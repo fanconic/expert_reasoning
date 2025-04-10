@@ -1,0 +1,49 @@
+random_state: 42
+
+# defaults:
+#   - override hydra/job_logging: default
+#   - override hydra/hydra_logging: default
+
+model:
+  name: "Qwen/Qwen2.5-3B-Instruct"  #"microsoft/Phi-4-mini-instruct", "google/gemma-3-4b-it", "meta-llama/Llama-3.2-3B-Instruct. "Qwen/Qwen2.5-7B-Instruct"
+  max_seq_length: 512
+  load_in_4bit: true
+  fast_inference: true
+  lora_rank: 256
+  gpu_memory_utilization: 0.6
+  
+dataset:
+  name: "curatedthoughts"   # Change to "countdown" (or other) to switch datasets
+  split: "train"
+
+training:
+  learning_rate: 1e-5
+  adam_beta1: 0.9
+  adam_beta2: 0.99
+  weight_decay: 0.1
+  warmup_ratio: 0.1
+  lr_scheduler_type: "cosine"
+  optim: "paged_adamw_8bit"
+  logging_steps: 1
+  per_device_train_batch_size: 56
+  gradient_accumulation_steps: 2
+  num_generations: 8
+  max_prompt_length: 256
+  max_steps: 500
+  save_steps: 250
+  max_grad_norm: 1
+  output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs"
+  report_to: "none"
+  device: 0
+
+eval:
+  do_eval: false
+  eval_strategy: "no"
+  eval_steps: 1
+  use_vllm: true
+  per_device_eval_batch_size: 6
+
+wandb:
+  project: "grpo_training"
+  entity: null
+  run_name: "Qwen-3B-SFT"
