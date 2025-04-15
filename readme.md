@@ -47,5 +47,5 @@ pyhton train.py
 
 Run the SFT training script:
 ```bash
-pyhton sft_train.py
+python sft_train.py
 ```
