@@ -35,27 +35,34 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         eval_steps=cfg.eval.eval_steps,
     )
 
-    def formatting_prompt_func(example):
+    def formatting_prompt_func(examples):
         # Use the tokenizer's chat template to format the messages
-        formatted_prompt = tokenizer.apply_chat_template(
-            example["prompt"], tokenize=False, add_generation_prompt=False
-        )
-        return [formatted_prompt]
+        prompts = examples["prompt"]
+        texts = []
+        for prompt in prompts:
+            formatted_prompt = tokenizer.apply_chat_template(
+                prompt, tokenize=False, add_generation_prompt=False
+            )
+            texts.append(formatted_prompt)
+        return { "text" : texts, }
 
     response_template = "<think>\n"
     collator = DataCollatorForCompletionOnlyLM(
         response_template=response_template,
         tokenizer=tokenizer,
     )
+    
+    train_dataset = train_dataset.map(formatting_prompt_func, batched = True,)
+    val_dataset = val_dataset.map(formatting_prompt_func, batched = True,)
 
     # Instantiate the SFTTrainer.
     trainer = SFTTrainer(
         model=model,
         processing_class=tokenizer,
+        dataset_text_field = "text",
         args=sft_config,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        formatting_func=formatting_prompt_func,
         data_collator=collator,
         dataset_num_proc=1,
     )

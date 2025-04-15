@@ -39,7 +39,13 @@ my_repo/
 ```
 
 
-Run the training script:
+Run the GRPO training script:
 ```bash
-pyhton main.py
+pyhton train.py
+```
+
+
+Run the SFT training script:
+```bash
+pyhton sft_train.py
 ```

@@ -1,12 +1,13 @@
-# sft_train.py
+import os
+os.environ["UNSLOTH_COMPILE_DISABLE"] = "1"
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
 
-import os
 
 
-@hydra.main(config_path="configs", config_name="config", version_base="1.2")
+@hydra.main(config_path="configs", config_name="config", version_base="1.3")
 def main(cfg: DictConfig):
     print("SFT Training Configuration:\n", OmegaConf.to_yaml(cfg))
 
