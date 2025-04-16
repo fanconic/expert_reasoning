@@ -9,11 +9,11 @@ model:
   max_seq_length: 512
   load_in_4bit: true
   fast_inference: true
-  lora_rank: 256
+  lora_rank: 8
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "curatedthoughts"   # Change to "countdown" (or other) to switch datasets
+  name: "gsm8k"   # Change to "curatedthoughts" (or other) to switch datasets
   split: "train"
 
 training:
@@ -33,17 +33,17 @@ training:
   save_steps: 250
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs"
-  report_to: "wandb"
-  device: 2
+  report_to: "none"
+  device: 3
 
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 25
+  eval_steps: 1
   use_vllm: true
-  per_device_eval_batch_size: 6
+  per_device_eval_batch_size: 8
 
 wandb:
   project: "grpo_training"
   entity: null
-  run_name: "Phi-4-SFT-distil"
+  run_name: "Phi-4-grpo"
