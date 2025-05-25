@@ -3,7 +3,6 @@ from omegaconf import DictConfig, OmegaConf
 import wandb
 import os
 
-
 # Example evaluation metric function
 def simple_accuracy_metric(ground_truth, prediction):
     # For example, compare if the extracted answer matches the ground truth exactly
