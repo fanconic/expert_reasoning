@@ -1,4 +1,4 @@
-# Tabular Reasoning Models
+# Knowledge Distillation via Expert Reasoning
 
 ## Abstract
 

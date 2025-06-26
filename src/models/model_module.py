@@ -24,7 +24,7 @@ def load_model_and_tokenizer(config):
     fast_inference = config.model.fast_inference
     lora_rank = config.model.lora_rank
     gpu_memory_utilization = config.model.gpu_memory_utilization
-    random_state = config.random_state
+    random_state = config.seed
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,

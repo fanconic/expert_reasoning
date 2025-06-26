@@ -2,6 +2,9 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
 import os
+import random
+import numpy as np
+import torch
 
 # Example evaluation metric function
 def simple_accuracy_metric(ground_truth, prediction):
@@ -9,9 +12,25 @@ def simple_accuracy_metric(ground_truth, prediction):
     return 1.0 if ground_truth.strip() == prediction.strip() else 0.0
 
 
+def set_seed(seed):
+    """Set all random seeds
+    Args:
+        seed (int): integer for reproducible experiments
+    """
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+
+
 @hydra.main(config_path="configs", config_name="config", version_base="1.3")
 def main(cfg: DictConfig):
     print("Configuration:\n", OmegaConf.to_yaml(cfg))
+    
+    set_seed(cfg.seed)
 
     if cfg.training.report_to == "wandb":
         wandb_config = OmegaConf.to_container(cfg, resolve=True)
@@ -31,8 +50,8 @@ def main(cfg: DictConfig):
     from src.training.grpo_module import run_grpo_training
 
     # Load training, validation, and test datasets (assuming you have these available)
-    train_dataset = get_dataset(cfg.dataset.name, split="train")
-    val_dataset = get_dataset(cfg.dataset.name, split="test") # Make sure your dataset loader supports this split.
+    train_dataset = get_dataset(cfg.dataset.name, split="train", ratio=cfg.training.train_ratio)
+    val_dataset = get_dataset(cfg.dataset.name, split="test", ratio=cfg.training.val_ratio) # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
     # Load model and tokenizer from unsloth

@@ -56,7 +56,7 @@ def extract_think_content(input_string):
     return match.group(1).strip() if match else "No think content found"
 
 
-def get_gsm8k_questions(split="train"):
+def get_gsm8k_questions(split="train", ratio: float = 1.0):
     """
     Load and preprocess the GSM8K dataset.
 
@@ -68,6 +68,7 @@ def get_gsm8k_questions(split="train"):
                 and extracted answers.
     """
     data = load_dataset("openai/gsm8k", "main")[split]
+    data = data.select(range(int(len(data) * ratio)))
     data = data.map(
         lambda x: {
             "prompt": [
@@ -80,14 +81,14 @@ def get_gsm8k_questions(split="train"):
     return data
 
 
-def get_curated_thoughts(split="train"):
+def get_curated_thoughts(split="train", ratio: float = 1.0):
     """
     Loads and processes the onnookk/format_vs_content_reasoning_clean_gsm8k dataset for knowledge distillation.
     Assumes the dataset contains keys: 'question', 'reasoning', 'answer'.
     Adjust the processing if the field names differ.
     """
     data = load_dataset("onnookk/format_vs_content_reasoning_clean_gsm8k", split=split)
-
+    data = data.select(range(int(len(data) * ratio)))
     data = data.map(
         lambda x: {
             "prompt": [
@@ -108,7 +109,7 @@ def get_curated_thoughts(split="train"):
     return data
 
 
-def get_dataset(name: str, split: str = "train"):
+def get_dataset(name: str, split: str = "train", ratio: float = 1.0):
     """
     Load a dataset by name and split.
 
@@ -124,10 +125,10 @@ def get_dataset(name: str, split: str = "train"):
         ValueError: If the dataset name is not supported.
     """
     if name.lower() == "gsm8k":
-        return get_gsm8k_questions(split)
+        return get_gsm8k_questions(split, ratio)
     elif name.lower() == "countdown":
         raise NotImplementedError("Countdown dataset not implemented")
     elif name.lower() == "curatedthoughts":
-        return get_curated_thoughts(split)
+        return get_curated_thoughts(split, ratio)
     else:
         raise ValueError(f"Dataset {name} not supported")

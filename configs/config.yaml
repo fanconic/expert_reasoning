@@ -1,4 +1,4 @@
-random_state: 42
+seed: 42
 
 # defaults:
 #   - override hydra/job_logging: default
@@ -9,7 +9,7 @@ model:
   max_seq_length: 512
   load_in_4bit: true
   fast_inference: true
-  lora_rank: 8
+  lora_rank: 64
   gpu_memory_utilization: 0.6
   
 dataset:
@@ -25,25 +25,27 @@ training:
   lr_scheduler_type: "cosine"
   optim: "paged_adamw_8bit"
   logging_steps: 1
-  per_device_train_batch_size: 2
+  per_device_train_batch_size: 8
   gradient_accumulation_steps: 2
-  num_generations: 2
+  num_generations: 16
   max_prompt_length: 256
   max_steps: 500
   save_steps: 250
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs"
-  report_to: "none"
-  device: 3
+  report_to: "wandb"
+  device: 0
+  train_ratio: 1.0
+  val_ratio: 0.1
 
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 1
+  eval_steps: 50
   use_vllm: true
-  per_device_eval_batch_size: 2
+  per_device_eval_batch_size: 32
 
 wandb:
-  project: "grpo_training"
-  entity: null
-  run_name: "Phi-4-grpo"
+  project: "expert_reasoning"
+  entity: eth_dlad_team32
+  run_name: "qwen2.5-3b-grpo-3"

@@ -55,9 +55,9 @@ def strict_format_reward_func(completions, **kwargs):
     Calculate reward based on strict adherence to the expected XML format.
 
     The expected format is:
-    <reasoning>
+    <think>
     ...
-    </reasoning>
+    </think>
     <answer>
     ...
     </answer>
@@ -69,7 +69,7 @@ def strict_format_reward_func(completions, **kwargs):
     Returns:
         list: A list of rewards (0.5 for correctly formatted responses, 0.0 otherwise).
     """
-    pattern = r"^<reasoning>\n.*?\n</reasoning>\n<answer>\n.*?\n</answer>\n$"
+    pattern = r"^<think>\n.*?\n</think>\n<answer>\n.*?\n</answer>\n$"
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
@@ -79,7 +79,7 @@ def soft_format_reward_func(completions, **kwargs):
     """
     Calculate reward based on a more lenient check of XML format.
 
-    Checks if the response contains <reasoning> and <answer> tags in any format.
+    Checks if the response contains <think> and <answer> tags in any format.
 
     Args:
         completions: List of model completions, each containing response content.
@@ -88,7 +88,7 @@ def soft_format_reward_func(completions, **kwargs):
     Returns:
         list: A list of rewards (0.5 for responses with both tags, 0.0 otherwise).
     """
-    pattern = r"<reasoning>.*?</reasoning>\s*<answer>.*?</answer>"
+    pattern = r"<think>.*?</think>\s*<answer>.*?</answer>"
     responses = [completion[0]["content"] for completion in completions]
     matches = [re.match(pattern, r) for r in responses]
     return [0.5 if match else 0.0 for match in matches]
@@ -108,9 +108,9 @@ def count_xml(text) -> float:
         float: A score between 0.0 and 0.5 based on XML formatting quality.
     """
     count = 0.0
-    if text.count("<reasoning>\n") == 1:
+    if text.count("<think>\n") == 1:
         count += 0.125
-    if text.count("\n</reasoning>\n") == 1:
+    if text.count("\n</think>\n") == 1:
         count += 0.125
     if text.count("\n<answer>\n") == 1:
         count += 0.125
