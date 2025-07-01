@@ -65,27 +65,39 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
     )
 
     def formatting_prompt_func(examples):
-        # Use the tokenizer's chat template to format the messages
-        prompts = examples["prompt"]
+        """
+        For each example:
+        1) format the system+user prompt with the chat template,
+        2) append an assistant span around the target (<think>…</think><answer>…</answer>).
+        """
+        prompts = examples["prompt"]    # list of lists of messages
+        targets = examples["target"]    # list of "<think>…</think><answer>…</answer>" strings
         texts = []
-        for prompt in prompts:
+        for msgs, tgt in zip(prompts, targets):
+            # 1) format system+user
             formatted_prompt = tokenizer.apply_chat_template(
-                prompt, tokenize=False, add_generation_prompt=False
+                msgs,
+                tokenize=False,
+                add_generation_prompt=False
             )
-            texts.append(formatted_prompt)
-        return { "text" : texts, }
+            # 2) wrap the reasoning+answer as the assistant reply
+            assistant_block = (
+                "<|im_start|>assistant\n"
+                f"{tgt}"
+                "<|im_end|>"
+            )
+            texts.append(formatted_prompt + assistant_block)
+        return {"text": texts}
 
-    response_template = "<think>\n"
+
+    response_template = "<|im_start|>assistant\n<think>\n"
     collator = DataCollatorForCompletionOnlyLM(
         response_template=response_template,
         tokenizer=tokenizer,
     )
-    
+        
     train_dataset = train_dataset.map(formatting_prompt_func, batched = True,)
     val_dataset = val_dataset.map(formatting_prompt_func, batched = True,)
-    
-    import IPython
-    IPython.embed()
 
     trainer = SFTTrainer(
         model=model,
