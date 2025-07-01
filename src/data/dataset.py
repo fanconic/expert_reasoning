@@ -1,16 +1,12 @@
 from datasets import load_dataset, Dataset
 import re
 
-SYSTEM_PROMPT = """
-Respond in the following format:
-<think>
-...
-</think>
-<answer>
-...
-</answer>
-"""
-
+SYSTEM_PROMPT = SYSTEM_PROMPT = (
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
+    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> reasoning process here </think><answer> answer here </answer>"
+)
 
 def extract_hash_answer(text: str) -> str:
     """
@@ -28,35 +24,16 @@ def extract_hash_answer(text: str) -> str:
     return text.split("####")[1].strip()
 
 
-def extract_boxed_integer(input_string):
-    """
-    Extracts the integer from inside a \(\boxed{}\) notation using regex.
-
-    Args:
-        input_string (str): The input string containing a boxed integer.
-
-    Returns:
-        str: The extracted integer as a string.
-    """
+def extract_boxed_integer(input_string: str) -> str:
     match = re.search(r"\\boxed{(\d+)}", input_string)
-    return match.group(1) if match else "No boxed value found"
+    return match.group(1) if match else input_string.strip()
 
-
-def extract_think_content(input_string):
-    """
-    Extracts the content between <think> and </think> tags using regex.
-
-    Args:
-        input_string (str): The input string containing <think> tags.
-
-    Returns:
-        str: The extracted content as a string.
-    """
+def extract_think_content(input_string: str) -> str:
     match = re.search(r"<think>(.*?)</think>", input_string, re.DOTALL)
-    return match.group(1).strip() if match else "No think content found"
+    return match.group(1).strip() if match else input_string.strip()
 
 
-def get_gsm8k_questions(split="train", ratio: float = 1.0):
+def get_gsm8k_grpo(split="train", ratio: float = 1.0):
     """
     Load and preprocess the GSM8K dataset.
 
@@ -80,33 +57,41 @@ def get_gsm8k_questions(split="train", ratio: float = 1.0):
     )
     return data
 
+def get_gsm8k_distillation(split: str = "train", ratio: float = 1.0) -> Dataset:
+    """
+    Load GSM8K questions plus CuratedThoughts reasoning for KD:
+      - Uses the 'onnookk/format_vs_content_reasoning_clean_gsm8k' dataset,
+        which supplies both the question and a full chain-of-thought+boxed answer.
+    Returns a Dataset with fields:
+      - prompt: list[dict(role,content)]  (system + user)
+      - target: str containing <think>…</think><answer>…</answer>
+    """
+    # this curated set has both the question and the full COT+boxed answer
+    ds = load_dataset("onnookk/format_vs_content_reasoning_clean_gsm8k", split=split)
+    # optionally subsample
+    if ratio < 1.0:
+        ds = ds.select(range(int(len(ds) * ratio)))
 
-def get_curated_thoughts(split="train", ratio: float = 1.0):
-    """
-    Loads and processes the onnookk/format_vs_content_reasoning_clean_gsm8k dataset for knowledge distillation.
-    Assumes the dataset contains keys: 'question', 'reasoning', 'answer'.
-    Adjust the processing if the field names differ.
-    """
-    data = load_dataset("onnookk/format_vs_content_reasoning_clean_gsm8k", split=split)
-    data = data.select(range(int(len(data) * ratio)))
-    data = data.map(
-        lambda x: {
-            "prompt": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": x["question"]},
-                {
-                    "role": "assistant",
-                    "content": "<think>\n"
-                    + extract_think_content(x["answer"])
-                    + "\n</think>\n"
-                    + "<answer>\n"
-                    + extract_boxed_integer(x["answer"])
-                    + "\n</answer>",
-                },
-            ]
-        }
-    )
-    return data
+    def munge(example):
+        reasoning = extract_think_content(example["answer"])
+        answer    = extract_boxed_integer(example["answer"])
+        # build prompt + target
+        prompt = [
+            {"role": "system",  "content": SYSTEM_PROMPT},
+            {"role": "user",    "content": example["question"]},
+        ]
+        target = (
+            "<think>\n"
+            f"{reasoning}\n"
+            "</think>\n"
+            "<answer>\n"
+            f"{answer}\n"
+            "</answer>"
+        )
+        return {"prompt": prompt, "target": target}
+
+    return ds.map(munge, remove_columns=ds.column_names)
+
 
 
 def get_dataset(name: str, split: str = "train", ratio: float = 1.0):
@@ -125,10 +110,8 @@ def get_dataset(name: str, split: str = "train", ratio: float = 1.0):
         ValueError: If the dataset name is not supported.
     """
     if name.lower() == "gsm8k":
-        return get_gsm8k_questions(split, ratio)
-    elif name.lower() == "countdown":
-        raise NotImplementedError("Countdown dataset not implemented")
-    elif name.lower() == "curatedthoughts":
-        return get_curated_thoughts(split, ratio)
+        return get_gsm8k_grpo(split, ratio)
+    elif name.lower() == "gsm8k_kd":
+        return get_gsm8k_distillation(split, ratio)
     else:
         raise ValueError(f"Dataset {name} not supported")

@@ -41,11 +41,11 @@ my_repo/
 
 Run the GRPO training script:
 ```bash
-pyhton train.py
+bash runner_scripts/{$node}_run_gpu_node.sh pyhton train.py
 ```
 
 
 Run the SFT training script:
 ```bash
-python sft_train.py
+bash runner_scripts/{$node}_run_gpu_node.sh pyhton sft_train.py
 ```

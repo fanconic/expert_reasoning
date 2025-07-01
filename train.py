@@ -1,16 +1,10 @@
+import os
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
-import os
 import random
 import numpy as np
 import torch
-
-# Example evaluation metric function
-def simple_accuracy_metric(ground_truth, prediction):
-    # For example, compare if the extracted answer matches the ground truth exactly
-    return 1.0 if ground_truth.strip() == prediction.strip() else 0.0
-
 
 def set_seed(seed):
     """Set all random seeds
@@ -29,7 +23,7 @@ def set_seed(seed):
 @hydra.main(config_path="configs", config_name="config", version_base="1.3")
 def main(cfg: DictConfig):
     print("Configuration:\n", OmegaConf.to_yaml(cfg))
-    
+
     set_seed(cfg.seed)
 
     if cfg.training.report_to == "wandb":
@@ -41,7 +35,7 @@ def main(cfg: DictConfig):
             name=cfg.wandb.run_name,
         )
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.training.device)
+   
 
     # Needs to be imported after CUDA_VISIBLE_DEVICES
     from src.data.dataset import get_dataset

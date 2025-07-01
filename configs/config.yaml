@@ -1,19 +1,19 @@
 seed: 42
 
-# defaults:
-#   - override hydra/job_logging: default
-#   - override hydra/hydra_logging: default
+defaults:
+   - override hydra/job_logging: default
+   - override hydra/hydra_logging: default
 
 model:
-  name: "Qwen/Qwen2.5-3B-Instruct"  #"microsoft/Phi-4-mini-instruct", "google/gemma-3-4b-it", "meta-llama/Llama-3.2-3B-Instruct. "Qwen/Qwen2.5-7B-Instruct"
-  max_seq_length: 512
+  name: "Qwen/Qwen2.5-3B-Instruct"  #"microsoft/Phi-4-mini-instruct", "google/gemma-3-4b-it", "meta-llama/Llama-3.2-3B-Instruct. "Qwen/Qwen2.5-3B-Instruct"
+  max_seq_length: 1280
   load_in_4bit: true
   fast_inference: true
-  lora_rank: 64
+  lora_rank: 128
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "gsm8k"   # Change to "curatedthoughts" (or other) to switch datasets
+  name: "gsm8k_kd"   # Change to "curatedthoughts" (or other) to switch datasets
   split: "train"
 
 training:
@@ -25,7 +25,7 @@ training:
   lr_scheduler_type: "cosine"
   optim: "paged_adamw_8bit"
   logging_steps: 1
-  per_device_train_batch_size: 8
+  per_device_train_batch_size: 16
   gradient_accumulation_steps: 2
   num_generations: 16
   max_prompt_length: 256
@@ -33,9 +33,8 @@ training:
   save_steps: 250
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs"
-  report_to: "wandb"
-  device: 0
-  train_ratio: 1.0
+  report_to: "none"
+  train_ratio: 1
   val_ratio: 0.1
 
 eval:
@@ -48,4 +47,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "qwen2.5-3b-grpo-3"
+  run_name: "debug_kd"

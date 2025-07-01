@@ -1,6 +1,55 @@
 import re
 
 
+# compile once, with DOTALL so '.' matches newlines
+STRICT_FMT = re.compile(
+    r"^<think>\s*.*?\s*</think>\s*<answer>\s*.*?\s*</answer>\s*$",
+    flags=re.DOTALL
+)
+SOFT_FMT   = re.compile(
+    r"<think>.*?</think>.*?<answer>.*?</answer>",
+    flags=re.DOTALL
+)
+
+def strict_format_reward_func(completions, **kwargs):
+    """
+    Calculate reward based on strict adherence to the expected XML format.
+
+    The expected format is:
+    <think>
+    ...
+    </think>
+    <answer>
+    ...
+    </answer>
+
+    Args:
+        completions: List of model completions, each containing response content.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        list: A list of rewards (0.5 for correctly formatted responses, 0.0 otherwise).
+    """
+    responses = [c[0]["content"].strip() for c in completions]
+    return [0.5 if STRICT_FMT.match(r) else 0.0 for r in responses]
+
+def soft_format_reward_func(completions, **kwargs):
+    
+    """
+    Calculate reward based on a more lenient check of XML format.
+
+    Checks if the response contains <think> and <answer> tags in any format.
+
+    Args:
+        completions: List of model completions, each containing response content.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        list: A list of rewards (0.5 for responses with both tags, 0.0 otherwise).
+    """
+    responses = [c[0]["content"] for c in completions]
+    return [0.5 if SOFT_FMT.search(r) else 0.0 for r in responses]
+
 def extract_xml_answer(text: str) -> str:
     """
     Extract the answer from XML-formatted text.
@@ -48,50 +97,6 @@ def int_reward_func(completions, **kwargs):
     responses = [completion[0]["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
     return [0.5 if r.isdigit() else 0.0 for r in extracted_responses]
-
-
-def strict_format_reward_func(completions, **kwargs):
-    """
-    Calculate reward based on strict adherence to the expected XML format.
-
-    The expected format is:
-    <think>
-    ...
-    </think>
-    <answer>
-    ...
-    </answer>
-
-    Args:
-        completions: List of model completions, each containing response content.
-        **kwargs: Additional keyword arguments.
-
-    Returns:
-        list: A list of rewards (0.5 for correctly formatted responses, 0.0 otherwise).
-    """
-    pattern = r"^<think>\n.*?\n</think>\n<answer>\n.*?\n</answer>\n$"
-    responses = [completion[0]["content"] for completion in completions]
-    matches = [re.match(pattern, r) for r in responses]
-    return [0.5 if match else 0.0 for match in matches]
-
-
-def soft_format_reward_func(completions, **kwargs):
-    """
-    Calculate reward based on a more lenient check of XML format.
-
-    Checks if the response contains <think> and <answer> tags in any format.
-
-    Args:
-        completions: List of model completions, each containing response content.
-        **kwargs: Additional keyword arguments.
-
-    Returns:
-        list: A list of rewards (0.5 for responses with both tags, 0.0 otherwise).
-    """
-    pattern = r"<think>.*?</think>\s*<answer>.*?</answer>"
-    responses = [completion[0]["content"] for completion in completions]
-    matches = [re.match(pattern, r) for r in responses]
-    return [0.5 if match else 0.0 for match in matches]
 
 
 def count_xml(text) -> float:
@@ -152,3 +157,4 @@ def get_reward_functions():
         int_reward_func,
         correctness_reward_func,
     ]
+    

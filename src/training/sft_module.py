@@ -1,17 +1,46 @@
+import numpy as np
 from trl import SFTConfig, SFTTrainer, DataCollatorForCompletionOnlyLM
+from transformers import EvalPrediction
 
+from src.rewards.reward_functions import (
+    xmlcount_reward_func,
+    soft_format_reward_func,
+    strict_format_reward_func,
+    int_reward_func,
+    correctness_reward_func,
+)
+
+# 1) Our compute_metrics for HF Trainer
 
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
-    """
-    Runs SFT training and periodically evaluates on validation and test sets.
+    # … your existing SFTConfig, formatting_prompt_func, collator, etc. …
+    
+    def compute_metrics(eval_pred: EvalPrediction) -> dict:
+        logits, labels = eval_pred
+        # a) get predicted token‐ids
+        pred_ids = np.argmax(logits, axis=-1)
+        # b) decode predictions & references to text
+        decoded_preds  = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
+        decoded_labels = tokenizer.batch_decode(labels,   skip_special_tokens=True)
+        # c) wrap into the format each reward fn expects
+        completions = [[{"content": p}] for p in decoded_preds]
+        answers     = decoded_labels
 
-    Args:
-        model, tokenizer: Loaded via unsloth.
-        train_dataset: The training dataset.
-        reward_funcs: List of reward functions.
-        training_cfg: Training configuration (expects attributes like max_steps, etc.).
-        val_dataset: Optional validation dataset.
-    """
+        # d) compute each reward over the whole batch
+        out = {}
+        out["xmlcount_reward_func"]      = float(np.mean(xmlcount_reward_func(completions)))
+        out["soft_format_reward_func"]   = float(np.mean(soft_format_reward_func(completions)))
+        out["strict_format_func"] = float(np.mean(strict_format_reward_func(completions)))
+        out["int_reward_func"]    = float(np.mean(int_reward_func(completions)))
+        out["correctness_reward_func"]   = float(np.mean(correctness_reward_func(None, completions, answers)))
+
+        # e) (optional) also compute plain accuracy
+        accs = [1.0 if p == a else 0.0
+                for p, a in zip(decoded_preds, decoded_labels)]
+        out["accuracy"] = float(np.mean(accs))
+
+        return out
+
 
     sft_config = SFTConfig(
         learning_rate=cfg.training.learning_rate,
@@ -54,18 +83,22 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
     
     train_dataset = train_dataset.map(formatting_prompt_func, batched = True,)
     val_dataset = val_dataset.map(formatting_prompt_func, batched = True,)
+    
+    import IPython
+    IPython.embed()
 
-    # Instantiate the SFTTrainer.
     trainer = SFTTrainer(
         model=model,
         processing_class=tokenizer,
-        dataset_text_field = "text",
+        dataset_text_field="text",
         args=sft_config,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         data_collator=collator,
+        compute_metrics=compute_metrics,     # ← pass it here
         dataset_num_proc=1,
     )
 
     trainer.train()
+    trainer.evaluate()
     return trainer
