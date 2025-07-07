@@ -6,6 +6,7 @@ import random
 import numpy as np
 import torch
 
+
 def set_seed(seed):
     """Set all random seeds
     Args:
@@ -35,8 +36,6 @@ def main(cfg: DictConfig):
             name=cfg.wandb.run_name,
         )
 
-   
-
     # Needs to be imported after CUDA_VISIBLE_DEVICES
     from src.data.dataset import get_dataset
     from src.models.model_module import load_model_and_tokenizer
@@ -44,8 +43,12 @@ def main(cfg: DictConfig):
     from src.training.grpo_module import run_grpo_training
 
     # Load training, validation, and test datasets (assuming you have these available)
-    train_dataset = get_dataset(cfg.dataset.name, split="train", ratio=cfg.training.train_ratio)
-    val_dataset = get_dataset(cfg.dataset.name, split="test", ratio=cfg.training.val_ratio) # Make sure your dataset loader supports this split.
+    train_dataset = get_dataset(
+        cfg.dataset.name, split="train", ratio=cfg.training.train_ratio
+    )
+    val_dataset = get_dataset(
+        cfg.dataset.name, split="test", ratio=cfg.training.val_ratio
+    )  # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
     # Load model and tokenizer from unsloth

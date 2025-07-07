@@ -1,6 +1,9 @@
-import numpy as np
 from trl import SFTConfig, SFTTrainer, DataCollatorForCompletionOnlyLM
-from transformers import EvalPrediction
+
+
+from vllm import SamplingParams
+from src.training.callbacks import GenerationEvalCallback
+
 
 from src.rewards.reward_functions import (
     xmlcount_reward_func,
@@ -10,37 +13,16 @@ from src.rewards.reward_functions import (
     correctness_reward_func,
 )
 
-# 1) Our compute_metrics for HF Trainer
+reward_fns = [
+    ("xmlcount_reward_func", xmlcount_reward_func),
+    ("soft_format_reward_func", soft_format_reward_func),
+    ("strict_format_reward_func", strict_format_reward_func),
+    ("int_reward_func", int_reward_func),
+    ("correctness_reward_func", correctness_reward_func),
+]
+
 
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
-    # … your existing SFTConfig, formatting_prompt_func, collator, etc. …
-    
-    def compute_metrics(eval_pred: EvalPrediction) -> dict:
-        logits, labels = eval_pred
-        # a) get predicted token‐ids
-        pred_ids = np.argmax(logits, axis=-1)
-        # b) decode predictions & references to text
-        decoded_preds  = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
-        decoded_labels = tokenizer.batch_decode(labels,   skip_special_tokens=True)
-        # c) wrap into the format each reward fn expects
-        completions = [[{"content": p}] for p in decoded_preds]
-        answers     = decoded_labels
-
-        # d) compute each reward over the whole batch
-        out = {}
-        out["xmlcount_reward_func"]      = float(np.mean(xmlcount_reward_func(completions)))
-        out["soft_format_reward_func"]   = float(np.mean(soft_format_reward_func(completions)))
-        out["strict_format_func"] = float(np.mean(strict_format_reward_func(completions)))
-        out["int_reward_func"]    = float(np.mean(int_reward_func(completions)))
-        out["correctness_reward_func"]   = float(np.mean(correctness_reward_func(None, completions, answers)))
-
-        # e) (optional) also compute plain accuracy
-        accs = [1.0 if p == a else 0.0
-                for p, a in zip(decoded_preds, decoded_labels)]
-        out["accuracy"] = float(np.mean(accs))
-
-        return out
-
 
     sft_config = SFTConfig(
         learning_rate=cfg.training.learning_rate,
@@ -62,7 +44,16 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         do_eval=cfg.eval.do_eval,
         eval_strategy=cfg.eval.eval_strategy,
         eval_steps=cfg.eval.eval_steps,
+        eval_accumulation_steps=cfg.eval.eval_accumulation_steps,
+        prediction_loss_only=cfg.eval.prediction_loss_only,
     )
+    
+    # sampling params for generation
+    sampling_params = SamplingParams(
+        max_tokens=cfg.model.max_seq_length - cfg.training.max_prompt_length,
+    )
+
+    
 
     def formatting_prompt_func(examples):
         """
@@ -70,34 +61,42 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         1) format the system+user prompt with the chat template,
         2) append an assistant span around the target (<think>…</think><answer>…</answer>).
         """
-        prompts = examples["prompt"]    # list of lists of messages
-        targets = examples["target"]    # list of "<think>…</think><answer>…</answer>" strings
+        prompts = examples["prompt"]  # list of lists of messages
+        targets = examples["target"]  # list of "<think>…</think><answer>…</answer>" strings
         texts = []
         for msgs, tgt in zip(prompts, targets):
             # 1) format system+user
             formatted_prompt = tokenizer.apply_chat_template(
-                msgs,
-                tokenize=False,
-                add_generation_prompt=False
+                msgs, tokenize=False, add_generation_prompt=False
             )
             # 2) wrap the reasoning+answer as the assistant reply
-            assistant_block = (
-                "<|im_start|>assistant\n"
-                f"{tgt}"
-                "<|im_end|>"
-            )
+            assistant_block = "<|im_start|>assistant\n" f"{tgt}" "<|im_end|>"
             texts.append(formatted_prompt + assistant_block)
         return {"text": texts}
 
-
-    response_template = "<|im_start|>assistant\n<think>\n"
+    response_template = "<|im_start|>assistant\n"
     collator = DataCollatorForCompletionOnlyLM(
         response_template=response_template,
         tokenizer=tokenizer,
     )
-        
-    train_dataset = train_dataset.map(formatting_prompt_func, batched = True,)
-    val_dataset = val_dataset.map(formatting_prompt_func, batched = True,)
+
+    train_dataset = train_dataset.map(
+        formatting_prompt_func,
+        batched=True,
+    )
+    val_dataset = val_dataset.map(
+        formatting_prompt_func,
+        batched=True,
+    )
+    
+    # create the callback
+    gen_eval_cb = GenerationEvalCallback(
+        val_dataset=val_dataset,
+        tokenizer=tokenizer,
+        reward_fns=reward_fns,
+        sampling_params=sampling_params,
+        batch_size=cfg.eval.per_device_eval_batch_size,
+    )
 
     trainer = SFTTrainer(
         model=model,
@@ -107,8 +106,8 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         data_collator=collator,
-        compute_metrics=compute_metrics,     # ← pass it here
         dataset_num_proc=1,
+        callbacks=[gen_eval_cb],
     )
 
     trainer.train()

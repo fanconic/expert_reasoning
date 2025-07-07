@@ -3,13 +3,10 @@ import re
 
 # compile once, with DOTALL so '.' matches newlines
 STRICT_FMT = re.compile(
-    r"^<think>\s*.*?\s*</think>\s*<answer>\s*.*?\s*</answer>\s*$",
-    flags=re.DOTALL
+    r"^<think>\s*.*?\s*</think>\s*<answer>\s*.*?\s*</answer>\s*$", flags=re.DOTALL
 )
-SOFT_FMT   = re.compile(
-    r"<think>.*?</think>.*?<answer>.*?</answer>",
-    flags=re.DOTALL
-)
+SOFT_FMT = re.compile(r"<think>.*?</think>.*?<answer>.*?</answer>", flags=re.DOTALL)
+
 
 def strict_format_reward_func(completions, **kwargs):
     """
@@ -33,8 +30,8 @@ def strict_format_reward_func(completions, **kwargs):
     responses = [c[0]["content"].strip() for c in completions]
     return [0.5 if STRICT_FMT.match(r) else 0.0 for r in responses]
 
+
 def soft_format_reward_func(completions, **kwargs):
-    
     """
     Calculate reward based on a more lenient check of XML format.
 
@@ -49,6 +46,7 @@ def soft_format_reward_func(completions, **kwargs):
     """
     responses = [c[0]["content"] for c in completions]
     return [0.5 if SOFT_FMT.search(r) else 0.0 for r in responses]
+
 
 def extract_xml_answer(text: str) -> str:
     """
@@ -157,4 +155,3 @@ def get_reward_functions():
         int_reward_func,
         correctness_reward_func,
     ]
-    
