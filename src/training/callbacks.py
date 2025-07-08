@@ -62,8 +62,8 @@ class GenerationEvalCallback(TrainerCallback):
             outputs = model.fast_generate(
                 texts,
                 sampling_params=self.sampling_params,
-                lora_request=None,
                 use_tqdm=False,
+                lora_request=model.load_lora("/mnt/pdata/caf83/tabular_reasoning/outputs/checkpoint-250"),
             )
             gens = [out.outputs[0].text for out in outputs]
             completions = [[{"content": g}] for g in gens]
@@ -74,7 +74,7 @@ class GenerationEvalCallback(TrainerCallback):
                 self.sums[name]    += batch_score
                 self.sum_sqs[name] += batch_score ** 2
             count += 1
-
+            
         # average and log
         # after looping all batches, compute mean & std
         metrics_mean = {

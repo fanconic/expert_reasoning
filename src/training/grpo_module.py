@@ -86,6 +86,9 @@ def run_grpo_training(
         do_eval=cfg.eval.do_eval,
         eval_strategy=cfg.eval.eval_strategy,
         eval_steps=cfg.eval.eval_steps,
+        num_train_epochs=cfg.training.epochs,
+        temperature=cfg.sampling.temperature,
+        top_p=cfg.sampling.top_p,
     )
 
     # Instantiate the GRPOTrainer.
@@ -99,4 +102,5 @@ def run_grpo_training(
     )
 
     trainer.train()
+    trainer.evaluate()
     return trainer

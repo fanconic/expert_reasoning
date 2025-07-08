@@ -46,11 +46,14 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         eval_steps=cfg.eval.eval_steps,
         eval_accumulation_steps=cfg.eval.eval_accumulation_steps,
         prediction_loss_only=cfg.eval.prediction_loss_only,
+        num_train_epochs= cfg.training.epochs,
     )
     
     # sampling params for generation
     sampling_params = SamplingParams(
         max_tokens=cfg.model.max_seq_length - cfg.training.max_prompt_length,
+        temperature=cfg.sampling.temperature,
+        top_p=cfg.sampling.top_p,
     )
 
     
