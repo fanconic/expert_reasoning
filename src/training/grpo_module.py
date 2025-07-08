@@ -78,7 +78,7 @@ def run_grpo_training(
         max_prompt_length=cfg.training.max_prompt_length,
         max_completion_length=max_completion_length,
         max_steps=cfg.training.max_steps,
-        save_steps=cfg.training.save_steps,
+        save_steps=cfg.eval.eval_steps,
         max_grad_norm=cfg.training.max_grad_norm,
         report_to=cfg.training.report_to,
         output_dir=cfg.training.output_dir,

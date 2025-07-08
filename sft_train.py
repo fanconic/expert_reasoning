@@ -13,16 +13,16 @@ import sys
 import subprocess
 
 # Only wrap in numactl if not already launched with it
-if os.getenv("USE_NUMACTL") == "1" and "NUMACTL_ACTIVE" not in os.environ:
-    os.environ["NUMACTL_ACTIVE"] = "1"
-    NUMA_NODE = os.getenv("NUMA_NODE", "1")
-    CMD = [
-        "numactl",
-        f"--cpunodebind={NUMA_NODE}",
-        f"--membind={NUMA_NODE}",
-        sys.executable,
-    ] + sys.argv
-    os.execvp("numactl", CMD)
+# if os.getenv("USE_NUMACTL") == "1" and "NUMACTL_ACTIVE" not in os.environ:
+#     os.environ["NUMACTL_ACTIVE"] = "1"
+#     NUMA_NODE = os.getenv("NUMA_NODE", "1")
+#     CMD = [
+#         "numactl",
+#         f"--cpunodebind={NUMA_NODE}",
+#         f"--membind={NUMA_NODE}",
+#         sys.executable,
+#     ] + sys.argv
+#     os.execvp("numactl", CMD)
 
 
 def set_seed(seed):

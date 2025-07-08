@@ -4,6 +4,8 @@ from transformers import TrainerCallback, TrainerState, TrainerControl
 from vllm import SamplingParams
 import wandb
 from tqdm import tqdm
+import glob
+import os
 
 
 class GenerationEvalCallback(TrainerCallback):
@@ -17,6 +19,7 @@ class GenerationEvalCallback(TrainerCallback):
         tokenizer,
         reward_fns,
         sampling_params: SamplingParams,
+        output_dir: str,
         batch_size: int = 1,
     ):
         """
@@ -29,6 +32,8 @@ class GenerationEvalCallback(TrainerCallback):
         self.batch_size = batch_size
         self.sums = {name: 0.0 for name, _ in self.reward_fns}
         self.sum_sqs = {name: 0.0 for name, _ in self.reward_fns}
+        self.output_dir = output_dir
+        
 
     def on_step_end(self, args, state: TrainerState, control: TrainerControl, **kwargs):
         # only on the process that’s logging
@@ -37,6 +42,18 @@ class GenerationEvalCallback(TrainerCallback):
 
         model = kwargs["model"]
         model.eval()
+        
+        # fetch the newest adapter - has to be saved on the disk somewhere, cuz god knows why it cannot retrieve it from memory?!
+        # Either this, or I am literally too dumb to find the weights in working memory; how did I even get into cambridge?!
+        
+        # 1) SAVE the in-memory adapter for *this* step before evaluating
+        ckpt_dir = os.path.join(self.output_dir, f"checkpoint-{state.global_step}")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        model.save_lora(ckpt_dir)
+
+        # 2) LOAD that freshly saved adapter
+        lora_req = model.load_lora(ckpt_dir)
+
 
         loader = DataLoader(self.val_dataset, batch_size=self.batch_size, shuffle=False, collate_fn=lambda examples: examples,)
 
@@ -63,7 +80,7 @@ class GenerationEvalCallback(TrainerCallback):
                 texts,
                 sampling_params=self.sampling_params,
                 use_tqdm=False,
-                lora_request=model.load_lora("/mnt/pdata/caf83/tabular_reasoning/outputs/checkpoint-250"),
+                lora_request = lora_req,
             )
             gens = [out.outputs[0].text for out in outputs]
             completions = [[{"content": g}] for g in gens]
@@ -95,5 +112,5 @@ class GenerationEvalCallback(TrainerCallback):
         # reset for next time
         self.sums    = {name: 0.0 for name, _ in self.reward_fns}
         self.sum_sqs = {name: 0.0 for name, _ in self.reward_fns}
-
+        
         model.train()

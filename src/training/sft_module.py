@@ -37,7 +37,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         per_device_eval_batch_size=cfg.eval.per_device_eval_batch_size,
         gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
         max_steps=cfg.training.max_steps,
-        save_steps=cfg.training.save_steps,
+        save_strategy="no", # Setting this to no, because I save it on my custom call-back
         max_grad_norm=cfg.training.max_grad_norm,
         report_to=cfg.training.report_to,
         output_dir=cfg.training.output_dir,
@@ -99,6 +99,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         reward_fns=reward_fns,
         sampling_params=sampling_params,
         batch_size=cfg.eval.per_device_eval_batch_size,
+        output_dir=cfg.training.output_dir
     )
 
     trainer = SFTTrainer(
