@@ -155,3 +155,19 @@ def get_reward_functions():
         int_reward_func,
         correctness_reward_func,
     ]
+
+
+def eval_correctness(completions, answer):
+    """
+    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
+
+    Args:
+        completions: List of model completions, each containing response content.
+        answer: The ground truth answer to compare against.
+
+    Returns:
+        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
+    """
+    responses = [completion["content"] for completion in completions]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    return [r == answer for r in extracted_responses]

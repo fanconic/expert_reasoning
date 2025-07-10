@@ -1,45 +1,13 @@
-import os
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
-import random
-import numpy as np
-import torch
 from src.models.model_module import load_model_and_tokenizer
 from src.data.dataset import get_dataset
 from src.training.sft_module import run_sft_training
-
-import sys
-import subprocess
-
-# Only wrap in numactl if not already launched with it
-# if os.getenv("USE_NUMACTL") == "1" and "NUMACTL_ACTIVE" not in os.environ:
-#     os.environ["NUMACTL_ACTIVE"] = "1"
-#     NUMA_NODE = os.getenv("NUMA_NODE", "1")
-#     CMD = [
-#         "numactl",
-#         f"--cpunodebind={NUMA_NODE}",
-#         f"--membind={NUMA_NODE}",
-#         sys.executable,
-#     ] + sys.argv
-#     os.execvp("numactl", CMD)
+from src.utils.utils import set_seed
 
 
-def set_seed(seed):
-    """Set all random seeds
-    Args:
-        seed (int): integer for reproducible experiments
-    """
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-
-
-@hydra.main(config_path="configs", config_name="config", version_base="1.3")
+@hydra.main(config_path="configs", config_name="config_train", version_base="1.3")
 def main(cfg: DictConfig):
     print("SFT Training Configuration:\n", OmegaConf.to_yaml(cfg))
 

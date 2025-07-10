@@ -53,4 +53,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "gsm8k_sft_baseline_qwen7b_2"
+  run_name: "gsm8k_sft_baseline_qwen7b"

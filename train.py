@@ -1,27 +1,14 @@
-import os
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
-import random
-import numpy as np
-import torch
+from src.utils.utils import set_seed
+from src.data.dataset import get_dataset
+from src.models.model_module import load_model_and_tokenizer
+from src.rewards.reward_functions import get_reward_functions
+from src.training.grpo_module import run_grpo_training
 
 
-def set_seed(seed):
-    """Set all random seeds
-    Args:
-        seed (int): integer for reproducible experiments
-    """
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-
-
-@hydra.main(config_path="configs", config_name="config", version_base="1.3")
+@hydra.main(config_path="configs", config_name="config_train", version_base="1.3")
 def main(cfg: DictConfig):
     print("Configuration:\n", OmegaConf.to_yaml(cfg))
 
@@ -35,12 +22,6 @@ def main(cfg: DictConfig):
             config=wandb_config,
             name=cfg.wandb.run_name,
         )
-
-    # Needs to be imported after CUDA_VISIBLE_DEVICES
-    from src.data.dataset import get_dataset
-    from src.models.model_module import load_model_and_tokenizer
-    from src.rewards.reward_functions import get_reward_functions
-    from src.training.grpo_module import run_grpo_training
 
     # Load training, validation, and test datasets (assuming you have these available)
     train_dataset = get_dataset(

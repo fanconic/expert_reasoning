@@ -37,7 +37,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         per_device_eval_batch_size=cfg.eval.per_device_eval_batch_size,
         gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
         max_steps=cfg.training.max_steps,
-        save_strategy="no", # Setting this to no, because I save it on my custom call-back
+        save_strategy="no",  # Setting this to no, because I save it on my custom call-back
         max_grad_norm=cfg.training.max_grad_norm,
         report_to=cfg.training.report_to,
         output_dir=cfg.training.output_dir,
@@ -46,17 +46,15 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         eval_steps=cfg.eval.eval_steps,
         eval_accumulation_steps=cfg.eval.eval_accumulation_steps,
         prediction_loss_only=cfg.eval.prediction_loss_only,
-        num_train_epochs= cfg.training.epochs,
+        num_train_epochs=cfg.training.epochs,
     )
-    
+
     # sampling params for generation
     sampling_params = SamplingParams(
         max_tokens=cfg.model.max_seq_length - cfg.training.max_prompt_length,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )
-
-    
 
     def formatting_prompt_func(examples):
         """
@@ -65,7 +63,9 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         2) append an assistant span around the target (<think>…</think><answer>…</answer>).
         """
         prompts = examples["prompt"]  # list of lists of messages
-        targets = examples["target"]  # list of "<think>…</think><answer>…</answer>" strings
+        targets = examples[
+            "target"
+        ]  # list of "<think>…</think><answer>…</answer>" strings
         texts = []
         for msgs, tgt in zip(prompts, targets):
             # 1) format system+user
@@ -91,7 +91,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         formatting_prompt_func,
         batched=True,
     )
-    
+
     # create the callback
     gen_eval_cb = GenerationEvalCallback(
         val_dataset=val_dataset,
@@ -99,7 +99,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         reward_fns=reward_fns,
         sampling_params=sampling_params,
         batch_size=cfg.eval.per_device_eval_batch_size,
-        output_dir=cfg.training.output_dir
+        output_dir=cfg.training.output_dir,
     )
 
     trainer = SFTTrainer(
