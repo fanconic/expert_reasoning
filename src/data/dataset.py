@@ -47,7 +47,9 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0):
                 and extracted answers.
     """
     data = load_dataset("openai/gsm8k", "main")[split]
-    data = data.select(range(int(len(data) * ratio)))
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
     data = data.map(
         lambda x: {
             "prompt": [

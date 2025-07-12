@@ -13,7 +13,7 @@ model:
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "gsm8k"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "train"
 
 training:
@@ -34,7 +34,7 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
-  train_ratio: 1
+  train_ratio: 1.0
   val_ratio: 0.1
 
 sampling:
@@ -53,4 +53,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "gsm8k_sft_baseline_qwen7b"
+  run_name: "gsm8k_grpo_baseline_qwen7b_20250711"

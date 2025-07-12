@@ -54,6 +54,8 @@ def main(cfg: DictConfig):
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )
+    
+    lora_req = model.load_lora(cfg.model.name)
 
     for batch in tqdm(loader):
 
@@ -68,20 +70,22 @@ def main(cfg: DictConfig):
         ]
 
         # generate with vllm
+        
         outputs = model.fast_generate(
             texts,
             sampling_params=sampling_params,
             use_tqdm=False,
-            lora_request=model.load_lora(cfg.model.name),
+            #lora_request=lora_req,
         )
         
         gens = [[out.outputs[i].text for i in range(cfg.sampling.n_samples)]  for out in outputs]
         completions = [[{"content": g[i]} for i in range(cfg.sampling.n_samples)] for g in gens]
-
         
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)
             all_correct_flags.append(correct_flags)
+            
+        #import IPython; IPython.embed()
 
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
 
