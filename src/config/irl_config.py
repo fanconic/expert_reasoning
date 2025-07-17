@@ -91,9 +91,13 @@ class IRLConfig(TrainingArguments):
     _VALID_DICT_FIELDS = TrainingArguments._VALID_DICT_FIELDS + ["model_init_kwargs"]
 
     # Parameters whose default values are overridden from TrainingArguments
-    learning_rate: float = field(
+    policy_learning_rate: float = field(
         default=2e-5,
-        metadata={"help": "The initial learning rate for AdamW."},
+        metadata={"help": "The initial learning rate for AdamW fpr the policy model."},
+    )
+    reward_learning_rate: float = field(
+        default=2e-5,
+        metadata={"help": "The initial learning rate for AdamW for the reward model."},
     )
     logging_steps: float = field(
         default=10,

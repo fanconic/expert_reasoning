@@ -1,13 +1,13 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
-from src.models.model_module import load_model_and_tokenizer
+from src.models.model_module import irl_load_model_and_tokenizer_trl
 from src.data.dataset import get_dataset
-from expert_reasoning.src.training.irl_module import run_irl_training
+from src.training.irl_module import run_irl_training
 from src.utils.utils import set_seed
 
 
-@hydra.main(config_path="configs", config_name="config_train", version_base="1.3")
+@hydra.main(config_path="configs", config_name="config_irl_train", version_base="1.3")
 def main(cfg: DictConfig):
     print("IRL Training Configuration:\n", OmegaConf.to_yaml(cfg))
 
@@ -25,19 +25,20 @@ def main(cfg: DictConfig):
 
     # Load training, validation, and test datasets (assuming you have these available)
     train_dataset = get_dataset(
-        cfg.dataset.name, split="train", ratio=cfg.training.train_ratio
+        cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio
     )
     val_dataset = get_dataset(
-        cfg.dataset.name, split="test", ratio=cfg.training.val_ratio
+        cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio
     )  # Make sure your dataset loader supports this split.  # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
     # Load model and tokenizer from unsloth
-    model, tokenizer = load_model_and_tokenizer(cfg)
+    policy_model, reward_model, tokenizer = irl_load_model_and_tokenizer_trl(cfg)
 
     # Run SFT training
     trainer = run_irl_training(
-        model,
+        policy_model,
+        reward_model,
         tokenizer,
         train_dataset,
         cfg,

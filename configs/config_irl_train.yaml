@@ -1,0 +1,74 @@
+seed: 42
+
+defaults:
+   - override hydra/job_logging: default
+   - override hydra/hydra_logging: default
+
+model:
+  name: "Qwen/Qwen2.5-7B-Instruct"
+  max_seq_length: 1024
+  load_in_4bit: true
+  
+  # Common settings
+  lora_rank: 64  # Base LoRA rank
+  use_gradient_checkpointing: true
+  
+  # Policy model specific
+  policy_lora_rank: 128  # Optional: override base rank for policy
+  policy_learning_rate: 1e-5
+  
+  # Reward model specific  
+  reward_lora_rank: 32  # Optional: override base rank for reward
+  reward_learning_rate: 2e-5
+
+dataset:
+  name: "gsm8k_kd"
+  split: "train"
+  train_ratio: 0.1
+  val_ratio: 0.1
+
+training:
+  # Common training params
+  warmup_ratio: 0.1
+  adam_beta1: 0.9
+  adam_beta2: 0.99
+  weight_decay: 0.1
+  lr_scheduler_type: "cosine"
+  optim: "paged_adamw_8bit"
+  logging_steps: 10
+  max_grad_norm: 1.0
+  output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
+  report_to: "none"
+
+  # Policy training
+  policy_per_device_train_batch_size: 16
+  policy_gradient_accumulation_steps: 2
+  
+  # Reward training
+  reward_per_device_train_batch_size: 32 #TODO
+  reward_gradient_accumulation_steps: 1
+  
+  # Adversarial training
+  n_policy_steps: 2  # Number of policy updates per iteration
+  n_reward_steps: 1  # Number of reward updates per iteration
+  max_iterations: 500
+  
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  num_return_sequences: 16  # Number of trajectories to generate per input
+
+eval:
+  do_eval: true
+  eval_strategy: "steps"
+  eval_steps: 50
+  prediction_loss_only: false
+  metrics:
+    - "reward_accuracy"  # Accuracy of reward model
+    - "policy_diversity"  # Diversity of generated responses
+    - "expert_similarity"  # Similarity to expert demonstrations
+
+wandb:
+  project: "expert_reasoning_irl"
+  entity: eth_dlad_team32
+  run_name: "irl_debug"

@@ -4,7 +4,7 @@ from trl import DataCollatorForCompletionOnlyLM
 from vllm import SamplingParams
 from src.training.callbacks import GenerationEvalCallback
 from src.config.irl_config import IRLConfig
-from expert_reasoning.src.training.irl_trainer import IRLTrainer
+from src.training.irl_trainer import IRLTrainer
 
 from src.rewards.reward_functions import (
     xmlcount_reward_func,
@@ -23,10 +23,11 @@ reward_fns = [
 ]
 
 
-def run_irl_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
+def run_irl_training(policy_model, reward_model, tokenizer, train_dataset, cfg, val_dataset=None):
 
     sft_config = IRLConfig(
-        learning_rate=cfg.training.learning_rate,
+        policy_learning_rate=cfg.model.policy_learning_rate,
+        reward_learning_rate=cfg.model.reward_learning_rate,
         adam_beta1=cfg.training.adam_beta1,
         adam_beta2=cfg.training.adam_beta2,
         weight_decay=cfg.training.weight_decay,
@@ -34,9 +35,11 @@ def run_irl_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         lr_scheduler_type=cfg.training.lr_scheduler_type,
         optim=cfg.training.optim,
         logging_steps=cfg.training.logging_steps,
-        per_device_train_batch_size=cfg.training.per_device_train_batch_size,
+        policy_per_device_train_batch_size=cfg.training.policy_per_device_train_batch_size,
+        reward_per_device_train_batch_size=cfg.training.reward_per_device_train_batch_size,
         per_device_eval_batch_size=cfg.eval.per_device_eval_batch_size,
-        gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
+        policy_gradient_accumulation_steps=cfg.training.policy_gradient_accumulation_steps,
+        reward_gradient_accumulation_steps=cfg.training.reward_gradient_accumulation_steps,
         max_steps=cfg.training.max_steps,
         save_strategy="no",  # Setting this to no, because I save it on my custom call-back
         max_grad_norm=cfg.training.max_grad_norm,
@@ -52,7 +55,7 @@ def run_irl_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
 
     # sampling params for generation
     sampling_params = SamplingParams(
-        max_tokens=cfg.model.max_seq_length - cfg.training.max_prompt_length,
+        max_tokens=cfg.model.max_seq_length,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )
@@ -103,8 +106,12 @@ def run_irl_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         output_dir=cfg.training.output_dir,
     )
 
+    import IPython
+    IPython.embed()
+    
     trainer = IRLTrainer(
-        model=model,
+        policy_model=policy_model,
+        reward_model=reward_model,
         processing_class=tokenizer,
         dataset_text_field="text",
         args=sft_config,
