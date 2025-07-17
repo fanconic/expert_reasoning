@@ -2,50 +2,6 @@ from trl import GRPOConfig, GRPOTrainer
 import wandb
 
 
-def evaluate_model(model, tokenizer, dataset, sampling_params, metric_fn):
-    """
-    Run inference on the dataset and compute averaged metrics.
-
-    Args:
-        model: The trained model.
-        tokenizer: The corresponding tokenizer.
-        dataset: A dataset (or similar iterable) of evaluation examples.
-        sampling_params: Inference parameters (e.g., SamplingParams instance).
-        metric_fn: A function that takes (ground_truth, prediction) and returns a dict of metrics.
-
-    Returns:
-        A dict containing the averaged metrics.
-    """
-    metrics = {}
-    count = 0
-    for example in dataset:
-        # Prepare the prompt using the tokenizer.
-        text = tokenizer.apply_chat_template(
-            example["prompt"], tokenize=False, add_generation_prompt=True
-        )
-        # Generate the output.
-        output = (
-            model.fast_generate(
-                [text],
-                sampling_params=sampling_params,
-                lora_request=None,
-            )[0]
-            .outputs[0]
-            .text
-        )
-
-        # Obtain metrics for this example.
-        sample_metrics = metric_fn(example["answer"], output)
-        # Accumulate the metrics.
-        for key, value in sample_metrics.items():
-            metrics[key] = metrics.get(key, 0.0) + value
-        count += 1
-
-    # Average each metric over the dataset.
-    avg_metrics = {key: value / count for key, value in metrics.items()}
-    return avg_metrics
-
-
 def run_grpo_training(
     model, tokenizer, train_dataset, reward_funcs, cfg, val_dataset=None
 ):
@@ -59,8 +15,6 @@ def run_grpo_training(
         training_cfg: Training configuration (expects attributes like max_steps, etc.).
         val_dataset: Optional validation dataset.
     """
-    # Calculate max_completion_length.
-    max_completion_length = cfg.model.max_seq_length - cfg.training.max_prompt_length
 
     grpo_config = GRPOConfig(
         learning_rate=cfg.training.learning_rate,
@@ -75,8 +29,8 @@ def run_grpo_training(
         per_device_eval_batch_size=cfg.eval.per_device_eval_batch_size,
         gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
         num_generations=cfg.training.num_generations,
-        max_prompt_length=cfg.training.max_prompt_length,
-        max_completion_length=max_completion_length,
+        max_prompt_length=None,
+        max_completion_length=cfg.model.max_seq_length,
         max_steps=cfg.training.max_steps,
         save_steps=cfg.eval.eval_steps,
         max_grad_norm=cfg.training.max_grad_norm,
@@ -89,6 +43,8 @@ def run_grpo_training(
         num_train_epochs=cfg.training.epochs,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
+        log_completions = True,
+        num_completions_to_print=2
     )
 
     # Instantiate the GRPOTrainer.
@@ -100,7 +56,8 @@ def run_grpo_training(
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
     )
-
+    
     trainer.train()
-    trainer.evaluate()
+    metrics = trainer.evaluate()
+    print(metrics)
     return trainer

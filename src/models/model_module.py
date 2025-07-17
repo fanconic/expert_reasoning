@@ -47,7 +47,7 @@ def load_model_and_tokenizer(config):
             "up_proj",
             "down_proj",
         ],
-        lora_alpha=lora_rank,
+        lora_alpha=lora_rank * 2,
         use_gradient_checkpointing="unsloth",
         random_state=random_state,
     )

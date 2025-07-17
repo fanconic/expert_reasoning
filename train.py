@@ -1,3 +1,6 @@
+import numba
+numba.config.DISABLE_JIT = True
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb

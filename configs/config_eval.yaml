@@ -6,8 +6,8 @@ defaults:
 
 model:
   checkpoint: 500
-  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
-  max_seq_length: 1280
+  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${checkpoint}" 
+  max_seq_length: 1024
   load_in_4bit: true
   fast_inference: true
   lora_rank: 128
@@ -16,7 +16,6 @@ model:
 dataset:
   name: "gsm8k"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
-  max_prompt_length: 256    
 
 sampling:
   n_samples: 16
@@ -32,4 +31,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "gsm8k_grpo_baseline_qwen7b_20250711"
+  run_name: "tbd"

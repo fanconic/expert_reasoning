@@ -3,13 +3,13 @@ from omegaconf import DictConfig, OmegaConf
 import wandb
 from src.models.model_module import load_model_and_tokenizer
 from src.data.dataset import get_dataset
-from src.training.sft_module import run_sft_training
+from expert_reasoning.src.training.irl_module import run_irl_training
 from src.utils.utils import set_seed
 
 
 @hydra.main(config_path="configs", config_name="config_train", version_base="1.3")
 def main(cfg: DictConfig):
-    print("SFT Training Configuration:\n", OmegaConf.to_yaml(cfg))
+    print("IRL Training Configuration:\n", OmegaConf.to_yaml(cfg))
 
     set_seed(cfg.seed)
 
@@ -36,16 +36,14 @@ def main(cfg: DictConfig):
     model, tokenizer = load_model_and_tokenizer(cfg)
 
     # Run SFT training
-    trainer = run_sft_training(
+    trainer = run_irl_training(
         model,
         tokenizer,
         train_dataset,
         cfg,
         val_dataset=val_dataset,
     )
-    
-    metrics = trainer.evaluate()
-    print(metrics)
+    trainer.evaluate()
 
 
 if __name__ == "__main__":

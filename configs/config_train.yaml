@@ -6,14 +6,14 @@ defaults:
 
 model:
   name: "Qwen/Qwen2.5-7B-Instruct"  #"microsoft/Phi-4-mini-instruct", "google/gemma-3-4b-it", "meta-llama/Llama-3.2-3B-Instruct. "Qwen/Qwen2.5-3B-Instruct"
-  max_seq_length: 1280
+  max_seq_length: 1024
   load_in_4bit: true
   fast_inference: true
   lora_rank: 128
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "gsm8k"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "train"
 
 training:
@@ -28,7 +28,6 @@ training:
   per_device_train_batch_size: 16
   gradient_accumulation_steps: 2
   num_generations: 16
-  max_prompt_length: 256  
   epochs: 2
   max_steps: 500
   max_grad_norm: 1.0
@@ -53,4 +52,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "gsm8k_grpo_baseline_qwen7b_20250711"
+  run_name: "qwen7b_sft"

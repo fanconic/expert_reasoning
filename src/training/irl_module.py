@@ -1,9 +1,10 @@
-from trl import SFTConfig, SFTTrainer, DataCollatorForCompletionOnlyLM
+from trl import DataCollatorForCompletionOnlyLM
 
 
 from vllm import SamplingParams
 from src.training.callbacks import GenerationEvalCallback
-
+from src.config.irl_config import IRLConfig
+from expert_reasoning.src.training.irl_trainer import IRLTrainer
 
 from src.rewards.reward_functions import (
     xmlcount_reward_func,
@@ -22,9 +23,9 @@ reward_fns = [
 ]
 
 
-def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
+def run_irl_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
 
-    sft_config = SFTConfig(
+    sft_config = IRLConfig(
         learning_rate=cfg.training.learning_rate,
         adam_beta1=cfg.training.adam_beta1,
         adam_beta2=cfg.training.adam_beta2,
@@ -51,7 +52,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
 
     # sampling params for generation
     sampling_params = SamplingParams(
-        max_tokens=cfg.model.max_seq_length,
+        max_tokens=cfg.model.max_seq_length - cfg.training.max_prompt_length,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )
@@ -102,7 +103,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         output_dir=cfg.training.output_dir,
     )
 
-    trainer = SFTTrainer(
+    trainer = IRLTrainer(
         model=model,
         processing_class=tokenizer,
         dataset_text_field="text",
