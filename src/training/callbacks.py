@@ -48,7 +48,7 @@ class GenerationEvalCallback(TrainerCallback):
         # 1) SAVE the in-memory adapter for *this* step before evaluating
         ckpt_dir = os.path.join(self.output_dir, f"checkpoint-{state.global_step}")
         os.makedirs(ckpt_dir, exist_ok=True)
-        model.save_checkpoints(ckpt_dir)
+        model.save_lora(ckpt_dir)
 
         # 2) LOAD that freshly saved adapter
         lora_req = model.load_lora(ckpt_dir)

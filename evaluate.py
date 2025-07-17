@@ -70,7 +70,7 @@ def main(cfg: DictConfig):
     sampling_params = SamplingParams(
         n=cfg.sampling.n_samples,
         seed=cfg.seed,
-        max_tokens=cfg.model.max_seq_length - cfg.dataset.max_prompt_length,
+        max_tokens=cfg.model.max_seq_length,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )
