@@ -25,7 +25,7 @@ reward_fns = [
 
 def run_irl_training(policy_model, reward_model, tokenizer, train_dataset, cfg, val_dataset=None):
 
-    sft_config = IRLConfig(
+    irl_config = IRLConfig(
         policy_learning_rate=cfg.model.policy_learning_rate,
         reward_learning_rate=cfg.model.reward_learning_rate,
         adam_beta1=cfg.training.adam_beta1,
@@ -113,12 +113,10 @@ def run_irl_training(policy_model, reward_model, tokenizer, train_dataset, cfg, 
         policy_model=policy_model,
         reward_model=reward_model,
         processing_class=tokenizer,
-        dataset_text_field="text",
-        args=sft_config,
+        args=irl_config,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         data_collator=collator,
-        dataset_num_proc=1,
         callbacks=[gen_eval_cb],
     )
 

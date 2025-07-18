@@ -51,7 +51,8 @@ training:
   # Adversarial training
   n_policy_steps: 2  # Number of policy updates per iteration
   n_reward_steps: 1  # Number of reward updates per iteration
-  max_iterations: 500
+  max_steps: 500
+  epochs: 2
   
 sampling:
   temperature: 1.0
@@ -62,6 +63,8 @@ eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 50
+  per_device_eval_batch_size: 16
+  eval_accumulation_steps: 2
   prediction_loss_only: false
   metrics:
     - "reward_accuracy"  # Accuracy of reward model

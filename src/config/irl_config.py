@@ -93,12 +93,34 @@ class IRLConfig(TrainingArguments):
     # Parameters whose default values are overridden from TrainingArguments
     policy_learning_rate: float = field(
         default=2e-5,
-        metadata={"help": "The initial learning rate for AdamW fpr the policy model."},
+        metadata={"help": "The initial learning rate for AdamW for the policy model."},
     )
     reward_learning_rate: float = field(
         default=2e-5,
         metadata={"help": "The initial learning rate for AdamW for the reward model."},
     )
+    
+    # Per device batch sizes
+    policy_per_device_train_batch_size: int = field(
+        default=8,
+        metadata={"help": "The per training device batch size for the policy model."},
+    )
+    reward_per_device_train_batch_size: int = field(
+        default=8,
+        metadata={"help": "The per training device batch size for the reward modell."},
+    )
+    
+    # Gradient Accumulation
+    policy_gradient_accumulation_steps: int = field(
+        default=1,
+        metadata={"help": "The per training device batch size for the policy model."},
+    )
+    reward_gradient_accumulation_steps: int = field(
+        default=1,
+        metadata={"help": "The per training device batch size for the reward modell."},
+    )
+    
+    
     logging_steps: float = field(
         default=10,
         metadata={
