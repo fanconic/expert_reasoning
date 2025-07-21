@@ -30,6 +30,7 @@ def run_irl_training(
     policy_tokenizer,
     reward_tokenizer,
     train_dataset,
+    reward_funcs,
     cfg,
     val_dataset=None,
 ):
@@ -94,14 +95,14 @@ def run_irl_training(
             texts.append(formatted_prompt + assistant_block)
         return {"text": texts}
 
-    train_dataset = train_dataset.map(
-        formatting_prompt_func,
-        batched=True,
-    )
-    val_dataset = val_dataset.map(
-        formatting_prompt_func,
-        batched=True,
-    )
+    # train_dataset = train_dataset.map(
+    #     formatting_prompt_func,
+    #     batched=True,
+    # )
+    # val_dataset = val_dataset.map(
+    #     formatting_prompt_func,
+    #     batched=True,
+    # )
 
     # create the callback
     gen_eval_cb = GenerationEvalCallback(
@@ -116,6 +117,7 @@ def run_irl_training(
     trainer = AIRLTrainer(
         policy_model=policy_model,
         reward_model=reward_model,
+        reward_funcs=reward_funcs, # Shall only use them for logging to start (or potential sparse reward)
         policy_tokenizer=policy_tokenizer,
         reward_tokenizer=reward_tokenizer,
         args=irl_config,

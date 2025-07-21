@@ -5,6 +5,7 @@ from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
 from src.data.dataset import get_dataset
 from src.training.irl_module import run_irl_training
 from src.utils.utils import set_seed
+from src.rewards.reward_functions import get_reward_functions
 
 
 @hydra.main(config_path="configs", config_name="config_irl_train", version_base="1.3")
@@ -36,15 +37,19 @@ def main(cfg: DictConfig):
     policy_model, reward_model, policy_tokenizer, reward_tokenizer = (
         irl_load_model_and_tokenizer_trl(cfg)
     )
+    
+    # Get reward functions
+    reward_funcs = get_reward_functions()
 
     # Run SFT training
     trainer = run_irl_training(
-        policy_model,
-        reward_model,
-        policy_tokenizer,
-        reward_tokenizer,
-        train_dataset,
-        cfg,
+        policy_model=policy_model,
+        reward_model=reward_model,
+        policy_tokenizer=policy_tokenizer,
+        reward_tokenizer=reward_tokenizer,
+        reward_funcs=reward_funcs,
+        train_dataset=train_dataset,
+        cfg=cfg,
         val_dataset=val_dataset,
     )
     trainer.evaluate()

@@ -24,7 +24,7 @@ model:
   reward_learning_rate: 2e-5
 
 dataset:
-  name: "gsm8k_kd"
+  name: "gsm8k"
   split: "train"
   train_ratio: 0.1
   val_ratio: 0.1
@@ -49,7 +49,7 @@ training:
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 16  # Number of trajectories to generate per input
+  num_generations: 16
 
 eval:
   do_eval: true
@@ -58,10 +58,6 @@ eval:
   per_device_eval_batch_size: 16
   eval_accumulation_steps: 2
   prediction_loss_only: false
-  metrics:
-    - "reward_accuracy"  # Accuracy of reward model
-    - "policy_diversity"  # Diversity of generated responses
-    - "expert_similarity"  # Similarity to expert demonstrations
 
 wandb:
   project: "expert_reasoning"

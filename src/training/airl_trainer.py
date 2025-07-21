@@ -47,7 +47,7 @@ See the class‑level docstring for details.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable
 
 import torch
 import torch.nn.functional as F
@@ -61,10 +61,11 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
     TrainerCallback,
-    Trainer,
 )
 
 from trl.trainer.utils import disable_dropout_in_model
+from trl import GRPOTrainer
+from src.config.irl_config import IRLConfig
 
 # Type aliases ---------------------------------------------------------------
 RewardModelType = Union[str, PreTrainedModel]
@@ -72,7 +73,7 @@ PolicyModelType = Union[str, PreTrainedModel]
 
 
 # ---------------------------------------------------------------------------
-class AIRLTrainer(Trainer):
+class AIRLTrainer(GRPOTrainer):
     """Adversarial IRL trainer using the AIRL discriminator‑style reward.
 
     Parameters
@@ -100,8 +101,8 @@ class AIRLTrainer(Trainer):
         self,
         policy_model: PolicyModelType,
         reward_model: RewardModelType,
-        *,
-        args,
+        reward_funcs: List[Callable],
+        args: IRLConfig,
         train_dataset: Optional[Dataset] = None,
         eval_dataset: Optional[Dataset] = None,
         policy_tokenizer: Optional[PreTrainedTokenizerBase] = None,
@@ -128,6 +129,8 @@ class AIRLTrainer(Trainer):
             )
         else:
             self.reward = reward_model
+            
+        self.reward_funcs = reward_funcs
 
         # Tokenizers --------------------------------------------------------------------
         self.policy_tokenizer = policy_tokenizer or AutoTokenizer.from_pretrained(
@@ -156,6 +159,7 @@ class AIRLTrainer(Trainer):
         super().__init__(
             model=self.policy,  # base Trainer still expects a *single* model; we wrap reward manually
             args=args,
+            reward_funcs=self.reward_funcs,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             processing_class=self.policy_tokenizer,
