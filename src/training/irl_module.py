@@ -5,6 +5,7 @@ from vllm import SamplingParams
 from src.training.callbacks import GenerationEvalCallback
 from src.config.irl_config import IRLConfig
 from src.training.irl_trainer import IRLTrainer
+from src.training.airl_trainer import AIRLTrainer
 
 from src.rewards.reward_functions import (
     xmlcount_reward_func,
@@ -23,7 +24,15 @@ reward_fns = [
 ]
 
 
-def run_irl_training(policy_model, reward_model, tokenizer, train_dataset, cfg, val_dataset=None):
+def run_irl_training(
+    policy_model,
+    reward_model,
+    policy_tokenizer,
+    reward_tokenizer,
+    train_dataset,
+    cfg,
+    val_dataset=None,
+):
 
     irl_config = IRLConfig(
         policy_learning_rate=cfg.model.policy_learning_rate,
@@ -35,22 +44,26 @@ def run_irl_training(policy_model, reward_model, tokenizer, train_dataset, cfg, 
         lr_scheduler_type=cfg.training.lr_scheduler_type,
         optim=cfg.training.optim,
         logging_steps=cfg.training.logging_steps,
-        policy_per_device_train_batch_size=cfg.training.policy_per_device_train_batch_size,
-        reward_per_device_train_batch_size=cfg.training.reward_per_device_train_batch_size,
+        per_device_train_batch_size=cfg.training.per_device_train_batch_size,
         per_device_eval_batch_size=cfg.eval.per_device_eval_batch_size,
-        policy_gradient_accumulation_steps=cfg.training.policy_gradient_accumulation_steps,
-        reward_gradient_accumulation_steps=cfg.training.reward_gradient_accumulation_steps,
+        gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
+        num_generations=cfg.sampling.num_generations,
+        max_prompt_length=None,
+        max_completion_length=cfg.model.max_seq_length,
         max_steps=cfg.training.max_steps,
-        save_strategy="no",  # Setting this to no, because I save it on my custom call-back
+        save_steps=cfg.eval.eval_steps,
         max_grad_norm=cfg.training.max_grad_norm,
         report_to=cfg.training.report_to,
         output_dir=cfg.training.output_dir,
+        use_vllm=cfg.model.fast_inference,
         do_eval=cfg.eval.do_eval,
         eval_strategy=cfg.eval.eval_strategy,
         eval_steps=cfg.eval.eval_steps,
-        eval_accumulation_steps=cfg.eval.eval_accumulation_steps,
-        prediction_loss_only=cfg.eval.prediction_loss_only,
         num_train_epochs=cfg.training.epochs,
+        temperature=cfg.sampling.temperature,
+        top_p=cfg.sampling.top_p,
+        log_completions=True,
+        num_completions_to_print=2,
     )
 
     # sampling params for generation
@@ -73,19 +86,13 @@ def run_irl_training(policy_model, reward_model, tokenizer, train_dataset, cfg, 
         texts = []
         for msgs, tgt in zip(prompts, targets):
             # 1) format system+user
-            formatted_prompt = tokenizer.apply_chat_template(
+            formatted_prompt = policy_tokenizer.apply_chat_template(
                 msgs, tokenize=False, add_generation_prompt=False
             )
             # 2) wrap the reasoning+answer as the assistant reply
             assistant_block = "<|im_start|>assistant\n" f"{tgt}" "<|im_end|>"
             texts.append(formatted_prompt + assistant_block)
         return {"text": texts}
-
-    response_template = "<|im_start|>assistant\n"
-    collator = DataCollatorForCompletionOnlyLM(
-        response_template=response_template,
-        tokenizer=tokenizer,
-    )
 
     train_dataset = train_dataset.map(
         formatting_prompt_func,
@@ -99,24 +106,21 @@ def run_irl_training(policy_model, reward_model, tokenizer, train_dataset, cfg, 
     # create the callback
     gen_eval_cb = GenerationEvalCallback(
         val_dataset=val_dataset,
-        tokenizer=tokenizer,
+        tokenizer=policy_tokenizer,
         reward_fns=reward_fns,
         sampling_params=sampling_params,
         batch_size=cfg.eval.per_device_eval_batch_size,
         output_dir=cfg.training.output_dir,
     )
 
-    import IPython
-    IPython.embed()
-    
-    trainer = IRLTrainer(
+    trainer = AIRLTrainer(
         policy_model=policy_model,
         reward_model=reward_model,
-        processing_class=tokenizer,
+        policy_tokenizer=policy_tokenizer,
+        reward_tokenizer=reward_tokenizer,
         args=irl_config,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        data_collator=collator,
         callbacks=[gen_eval_cb],
     )
 

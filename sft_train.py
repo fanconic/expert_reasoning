@@ -43,7 +43,7 @@ def main(cfg: DictConfig):
         cfg,
         val_dataset=val_dataset,
     )
-    
+
     metrics = trainer.evaluate()
     print(metrics)
 

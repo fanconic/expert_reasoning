@@ -65,7 +65,12 @@ from trl.trainer.utils import (
 
 if is_peft_available():
     import peft
-    from peft import PeftConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
+    from peft import (
+        PeftConfig,
+        PeftModel,
+        get_peft_model,
+        prepare_model_for_kbit_training,
+    )
 
 if is_wandb_available():
     import wandb
@@ -94,7 +99,10 @@ def remove_none_values(example: TListOrMapping) -> TListOrMapping:
     ```
     """
     if isinstance(example, list):
-        return [remove_none_values(value) if isinstance(value, (dict, list)) else value for value in example]
+        return [
+            remove_none_values(value) if isinstance(value, (dict, list)) else value
+            for value in example
+        ]
     elif isinstance(example, Mapping):
         return {
             key: remove_none_values(value) if isinstance(value, (dict, list)) else value
@@ -183,13 +191,17 @@ class DataCollatorForLanguageModeling(DataCollatorMixin):
     pad_to_multiple_of: Optional[int] = None
     return_tensors: str = "pt"
 
-    def torch_call(self, examples: list[Union[list[int], Any, dict[str, Any]]]) -> dict[str, Any]:
+    def torch_call(
+        self, examples: list[Union[list[int], Any, dict[str, Any]]]
+    ) -> dict[str, Any]:
         # Convert to tensor
         input_ids = [torch.tensor(example["input_ids"]) for example in examples]
         attention_mask = [torch.ones_like(input_ids) for input_ids in input_ids]
         if self.return_position_ids:
             if "position_ids" in examples[0]:
-                position_ids = [torch.tensor(example["position_ids"]) for example in examples]
+                position_ids = [
+                    torch.tensor(example["position_ids"]) for example in examples
+                ]
             else:
                 position_ids = [torch.arange(len(ids)) for ids in input_ids]
         if "labels" in examples[0]:
@@ -197,9 +209,13 @@ class DataCollatorForLanguageModeling(DataCollatorMixin):
         else:
             labels = [torch.tensor(example["input_ids"]) for example in examples]
         if self.completion_only_loss and "completion_mask" in examples[0]:
-            completion_mask = [torch.tensor(example["completion_mask"]) for example in examples]
+            completion_mask = [
+                torch.tensor(example["completion_mask"]) for example in examples
+            ]
         if "assistant_masks" in examples[0]:
-            assistant_masks = [torch.tensor(example["assistant_masks"]) for example in examples]
+            assistant_masks = [
+                torch.tensor(example["assistant_masks"]) for example in examples
+            ]
 
         # Pad
         output = {}
@@ -224,23 +240,40 @@ class DataCollatorForLanguageModeling(DataCollatorMixin):
                 pad_to_multiple_of=self.pad_to_multiple_of,
             )
             output["attention_mask"] = pad(
-                attention_mask, padding_value=0, padding_side="right", pad_to_multiple_of=self.pad_to_multiple_of
+                attention_mask,
+                padding_value=0,
+                padding_side="right",
+                pad_to_multiple_of=self.pad_to_multiple_of,
             )
             if self.return_position_ids:
                 output["position_ids"] = pad(
-                    position_ids, padding_value=0, padding_side="right", pad_to_multiple_of=self.pad_to_multiple_of
+                    position_ids,
+                    padding_value=0,
+                    padding_side="right",
+                    pad_to_multiple_of=self.pad_to_multiple_of,
                 )
             output["labels"] = pad(
-                labels, padding_value=-100, padding_side="right", pad_to_multiple_of=self.pad_to_multiple_of
+                labels,
+                padding_value=-100,
+                padding_side="right",
+                pad_to_multiple_of=self.pad_to_multiple_of,
             )
             if self.completion_only_loss and "completion_mask" in examples[0]:
                 completion_mask = pad(
-                    completion_mask, padding_value=0, padding_side="right", pad_to_multiple_of=self.pad_to_multiple_of
+                    completion_mask,
+                    padding_value=0,
+                    padding_side="right",
+                    pad_to_multiple_of=self.pad_to_multiple_of,
                 )
-                output["labels"][completion_mask == 0] = -100  # mask everything that is not in the completion
+                output["labels"][
+                    completion_mask == 0
+                ] = -100  # mask everything that is not in the completion
             if "assistant_masks" in examples[0]:
                 assistant_masks = pad(
-                    assistant_masks, padding_value=0, padding_side="right", pad_to_multiple_of=self.pad_to_multiple_of
+                    assistant_masks,
+                    padding_value=0,
+                    padding_side="right",
+                    pad_to_multiple_of=self.pad_to_multiple_of,
                 )
                 output["labels"][assistant_masks == 0] = -100
         return output
@@ -249,15 +282,15 @@ class DataCollatorForLanguageModeling(DataCollatorMixin):
 class IRLTrainer(Trainer):
     """
     A trainer for Adversarial Inverse Reinforcement Learning (AIRL) that learns from expert demonstrations.
-    
+
     This trainer implements the AIRL algorithm, which consists of two key components trained adversarially:
     1. A policy model (generator) that learns to imitate expert behavior
     2. A reward model (discriminator) that learns to distinguish between expert and generated behavior
 
     The training process alternates between:
-    1. Training the reward model to accurately discriminate between expert demonstrations 
+    1. Training the reward model to accurately discriminate between expert demonstrations
        and trajectories generated by the current policy
-    2. Training the policy model to generate trajectories that maximize the rewards 
+    2. Training the policy model to generate trajectories that maximize the rewards
        assigned by the current reward model
 
     Key Features:
@@ -272,53 +305,53 @@ class IRLTrainer(Trainer):
             The policy model that will learn to imitate expert behavior. Can be either:
             - A model ID string (e.g. 'gpt2') or path to load with AutoModelForCausalLM
             - A pretrained causal language model instance
-            
+
         reward_model (`Union[str, PreTrainedModel]`):
             The reward/discriminator model that learns to distinguish expert vs generated trajectories.
             Can be either:
-            - A model ID string or path to load with AutoModelForSequenceClassification  
+            - A model ID string or path to load with AutoModelForSequenceClassification
             - A pretrained sequence classification model instance
-            
+
         args (`IRLConfig`, *optional*):
             Training configuration including hyperparameters like learning rates, batch sizes,
             training steps, etc. Will use default config if not provided.
-            
+
         data_collator (`DataCollator`, *optional*):
             Function to collate training examples into batches. Defaults to DataCollatorForLanguageModeling
             configured for the policy model's tokenizer.
-            
+
         train_dataset (`Union[Dataset, IterableDataset]`):
             Dataset of expert demonstrations for training. Should contain either:
             - Raw text examples for standard language modeling
             - Structured conversations with roles and content
             - Preprocessed examples with input_ids field
-            
+
         eval_dataset (`Union[Dataset, IterableDataset, dict[str, Dataset]]`, *optional*):
             Validation dataset(s) in same format as train_dataset. Can be a single dataset
             or dict mapping names to datasets.
-            
+
         processing_class (`PreTrainedTokenizerBase`, *optional*):
             Tokenizer/processor for preparing inputs. Will load from policy_model's config if not provided.
-            
-        callbacks (`list[TrainerCallback]`, *optional*): 
+
+        callbacks (`list[TrainerCallback]`, *optional*):
             Custom callbacks for monitoring and controlling training. See Transformers documentation
             for available callbacks.
-            
+
         optimizers (`tuple[Optimizer, LRScheduler]`, *optional*):
             Custom optimizer and learning rate scheduler. Will use AdamW with linear warmup by default.
-            
+
         optimizer_cls_and_kwargs (`tuple[Type[Optimizer], dict]`, *optional*):
             Alternative way to specify optimizer class and args. Useful when model parameters
             aren't yet on target devices.
-            
+
         preprocess_logits_for_metrics (`Callable`, *optional*):
             Function to transform logits before computing metrics. Takes logits and labels tensors
             as input.
-            
+
         peft_config (`PeftConfig`, *optional*):
             Configuration for parameter-efficient fine-tuning methods like LoRA. Models will
             not use PEFT if None.
-            
+
         formatting_func (`Callable`, *optional*):
             Function to format raw examples before tokenization. Use only for non-preprocessed
             language modeling datasets.
@@ -335,19 +368,34 @@ class IRLTrainer(Trainer):
         train_dataset: Optional[Union[Dataset, IterableDataset]] = None,
         eval_dataset: Optional[Union[Dataset, dict[str, Dataset]]] = None,
         processing_class: Optional[
-            Union[PreTrainedTokenizerBase, BaseImageProcessor, FeatureExtractionMixin, ProcessorMixin]
+            Union[
+                PreTrainedTokenizerBase,
+                BaseImageProcessor,
+                FeatureExtractionMixin,
+                ProcessorMixin,
+            ]
         ] = None,
         compute_loss_func: Optional[Callable] = None,
         compute_metrics: Optional[Callable[[EvalPrediction], dict]] = None,
         callbacks: Optional[list[TrainerCallback]] = None,
-        optimizers: tuple[Optional[torch.optim.Optimizer], Optional[torch.optim.lr_scheduler.LambdaLR]] = (None, None),
-        optimizer_cls_and_kwargs: Optional[tuple[type[torch.optim.Optimizer], dict[str, Any]]] = None,
-        preprocess_logits_for_metrics: Optional[Callable[[torch.Tensor, torch.Tensor], torch.Tensor]] = None,
+        optimizers: tuple[
+            Optional[torch.optim.Optimizer], Optional[torch.optim.lr_scheduler.LambdaLR]
+        ] = (None, None),
+        optimizer_cls_and_kwargs: Optional[
+            tuple[type[torch.optim.Optimizer], dict[str, Any]]
+        ] = None,
+        preprocess_logits_for_metrics: Optional[
+            Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+        ] = None,
         peft_config: Optional["PeftConfig"] = None,
         formatting_func: Optional[Callable[[dict], str]] = None,
     ):
         # Args
-        model_id = model if isinstance(model, str) else model.config._name_or_path
+        model_id = (
+            policy_model
+            if isinstance(policy_model, str)
+            else policy_model.config._name_or_path
+        )
         if args is None:
             model_name = model_id.split("/")[-1]
             args = IRLConfig(f"{model_name}-IRL")
@@ -372,21 +420,18 @@ class IRLTrainer(Trainer):
                 )
             processing_class.eos_token_id = eos_token_id
 
-        # Model
-        if args.model_init_kwargs is not None and not isinstance(model, str):
-            warnings.warn(
-                "You passed model_init_kwargs to the `IRLConfig`, but your model is already instantiated. "
-                "The `model_init_kwargs` will be ignored."
-            )
-        if isinstance(model, str):
-            model = self._create_model_from_path(model, args)
-
         if args.chat_template_path is not None:
-            if os.path.isfile(args.chat_template_path) and args.chat_template_path.endswith((".jinja", ".j2")):
-                with open(args.chat_template_path, encoding="utf-8") as chat_template_file:
+            if os.path.isfile(
+                args.chat_template_path
+            ) and args.chat_template_path.endswith((".jinja", ".j2")):
+                with open(
+                    args.chat_template_path, encoding="utf-8"
+                ) as chat_template_file:
                     processing_class.chat_template = chat_template_file.read()
             else:
-                model, processing_class = clone_chat_template(model, processing_class, args.chat_template_path)
+                policy_model, processing_class = clone_chat_template(
+                    policy_model, processing_class, args.chat_template_path
+                )
 
         # PEFT configuration and model wrapping
         if peft_config is not None:
@@ -395,24 +440,28 @@ class IRLTrainer(Trainer):
 
         self.policy_model = policy_model
         self.reward_model = reward_model
-        
+
         # Initialize adversarial training parameters
         self.disc_criterion = nn.BCEWithLogitsLoss()
         self.policy_criterion = nn.CrossEntropyLoss(ignore_index=-100)
-        
+
         # Data collator
         # FFD packing requires padding-free mode; otherwise, the collator outputs padded attention masks, causing
         # FlashAttention to ignore position_ids and recompute them incorrectly from the padded attention mask.
-        self.padding_free = args.padding_free or (args.packing and args.packing_strategy == "ffd")
+        self.padding_free = args.padding_free or (
+            args.packing and args.packing_strategy == "ffd"
+        )
         if self.padding_free:
             if data_collator is not None:
-                raise ValueError("Passing a custom data collator is not supported when using padding-free.")
+                raise ValueError(
+                    "Passing a custom data collator is not supported when using padding-free."
+                )
             if args.packing and args.packing_strategy == "wrapped":
                 warnings.warn(
                     "You are passing `padding_free=True` with the 'wrapped' packing strategy, which is not "
                     "recommended. Please refer to the documentation to understand why this is not recommended."
                 )
-            if model.config._attn_implementation != "flash_attention_2":
+            if policy_model.config._attn_implementation != "flash_attention_2":
                 warnings.warn(
                     "Padding-free training is enabled, but the attention implementation is not set to "
                     "'flash_attention_2'. Padding-free training flattens batches into a single sequence, and "
@@ -421,7 +470,7 @@ class IRLTrainer(Trainer):
                     "`attn_implementation='flash_attention_2'` in the model configuration, or verify that your "
                     "attention mechanism can handle flattened sequences."
                 )
-            if args.per_device_train_batch_size == 1 and not args.packing:
+            if args.policy_per_device_train_batch_size == 1 and not args.packing:
                 warnings.warn(
                     "You are using a per_device_train_batch_size of 1 with padding-free training. Using a batch size "
                     "of 1 anihilate the benefits of padding-free training. Please consider increasing the batch size "
@@ -437,7 +486,11 @@ class IRLTrainer(Trainer):
         if data_collator is None:
             # Get the pad token: if not provided, use the one from the processing class or the eos token
             # if the processing class does not have a pad token.
-            pad_token = args.pad_token or processing_class.pad_token or processing_class.eos_token
+            pad_token = (
+                args.pad_token
+                or processing_class.pad_token
+                or processing_class.eos_token
+            )
             pad_token_id = processing_class.convert_tokens_to_ids(pad_token)
             if pad_token_id is None:
                 raise ValueError(
@@ -450,14 +503,15 @@ class IRLTrainer(Trainer):
                 completion_only_loss=self.completion_only_loss,
                 padding_free=self.padding_free,
                 # Using position_ids without flash_attn hurts the training
-                return_position_ids=model.config._attn_implementation == "flash_attention_2",
+                return_position_ids=policy_model.config._attn_implementation
+                == "flash_attention_2",
                 pad_to_multiple_of=args.pad_to_multiple_of,
             )
 
         if (
             args.packing
             and args.packing_strategy == "ffd"
-            and model.config._attn_implementation != "flash_attention_2"
+            and policy_model.config._attn_implementation != "flash_attention_2"
         ):
             warnings.warn(
                 "You are using packing, but the attention implementation is not set to 'flash_attention_2'. Packing "
@@ -473,7 +527,9 @@ class IRLTrainer(Trainer):
             )
 
         # Dataset
-        preprocess_dataset = args.dataset_kwargs is None or not args.dataset_kwargs.get("skip_prepare_dataset", False)
+        preprocess_dataset = args.dataset_kwargs is None or not args.dataset_kwargs.get(
+            "skip_prepare_dataset", False
+        )
         if preprocess_dataset:
             if self.completion_only_loss and formatting_func:
                 raise ValueError(
@@ -483,18 +539,37 @@ class IRLTrainer(Trainer):
                     "dataset, or disable `completion_only_loss` in `IRLConfig`."
                 )
             train_dataset = self._prepare_dataset(
-                train_dataset, processing_class, args, args.packing, formatting_func, "train"
+                train_dataset,
+                processing_class,
+                args,
+                args.packing,
+                formatting_func,
+                "train",
             )
             if eval_dataset is not None:
-                packing = args.packing if args.eval_packing is None else args.eval_packing
+                packing = (
+                    args.packing if args.eval_packing is None else args.eval_packing
+                )
                 if isinstance(eval_dataset, dict):
                     eval_dataset = {
-                        key: self._prepare_dataset(dataset, processing_class, args, packing, formatting_func, key)
+                        key: self._prepare_dataset(
+                            dataset,
+                            processing_class,
+                            args,
+                            packing,
+                            formatting_func,
+                            key,
+                        )
                         for key, dataset in eval_dataset.items()
                     }
                 else:
                     eval_dataset = self._prepare_dataset(
-                        eval_dataset, processing_class, args, packing, formatting_func, "eval"
+                        eval_dataset,
+                        processing_class,
+                        args,
+                        packing,
+                        formatting_func,
+                        "eval",
                     )
 
         # Initialize the metrics
@@ -508,7 +583,7 @@ class IRLTrainer(Trainer):
         # - Optimizer and scheduler creation
 
         super().__init__(
-            model=model,
+            model=policy_model,
             args=args,
             data_collator=data_collator,
             train_dataset=train_dataset,
@@ -524,7 +599,9 @@ class IRLTrainer(Trainer):
 
         # Initialize activation offloading context
         if self.args.activation_offloading:
-            self.maybe_activation_offload_context = get_act_offloading_ctx_manager(model=self.model)
+            self.maybe_activation_offload_context = get_act_offloading_ctx_manager(
+                model=self.model
+            )
         else:
             self.maybe_activation_offload_context = contextlib.nullcontext()
 
@@ -532,12 +609,18 @@ class IRLTrainer(Trainer):
         if hasattr(self.model, "add_model_tags"):
             self.model.add_model_tags(self._tag_names)
 
-    def _create_model_from_path(self, model_path: str, args: IRLConfig) -> PreTrainedModel:
+    def _create_model_from_path(
+        self, model_path: str, args: IRLConfig
+    ) -> PreTrainedModel:
         """Creates a model from a path or model identifier."""
         model_init_kwargs = args.model_init_kwargs or {}
         # Handle torch dtype
         torch_dtype = model_init_kwargs.get("torch_dtype")
-        if isinstance(torch_dtype, torch.dtype) or torch_dtype == "auto" or torch_dtype is None:
+        if (
+            isinstance(torch_dtype, torch.dtype)
+            or torch_dtype == "auto"
+            or torch_dtype is None
+        ):
             pass  # torch_dtype is already a torch.dtype or "auto" or None
         elif isinstance(torch_dtype, str):  # it's a str, but not "auto"
             torch_dtype = getattr(torch, torch_dtype)
@@ -555,10 +638,14 @@ class IRLTrainer(Trainer):
         model = AutoModelForCausalLM.from_pretrained(model_path, **model_init_kwargs)
         return model
 
-    def _prepare_peft_model(self, model: PreTrainedModel, peft_config: Any, args: IRLConfig) -> PreTrainedModel:
+    def _prepare_peft_model(
+        self, model: PreTrainedModel, peft_config: Any, args: IRLConfig
+    ) -> PreTrainedModel:
         """Prepares a model for PEFT training."""
         if not is_peft_available():
-            raise ImportError("To use PeftModel, you need to install the `peft` library.")
+            raise ImportError(
+                "To use PeftModel, you need to install the `peft` library."
+            )
 
         if not isinstance(peft_config, PeftConfig):
             raise ValueError(
@@ -570,7 +657,9 @@ class IRLTrainer(Trainer):
             return model
 
         # Handle quantized models (QLoRA)
-        is_qlora = getattr(model, "is_loaded_in_4bit", False) or getattr(model, "is_loaded_in_8bit", False)
+        is_qlora = getattr(model, "is_loaded_in_4bit", False) or getattr(
+            model, "is_loaded_in_8bit", False
+        )
 
         is_sharded_qlora = False
         if getattr(model, "is_loaded_in_4bit", False):
@@ -590,7 +679,8 @@ class IRLTrainer(Trainer):
 
         # Create PEFT model
         if (
-            version.parse(peft.__version__) >= version.parse("0.12")  # autocast_adapter_dtype introduced in 0.12
+            version.parse(peft.__version__)
+            >= version.parse("0.12")  # autocast_adapter_dtype introduced in 0.12
             and getattr(model, "is_loaded_in_4bit", False)
             and is_sharded_qlora
         ):
@@ -599,12 +689,18 @@ class IRLTrainer(Trainer):
             model = get_peft_model(model, peft_config)
 
         # Handle bf16 casting for 4-bit models
-        if args.bf16 and getattr(model, "is_loaded_in_4bit", False) and not is_sharded_qlora:
+        if (
+            args.bf16
+            and getattr(model, "is_loaded_in_4bit", False)
+            and not is_sharded_qlora
+        ):
             peft_module_casting_to_bf16(model)
 
         return model
 
-    def _prepare_model_for_kbit_training(self, model: PreTrainedModel, args: IRLConfig) -> PreTrainedModel:
+    def _prepare_model_for_kbit_training(
+        self, model: PreTrainedModel, args: IRLConfig
+    ) -> PreTrainedModel:
         """Prepares a quantized model for kbit training."""
         prepare_model_kwargs = {
             "use_gradient_checkpointing": args.gradient_checkpointing,
@@ -613,11 +709,14 @@ class IRLTrainer(Trainer):
 
         return prepare_model_for_kbit_training(model, **prepare_model_kwargs)
 
-    def _enable_gradient_checkpointing(self, model: PreTrainedModel, args: IRLConfig) -> PreTrainedModel:
+    def _enable_gradient_checkpointing(
+        self, model: PreTrainedModel, args: IRLConfig
+    ) -> PreTrainedModel:
         """Enables gradient checkpointing for the model."""
         gradient_checkpointing_kwargs = args.gradient_checkpointing_kwargs or {}
         use_reentrant = (
-            "use_reentrant" not in gradient_checkpointing_kwargs or gradient_checkpointing_kwargs["use_reentrant"]
+            "use_reentrant" not in gradient_checkpointing_kwargs
+            or gradient_checkpointing_kwargs["use_reentrant"]
         )
 
         if use_reentrant:
@@ -628,14 +727,21 @@ class IRLTrainer(Trainer):
                 def make_inputs_require_grad(module, input, output):
                     output.requires_grad_(True)
 
-                model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
+                model.get_input_embeddings().register_forward_hook(
+                    make_inputs_require_grad
+                )
 
         return model
 
     def _prepare_dataset(
         self,
         dataset: Union[Dataset, IterableDataset],
-        processing_class: Union[PreTrainedTokenizerBase, BaseImageProcessor, FeatureExtractionMixin, ProcessorMixin],
+        processing_class: Union[
+            PreTrainedTokenizerBase,
+            BaseImageProcessor,
+            FeatureExtractionMixin,
+            ProcessorMixin,
+        ],
         args: IRLConfig,
         packing: bool,
         formatting_func: Optional[Callable[[dict], str]],
@@ -647,7 +753,9 @@ class IRLTrainer(Trainer):
 
         # Tabular backends like Arrow/Parquet insert `None` for mismatched keys in nested structures. Clean them from
         # sampled data.
-        if isinstance(dataset, Dataset):  # IterableDataset does not support `with_transform`
+        if isinstance(
+            dataset, Dataset
+        ):  # IterableDataset does not support `with_transform`
             dataset = dataset.with_transform(remove_none_values)
 
         # If the dataset is already preprocessed (tokenized), skip the processing steps.
@@ -670,8 +778,12 @@ class IRLTrainer(Trainer):
                 )
 
             if formatting_func is not None and not is_processed:
-                if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
-                    map_kwargs["desc"] = f"Applying formatting function to {dataset_name} dataset"
+                if isinstance(
+                    dataset, Dataset
+                ):  # `IterableDataset.map` does not support `desc`
+                    map_kwargs["desc"] = (
+                        f"Applying formatting function to {dataset_name} dataset"
+                    )
 
                 def _func(example):
                     return {"text": formatting_func(example)}
@@ -693,40 +805,58 @@ class IRLTrainer(Trainer):
                 # Convert the dataset to ChatML if needed
                 first_example = next(iter(dataset))
                 if is_conversational_from_value(first_example):
-                    if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
-                        map_kwargs["desc"] = f"Converting {dataset_name} dataset to ChatML"
+                    if isinstance(
+                        dataset, Dataset
+                    ):  # `IterableDataset.map` does not support `desc`
+                        map_kwargs["desc"] = (
+                            f"Converting {dataset_name} dataset to ChatML"
+                        )
                     column_names = next(iter(dataset)).keys()
                     dataset = dataset.map(
                         maybe_convert_to_chatml,
-                        remove_columns="conversations" if "conversations" in column_names else None,
+                        remove_columns=(
+                            "conversations" if "conversations" in column_names else None
+                        ),
                         **map_kwargs,
                     )
 
                 # Apply the chat template if needed
                 first_example = next(iter(dataset))
                 if not is_conversational(first_example):
-                    if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
+                    if isinstance(
+                        dataset, Dataset
+                    ):  # `IterableDataset.map` does not support `desc`
                         map_kwargs["desc"] = f"Adding EOS to {dataset_name} dataset"
 
                     def add_eos(example, eos_token):
-                        if "text" in example and not example["text"].endswith(eos_token):  # language modeling case
+                        if "text" in example and not example["text"].endswith(
+                            eos_token
+                        ):  # language modeling case
                             example["text"] = example["text"] + eos_token
-                        elif "completion" in example and not example["completion"].endswith(eos_token):
+                        elif "completion" in example and not example[
+                            "completion"
+                        ].endswith(eos_token):
                             example["completion"] = example["completion"] + eos_token
                         return example
 
                     dataset = dataset.map(
                         add_eos,
                         fn_kwargs={"eos_token": processing_class.eos_token},
-                        remove_columns="messages" if "messages" in column_names else None,  # renamed to "text"
+                        remove_columns=(
+                            "messages" if "messages" in column_names else None
+                        ),  # renamed to "text"
                         **map_kwargs,
                     )
 
                 # Tokenize the dataset
-                if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
+                if isinstance(
+                    dataset, Dataset
+                ):  # `IterableDataset.map` does not support `desc`
                     map_kwargs["desc"] = f"Tokenizing {dataset_name} dataset"
 
-                def tokenize(example, processing_class, dataset_text_field, assistant_only_loss):
+                def tokenize(
+                    example, processing_class, dataset_text_field, assistant_only_loss
+                ):
                     if "prompt" in example:  # prompt-completion case
                         if is_conversational(example):
                             prompt_ids = processing_class.apply_chat_template(
@@ -735,12 +865,17 @@ class IRLTrainer(Trainer):
                                 **example.get("chat_template_kwargs", {}),
                             )
                             prompt_completion_ids = processing_class.apply_chat_template(
-                                example["prompt"] + example["completion"],
+                                example["prompt"]
+                                + [
+                                    {"content": example["target"], "role": "assistant"}
+                                ],  # TODO: potentially fix in the future to be more modular
                                 tools=example.get("tools"),
                                 **example.get("chat_template_kwargs", {}),
                             )
                         else:
-                            prompt_ids = processing_class(text=example["prompt"]).input_ids
+                            prompt_ids = processing_class(
+                                text=example["prompt"]
+                            ).input_ids
                             prompt_completion_ids = processing_class(
                                 text=example["prompt"] + example["completion"]
                             ).input_ids
@@ -754,8 +889,13 @@ class IRLTrainer(Trainer):
                             )
 
                         # Create a completion mask
-                        completion_mask = [0] * len(prompt_ids) + [1] * (len(prompt_completion_ids) - len(prompt_ids))
-                        processed = {"input_ids": prompt_completion_ids, "completion_mask": completion_mask}
+                        completion_mask = [0] * len(prompt_ids) + [1] * (
+                            len(prompt_completion_ids) - len(prompt_ids)
+                        )
+                        processed = {
+                            "input_ids": prompt_completion_ids,
+                            "completion_mask": completion_mask,
+                        }
 
                     else:  # language modeling case
                         if is_conversational(example):
@@ -766,7 +906,10 @@ class IRLTrainer(Trainer):
                                 tools=example.get("tools"),
                                 **example.get("chat_template_kwargs", {}),
                             )
-                            if "assistant_masks" in processed and 1 not in processed["assistant_masks"]:
+                            if (
+                                "assistant_masks" in processed
+                                and 1 not in processed["assistant_masks"]
+                            ):
                                 raise RuntimeError(
                                     "You're using `assistant_only_loss=True`, but at least one example has no "
                                     "assistant tokens. This usually means the tokenizer's chat template doesn't "
@@ -774,9 +917,17 @@ class IRLTrainer(Trainer):
                                     "check the template and ensure it's correctly configured to support assistant "
                                     "masking."
                                 )
-                            processed = {k: processed[k] for k in ("input_ids", "assistant_masks") if k in processed}
+                            processed = {
+                                k: processed[k]
+                                for k in ("input_ids", "assistant_masks")
+                                if k in processed
+                            }
                         else:
-                            processed = {"input_ids": processing_class(text=example[dataset_text_field]).input_ids}
+                            processed = {
+                                "input_ids": processing_class(
+                                    text=example[dataset_text_field]
+                                ).input_ids
+                            }
                     return processed
 
                 dataset = dataset.map(
@@ -792,19 +943,29 @@ class IRLTrainer(Trainer):
             # Pack or truncate
             if packing:
                 if args.max_length is None:
-                    raise ValueError("When packing is enabled, `max_length` can't be `None`.")
-                if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
+                    raise ValueError(
+                        "When packing is enabled, `max_length` can't be `None`."
+                    )
+                if isinstance(
+                    dataset, Dataset
+                ):  # `IterableDataset.map` does not support `desc`
                     map_kwargs["desc"] = f"Packing {dataset_name} dataset"
                 dataset = dataset.select_columns("input_ids")
                 # Packing adds new column "position_ids" needed for document aware flash attention
-                dataset = pack_dataset(dataset, args.max_length, args.packing_strategy, map_kwargs)
+                dataset = pack_dataset(
+                    dataset, args.max_length, args.packing_strategy, map_kwargs
+                )
             elif args.max_length is not None:
-                if isinstance(dataset, Dataset):  # `IterableDataset.map` does not support `desc`
+                if isinstance(
+                    dataset, Dataset
+                ):  # `IterableDataset.map` does not support `desc`
                     map_kwargs["desc"] = f"Truncating {dataset_name} dataset"
                 dataset = truncate_dataset(dataset, args.max_length, map_kwargs)
             # For Liger kernel, ensure only input_ids is present
             if args.use_liger_kernel:
-                dataset = dataset.select_columns({"input_ids", "position_ids"}.intersection(dataset.column_names))
+                dataset = dataset.select_columns(
+                    {"input_ids", "position_ids"}.intersection(dataset.column_names)
+                )
 
         return dataset
 
@@ -825,57 +986,61 @@ class IRLTrainer(Trainer):
     def train_discriminator(self, expert_batch, generated_batch):
         """
         Train the reward model (discriminator) to distinguish between expert and generated trajectories.
-        
+
         Args:
             expert_batch: Batch of expert demonstrations
             generated_batch: Batch of trajectories generated by policy model
         """
         # Prepare inputs
         expert_labels = torch.ones(expert_batch["input_ids"].size(0)).to(self.device)
-        generated_labels = torch.zeros(generated_batch["input_ids"].size(0)).to(self.device)
-        
+        generated_labels = torch.zeros(generated_batch["input_ids"].size(0)).to(
+            self.device
+        )
+
         # Get reward scores
         expert_rewards = self.reward_model(**expert_batch).logits.squeeze()
         generated_rewards = self.reward_model(**generated_batch).logits.squeeze()
-        
+
         # Compute discriminator loss
         expert_loss = self.disc_criterion(expert_rewards, expert_labels)
         generated_loss = self.disc_criterion(generated_rewards, generated_labels)
         disc_loss = expert_loss + generated_loss
-        
+
         # Update discriminator
         disc_loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
-        
+
         return {"disc_loss": disc_loss.item()}
 
     def train_policy(self, batch):
         """
         Train the policy model to maximize the learned reward function.
-        
+
         Args:
             batch: Batch of input sequences
         """
         # Generate trajectories
         outputs = self.policy_model(**batch)
         logits = outputs.logits
-        
+
         # Get rewards from discriminator
         with torch.no_grad():
             rewards = self.reward_model(**batch).logits
-        
+
         # Compute policy gradient loss
         policy_loss = -torch.mean(rewards * logits.softmax(dim=-1).log())
-        
+
         # Update policy
         policy_loss.backward()
         self.optimizer.step()
         self.optimizer.zero_grad()
-        
+
         return {"policy_loss": policy_loss.item()}
 
-    def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
+    def compute_loss(
+        self, model, inputs, return_outputs=False, num_items_in_batch=None
+    ):
         """
         Compute training loss for either policy or discriminator model
         """
@@ -887,12 +1052,22 @@ class IRLTrainer(Trainer):
             # When using padding-free, the attention_mask is not present in the inputs, instead we have cu_seq_lens_q,
             # cu_seq_lens_k, and max_length_k, max_length_q and position_ids.
             if "attention_mask" in inputs:
-                num_tokens_in_batch = self.accelerator.gather_for_metrics(inputs["attention_mask"].sum()).sum().item()
+                num_tokens_in_batch = (
+                    self.accelerator.gather_for_metrics(inputs["attention_mask"].sum())
+                    .sum()
+                    .item()
+                )
             elif "position_ids" in inputs:
-                local_num_tokens = torch.tensor(inputs["position_ids"].size(1), device=inputs["position_ids"].device)
-                num_tokens_in_batch = self.accelerator.gather_for_metrics(local_num_tokens).sum().item()
+                local_num_tokens = torch.tensor(
+                    inputs["position_ids"].size(1), device=inputs["position_ids"].device
+                )
+                num_tokens_in_batch = (
+                    self.accelerator.gather_for_metrics(local_num_tokens).sum().item()
+                )
             else:
-                raise ValueError("Expected 'attention_mask' or 'position_ids' in inputs.")
+                raise ValueError(
+                    "Expected 'attention_mask' or 'position_ids' in inputs."
+                )
             self._total_train_tokens += num_tokens_in_batch
         self._metrics[mode]["num_tokens"] = [self._total_train_tokens]
 
@@ -918,7 +1093,9 @@ class IRLTrainer(Trainer):
 
             # Compute the mean token accuracy and log it
             total_sum = total_tokens.sum()
-            accuracy = (correct_tokens.sum() / total_sum).item() if total_sum > 0 else 0.0
+            accuracy = (
+                (correct_tokens.sum() / total_sum).item() if total_sum > 0 else 0.0
+            )
             self._metrics[mode]["mean_token_accuracy"].append(accuracy)
 
         return (loss, outputs) if return_outputs else loss
@@ -932,7 +1109,7 @@ class IRLTrainer(Trainer):
         """
         # Get expert demonstrations batch
         expert_batch = {k: v for k, v in inputs.items() if k != "generated"}
-        
+
         # Generate trajectories using current policy
         with torch.no_grad():
             generated_outputs = self.policy_model.generate(
@@ -940,28 +1117,30 @@ class IRLTrainer(Trainer):
                 attention_mask=inputs["attention_mask"],
                 max_length=self.args.max_length,
                 do_sample=True,
-                num_return_sequences=1
+                num_return_sequences=1,
             )
             generated_batch = {
                 "input_ids": generated_outputs,
-                "attention_mask": torch.ones_like(generated_outputs)
+                "attention_mask": torch.ones_like(generated_outputs),
             }
-        
+
         # Train discriminator
         disc_metrics = self.train_discriminator(expert_batch, generated_batch)
-        
-        # Train policy 
+
+        # Train policy
         policy_metrics = self.train_policy(expert_batch)
-        
+
         return {
             "loss": disc_metrics["disc_loss"] + policy_metrics["policy_loss"],
             **disc_metrics,
-            **policy_metrics
+            **policy_metrics,
         }
 
     def log(self, logs: dict[str, float], start_time: Optional[float] = None) -> None:
         mode = "train" if self.model.training else "eval"
-        metrics = {key: sum(val) / len(val) for key, val in self._metrics[mode].items()}  # average the metrics
+        metrics = {
+            key: sum(val) / len(val) for key, val in self._metrics[mode].items()
+        }  # average the metrics
 
         # This method can be called both in training and evaluation. When called in evaluation, the keys in `logs`
         # start with "eval_". We need to add the prefix "eval_" to the keys in `metrics` to match the format.
@@ -1001,7 +1180,9 @@ class IRLTrainer(Trainer):
         if not self.is_world_process_zero():
             return
 
-        if hasattr(self.model.config, "_name_or_path") and not os.path.isdir(self.model.config._name_or_path):
+        if hasattr(self.model.config, "_name_or_path") and not os.path.isdir(
+            self.model.config._name_or_path
+        ):
             base_model = self.model.config._name_or_path
         else:
             base_model = None
@@ -1025,7 +1206,11 @@ class IRLTrainer(Trainer):
             hub_model_id=self.hub_model_id,
             dataset_name=dataset_name,
             tags=list(tags),
-            wandb_url=wandb.run.get_url() if is_wandb_available() and wandb.run is not None else None,
+            wandb_url=(
+                wandb.run.get_url()
+                if is_wandb_available() and wandb.run is not None
+                else None
+            ),
             comet_url=get_comet_experiment_url(),
             trainer_name="SFT",
         )

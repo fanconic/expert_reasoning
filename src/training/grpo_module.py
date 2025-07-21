@@ -43,8 +43,8 @@ def run_grpo_training(
         num_train_epochs=cfg.training.epochs,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
-        log_completions = True,
-        num_completions_to_print=2
+        log_completions=True,
+        num_completions_to_print=2,
     )
 
     # Instantiate the GRPOTrainer.
@@ -56,7 +56,7 @@ def run_grpo_training(
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
     )
-    
+
     trainer.train()
     metrics = trainer.evaluate()
     print(metrics)

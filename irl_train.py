@@ -1,7 +1,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
-from src.models.model_module import irl_load_model_and_tokenizer_trl
+from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
 from src.data.dataset import get_dataset
 from src.training.irl_module import run_irl_training
 from src.utils.utils import set_seed
@@ -33,13 +33,16 @@ def main(cfg: DictConfig):
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
     # Load model and tokenizer from unsloth
-    policy_model, reward_model, tokenizer = irl_load_model_and_tokenizer_trl(cfg)
+    policy_model, reward_model, policy_tokenizer, reward_tokenizer = (
+        irl_load_model_and_tokenizer_trl(cfg)
+    )
 
     # Run SFT training
     trainer = run_irl_training(
         policy_model,
         reward_model,
-        tokenizer,
+        policy_tokenizer,
+        reward_tokenizer,
         train_dataset,
         cfg,
         val_dataset=val_dataset,

@@ -12,7 +12,7 @@ from src.rewards.reward_functions import (
     eval_correctness,
     int_reward_func,
     xmlcount_reward_func,
-    correctness_reward_func
+    correctness_reward_func,
 )
 import numpy as np
 from src.eval.eval_module import compute_pass_at_k
@@ -39,7 +39,7 @@ def main(cfg: DictConfig):
     print("Evaluation configuration:\n", OmegaConf.to_yaml(cfg))
 
     set_seed(cfg.seed)
-    
+
     # Initialize wandb
     if cfg.eval.report_to == "wandb":
         wandb_config = OmegaConf.to_container(cfg, resolve=True)
@@ -62,7 +62,7 @@ def main(cfg: DictConfig):
     # Load model and tokenizer
     model, tokenizer = load_model_and_tokenizer(cfg)
     model.eval()
-    
+
     lora_req = model.load_lora(cfg.model.name, load_tensors=True)
 
     # Generation loop
@@ -74,7 +74,7 @@ def main(cfg: DictConfig):
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )
-    
+
     sums = {name: 0.0 for name, _ in reward_fns}
     sum_sqs = {name: 0.0 for name, _ in reward_fns}
     count = 0
@@ -90,7 +90,7 @@ def main(cfg: DictConfig):
             maybe_apply_chat_template({"prompt": p}, tokenizer)["prompt"]
             for p in prompts
         ]
-        
+
         # generate with vllm
         outputs = model.fast_generate(
             prompts_text,
@@ -98,14 +98,14 @@ def main(cfg: DictConfig):
             use_tqdm=False,
             lora_request=lora_req,
         )
-        
-        gens = [[out.outputs[i].text for i in range(16)]  for out in outputs]
+
+        gens = [[out.outputs[i].text for i in range(16)] for out in outputs]
         completions = [[{"content": g[i]} for i in range(16)] for g in gens]
-        
+
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)
             all_correct_flags.append(correct_flags)
-            
+
             for name, fn in reward_fns:
                 batch_score = float(
                     np.mean(
@@ -123,25 +123,26 @@ def main(cfg: DictConfig):
         if cfg.eval.report_to == "wandb":
             wandb.log({f"test/pass@{k}": v})
         print(f"pass@{k}: {v:.4f}")
-        
+
     metrics_mean = {
-            f"test/rewards/{name}/mean": sums[name] / count
-            for name, _ in reward_fns
-        }
-    
+        f"test/rewards/{name}/mean": sums[name] / count for name, _ in reward_fns
+    }
+
     metrics_std = {
         f"test/rewards/{name}/std": np.sqrt(
             (sum_sqs[name] / count) - (sums[name] / count) ** 2
         )
         for name, _ in reward_fns
     }
-    
+
     metrics = {**metrics_mean, **metrics_std}
     print("\n--- Final Rewards ---")
     if cfg.eval.report_to == "wandb":
         wandb.log(metrics)
     for name, _ in reward_fns:
-        print(f"{name} mean: {metrics[f'test/rewards/{name}/mean']:.2f}, std: {metrics[f'test/rewards/{name}/std']:.2f}")
+        print(
+            f"{name} mean: {metrics[f'test/rewards/{name}/mean']:.2f}, std: {metrics[f'test/rewards/{name}/std']:.2f}"
+        )
 
 
 if __name__ == "__main__":
