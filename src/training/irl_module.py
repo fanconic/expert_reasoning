@@ -1,6 +1,3 @@
-from trl import DataCollatorForCompletionOnlyLM
-
-
 from vllm import SamplingParams
 from src.training.callbacks import GenerationEvalCallback
 from src.config.irl_config import IRLConfig
@@ -95,14 +92,14 @@ def run_irl_training(
             texts.append(formatted_prompt + assistant_block)
         return {"text": texts}
 
-    # train_dataset = train_dataset.map(
-    #     formatting_prompt_func,
-    #     batched=True,
-    # )
-    # val_dataset = val_dataset.map(
-    #     formatting_prompt_func,
-    #     batched=True,
-    # )
+    train_dataset = train_dataset.map(
+        formatting_prompt_func,
+        batched=True,
+    )
+    val_dataset = val_dataset.map(
+        formatting_prompt_func,
+        batched=True,
+    )
 
     # create the callback
     gen_eval_cb = GenerationEvalCallback(

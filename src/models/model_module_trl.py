@@ -99,7 +99,7 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
     reward_lora_rank = getattr(config.model, "reward_lora_rank", lora_rank)
     
     # --------------------------------------------------------------
-    # Policy Model - FIXED: Set use_cache=False at model config level
+    # Policy Model
     policy_model = AutoModelForCausalLM.from_pretrained(
         policy_model_name,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
@@ -131,7 +131,7 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
         policy_model.enable_input_require_grads()
 
     # --------------------------------------------------------------
-    # Reward Model - FIXED: Set use_cache=False at model config level
+    # Reward Model
     reward_model = AutoModelForCausalLM.from_pretrained(
         reward_model_name,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
