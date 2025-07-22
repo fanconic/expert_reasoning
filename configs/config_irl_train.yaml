@@ -6,10 +6,10 @@ defaults:
 
 model:
   policy_name: "Qwen/Qwen2.5-3B-Instruct"
-  reward_name: "Qwen/Qwen2.5-1.5B-Instruct"
+  reward_name: "Qwen/Qwen2.5-0.5B-Instruct" #Qwen/Qwen2.5-0.5B-Instruct
   max_seq_length: 1024
   load_in_4bit: true
-  fast_inference: true
+  fast_inference: false
   
   # Common settings
   lora_rank: 64  # Base LoRA rank

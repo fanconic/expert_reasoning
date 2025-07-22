@@ -175,146 +175,146 @@ class AIRLTrainer(GRPOTrainer):
                 self.reward.parameters(), lr=args.learning_rate
             )
 
-    # -----------------------------------------------------------------------
-    # Data utilities
-    # -----------------------------------------------------------------------
-    def _tokenise_examples(
-        self, examples: List[Dict[str, Any]], *, tokenizer: PreTrainedTokenizerBase
-    ) -> Dict[str, torch.Tensor]:
-        """Tokenise list of {prompt, completion} dicts into model inputs."""
-        texts = [ex["prompt"] + ex["completion"] for ex in examples]
-        tok = tokenizer(
-            text=texts, padding=True, return_tensors="pt", add_special_tokens=False
-        )
-        return tok
+    # # -----------------------------------------------------------------------
+    # # Data utilities
+    # # -----------------------------------------------------------------------
+    # def _tokenise_examples(
+    #     self, examples: List[Dict[str, Any]], *, tokenizer: PreTrainedTokenizerBase
+    # ) -> Dict[str, torch.Tensor]:
+    #     """Tokenise list of {prompt, completion} dicts into model inputs."""
+    #     texts = [ex["prompt"] + ex["completion"] for ex in examples]
+    #     tok = tokenizer(
+    #         text=texts, padding=True, return_tensors="pt", add_special_tokens=False
+    #     )
+    #     return tok
 
-    # -----------------------------------------------------------------------
-    def policy_generate(self, prompts: List[str]) -> List[str]:
-        """Sample *num_generations* reasoning traces from the current policy."""
-        inputs = self.policy_tokenizer(
-            text=prompts, return_tensors="pt", padding=True
-        ).to(self.accelerator.device)
-        gen_cfg = dict(
-            max_new_tokens=self.args.max_completion_length,
-            do_sample=True,
-            temperature=self.args.temperature,
-        )
-        with torch.no_grad():
-            outputs = self.policy.generate(**inputs, **gen_cfg)
-        completions = self.policy_tokenizer.batch_decode(
-            outputs[:, inputs["input_ids"].shape[1] :], skip_special_tokens=True
-        )
-        return completions
+    # # -----------------------------------------------------------------------
+    # def policy_generate(self, prompts: List[str]) -> List[str]:
+    #     """Sample *num_generations* reasoning traces from the current policy."""
+    #     inputs = self.policy_tokenizer(
+    #         text=prompts, return_tensors="pt", padding=True
+    #     ).to(self.accelerator.device)
+    #     gen_cfg = dict(
+    #         max_new_tokens=self.args.max_completion_length,
+    #         do_sample=True,
+    #         temperature=self.args.temperature,
+    #     )
+    #     with torch.no_grad():
+    #         outputs = self.policy.generate(**inputs, **gen_cfg)
+    #     completions = self.policy_tokenizer.batch_decode(
+    #         outputs[:, inputs["input_ids"].shape[1] :], skip_special_tokens=True
+    #     )
+    #     return completions
 
-    # -----------------------------------------------------------------------
-    # Core training loop overrides
-    # -----------------------------------------------------------------------
-    def compute_loss(self, model, inputs, return_outputs: bool = False):  # type: ignore[override]
-        """Compute GRPO loss for *policy* using fresh rewards from discriminator."""
-        # 1. Split batch into prompts only (train_dataset provides just prompts)
-        prompts = [ex["prompt"] for ex in inputs]
-        # 2. Generate completions with current policy
-        completions = self.policy_generate(prompts)
+    # # -----------------------------------------------------------------------
+    # # Core training loop overrides
+    # # -----------------------------------------------------------------------
+    # def compute_loss(self, model, inputs, return_outputs: bool = False):  # type: ignore[override]
+    #     """Compute GRPO loss for *policy* using fresh rewards from discriminator."""
+    #     # 1. Split batch into prompts only (train_dataset provides just prompts)
+    #     prompts = [ex["prompt"] for ex in inputs]
+    #     # 2. Generate completions with current policy
+    #     completions = self.policy_generate(prompts)
 
-        # 3. Build policy samples list of dicts
-        policy_samples = [
-            dict(prompt=p, completion=c) for p, c in zip(prompts, completions)
-        ]
-        # 4. Sample same‑sized batch from expert dataset
-        expert_samples = [
-            self.expert_dataset[i]
-            for i in torch.randint(0, len(self.expert_dataset), (len(prompts),))
-        ]
+    #     # 3. Build policy samples list of dicts
+    #     policy_samples = [
+    #         dict(prompt=p, completion=c) for p, c in zip(prompts, completions)
+    #     ]
+    #     # 4. Sample same‑sized batch from expert dataset
+    #     expert_samples = [
+    #         self.expert_dataset[i]
+    #         for i in torch.randint(0, len(self.expert_dataset), (len(prompts),))
+    #     ]
 
-        # 5. Update reward model -------------------------------------------------
-        reward_loss = self._update_reward_model(expert_samples, policy_samples)
-        self._metrics["train"]["reward/bce"].append(reward_loss.item())
+    #     # 5. Update reward model -------------------------------------------------
+    #     reward_loss = self._update_reward_model(expert_samples, policy_samples)
+    #     self._metrics["train"]["reward/bce"].append(reward_loss.item())
 
-        # 6. Compute shaped rewards for policy batch ---------------------------
-        with torch.no_grad():
-            rews = self._reward_scores(policy_samples)  # tensor (B,)
+    #     # 6. Compute shaped rewards for policy batch ---------------------------
+    #     with torch.no_grad():
+    #         rews = self._reward_scores(policy_samples)  # tensor (B,)
 
-        # 7. Turn rewards into advantages (baseline – mean over group) ---------
-        #    For simplicity we do per‑batch normalisation
-        advantages = rews - rews.mean()
+    #     # 7. Turn rewards into advantages (baseline – mean over group) ---------
+    #     #    For simplicity we do per‑batch normalisation
+    #     advantages = rews - rews.mean()
 
-        # 8. Re‑tokenise prompt+completion for log‑prob computation ------------
-        batch_tok = self._tokenise_examples(
-            policy_samples, tokenizer=self.policy_tokenizer
-        )
-        batch_tok = {k: v.to(self.accelerator.device) for k, v in batch_tok.items()}
-        logits = model(**batch_tok).logits  # (B, L, V)
-        # log‑prob of each *completion* token under current policy
-        comp_len = logits.size(1) - batch_tok["input_ids"].size(1)
-        logits = logits[:, -comp_len:, :]
-        logps = torch.log_softmax(logits / self.args.temperature, dim=-1)
-        token_ids = batch_tok["input_ids"][:, -comp_len:]
-        ll = torch.gather(logps, 2, token_ids.unsqueeze(-1)).squeeze(
-            -1
-        )  # (B, comp_len)
-        token_logp = ll.sum(-1)  # sum over completion tokens
+    #     # 8. Re‑tokenise prompt+completion for log‑prob computation ------------
+    #     batch_tok = self._tokenise_examples(
+    #         policy_samples, tokenizer=self.policy_tokenizer
+    #     )
+    #     batch_tok = {k: v.to(self.accelerator.device) for k, v in batch_tok.items()}
+    #     logits = model(**batch_tok).logits  # (B, L, V)
+    #     # log‑prob of each *completion* token under current policy
+    #     comp_len = logits.size(1) - batch_tok["input_ids"].size(1)
+    #     logits = logits[:, -comp_len:, :]
+    #     logps = torch.log_softmax(logits / self.args.temperature, dim=-1)
+    #     token_ids = batch_tok["input_ids"][:, -comp_len:]
+    #     ll = torch.gather(logps, 2, token_ids.unsqueeze(-1)).squeeze(
+    #         -1
+    #     )  # (B, comp_len)
+    #     token_logp = ll.sum(-1)  # sum over completion tokens
 
-        # 9. GRPO style clipped objective --------------------------------------
-        #    L = -min( π/π_old * adv , clip(π/π_old, 1-ε,1+ε)*adv )
-        #    We keep old log‑prob in cache on *inputs*. For demo we ignore IS correction.
-        ratio = torch.exp(
-            token_logp.detach() - token_logp.detach()
-        )  # =1, placeholder for proper IS
-        unclipped = ratio * advantages
-        clipped = (
-            torch.clamp(ratio, 1 - self.args.epsilon, 1 + self.args.epsilon)
-            * advantages
-        )
-        loss = -torch.mean(torch.minimum(unclipped, clipped))
+    #     # 9. GRPO style clipped objective --------------------------------------
+    #     #    L = -min( π/π_old * adv , clip(π/π_old, 1-ε,1+ε)*adv )
+    #     #    We keep old log‑prob in cache on *inputs*. For demo we ignore IS correction.
+    #     ratio = torch.exp(
+    #         token_logp.detach() - token_logp.detach()
+    #     )  # =1, placeholder for proper IS
+    #     unclipped = ratio * advantages
+    #     clipped = (
+    #         torch.clamp(ratio, 1 - self.args.epsilon, 1 + self.args.epsilon)
+    #         * advantages
+    #     )
+    #     loss = -torch.mean(torch.minimum(unclipped, clipped))
 
-        if return_outputs:
-            return loss, {}
-        return loss
+    #     if return_outputs:
+    #         return loss, {}
+    #     return loss
 
-    # -----------------------------------------------------------------------
-    # Reward model utilities
-    # -----------------------------------------------------------------------
-    def _reward_scores(self, samples: List[Dict[str, str]]) -> torch.Tensor:
-        """Return r̂(s,a) for each (prompt,completion)."""
-        tok = self._tokenise_examples(samples, tokenizer=self.reward_tokenizer)
-        tok = {k: v.to(self.accelerator.device) for k, v in tok.items()}
-        logits = self.reward(**tok).logits.squeeze(-1)  # (B,)
-        # Convert logits → probability via sigmoid then AIRL shaping
-        d = torch.sigmoid(logits)
-        r_hat = torch.log(d + 1e-8) - torch.log(1 - d + 1e-8)
-        return r_hat.detach()
+    # # -----------------------------------------------------------------------
+    # # Reward model utilities
+    # # -----------------------------------------------------------------------
+    # def _reward_scores(self, samples: List[Dict[str, str]]) -> torch.Tensor:
+    #     """Return r̂(s,a) for each (prompt,completion)."""
+    #     tok = self._tokenise_examples(samples, tokenizer=self.reward_tokenizer)
+    #     tok = {k: v.to(self.accelerator.device) for k, v in tok.items()}
+    #     logits = self.reward(**tok).logits.squeeze(-1)  # (B,)
+    #     # Convert logits → probability via sigmoid then AIRL shaping
+    #     d = torch.sigmoid(logits)
+    #     r_hat = torch.log(d + 1e-8) - torch.log(1 - d + 1e-8)
+    #     return r_hat.detach()
 
-    def _update_reward_model(
-        self,
-        expert_batch: List[Dict[str, str]],
-        policy_batch: List[Dict[str, str]],
-    ) -> torch.Tensor:
-        """One discriminator step (binary‑CE) on combined batch."""
-        batch = expert_batch + policy_batch
-        labels = torch.cat(
-            [torch.ones(len(expert_batch)), torch.zeros(len(policy_batch))]
-        ).to(self.accelerator.device)
-        tok = self._tokenise_examples(batch, tokenizer=self.reward_tokenizer)
-        tok = {k: v.to(self.accelerator.device) for k, v in tok.items()}
+    # def _update_reward_model(
+    #     self,
+    #     expert_batch: List[Dict[str, str]],
+    #     policy_batch: List[Dict[str, str]],
+    # ) -> torch.Tensor:
+    #     """One discriminator step (binary‑CE) on combined batch."""
+    #     batch = expert_batch + policy_batch
+    #     labels = torch.cat(
+    #         [torch.ones(len(expert_batch)), torch.zeros(len(policy_batch))]
+    #     ).to(self.accelerator.device)
+    #     tok = self._tokenise_examples(batch, tokenizer=self.reward_tokenizer)
+    #     tok = {k: v.to(self.accelerator.device) for k, v in tok.items()}
 
-        logits = self.reward(**tok).logits.squeeze(-1)
-        loss = F.binary_cross_entropy_with_logits(logits, labels)
+    #     logits = self.reward(**tok).logits.squeeze(-1)
+    #     loss = F.binary_cross_entropy_with_logits(logits, labels)
 
-        self.reward_optimizer.zero_grad()
-        loss.backward()
-        self.reward_optimizer.step()
-        return loss.detach()
+    #     self.reward_optimizer.zero_grad()
+    #     loss.backward()
+    #     self.reward_optimizer.step()
+    #     return loss.detach()
 
-    # -----------------------------------------------------------------------
-    def log(
-        self, logs: Dict[str, float], start_time: Optional[float] = None
-    ):  # noqa: D401
-        # merge local metric buffer
-        for k, vlist in self._metrics["train"].items():
-            if vlist:
-                logs[k] = sum(vlist) / len(vlist)
-        self._metrics["train"].clear()
-        super().log(logs, start_time)
+    # # -----------------------------------------------------------------------
+    # def log(
+    #     self, logs: Dict[str, float], start_time: Optional[float] = None
+    # ):  # noqa: D401
+    #     # merge local metric buffer
+    #     for k, vlist in self._metrics["train"].items():
+    #         if vlist:
+    #             logs[k] = sum(vlist) / len(vlist)
+    #     self._metrics["train"].clear()
+    #     super().log(logs, start_time)
 
 
 # ---------------------------------------------------------------------------
