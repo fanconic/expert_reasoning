@@ -7,7 +7,7 @@ from peft import (
     get_peft_model,
     prepare_model_for_kbit_training,
 )
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
 
 try:
     # BitsAndBytes is optional; only needed for 4-bit loading
@@ -132,12 +132,14 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
 
     # --------------------------------------------------------------
     # Reward Model
-    reward_model = AutoModelForCausalLM.from_pretrained(
+    reward_model = AutoModelForSequenceClassification.from_pretrained(
         reward_model_name,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         quantization_config=quantization_config,
         use_cache=False if use_grad_ckpt else True,  # Set at config level
+        num_labels=1,
     )
+    reward_model.config.pad_token_id = reward_tokenizer.pad_token_id
 
     if load_in_4bit:
         reward_model = prepare_model_for_kbit_training(reward_model, use_gradient_checkpointing=use_grad_ckpt)
@@ -153,11 +155,6 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
         inference_mode=False,
     )
     reward_model = get_peft_model(reward_model, reward_lora_config)
-
-    # Add classification head to reward model
-    reward_model.score = torch.nn.Linear(
-        reward_model.config.hidden_size, 1, bias=False
-    ).to(reward_model.device)
             
     if hasattr(reward_model, "enable_input_require_grads"):
         reward_model.enable_input_require_grads()

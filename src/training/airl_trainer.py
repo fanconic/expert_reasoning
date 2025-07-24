@@ -106,8 +106,9 @@ class AIRLTrainer(GRPOTrainer):
         self,
         policy_model: PolicyModelType,
         reward_model: RewardModelType,
-        reward_funcs: List[Callable],
         args: IRLConfig,
+        reward_funcs: Optional[List[Callable]] = None,
+        reward_processing_classes: Optional[Union[PreTrainedTokenizerBase, list[PreTrainedTokenizerBase]]] = None,
         train_dataset: Optional[Dataset] = None,
         eval_dataset: Optional[Dataset] = None,
         policy_tokenizer: Optional[PreTrainedTokenizerBase] = None,
@@ -133,24 +134,16 @@ class AIRLTrainer(GRPOTrainer):
                 )
             )
         else:
-            self.reward = reward_model
+            self.reward_model = reward_model
             
-        self.reward_funcs = reward_funcs
 
         # Tokenizers --------------------------------------------------------------------
-        self.policy_tokenizer = policy_tokenizer or AutoTokenizer.from_pretrained(
-            self.policy.config._name_or_path, padding_side="left"
-        )
-        if self.policy_tokenizer.pad_token is None:
-            self.policy_tokenizer.pad_token = self.policy_tokenizer.eos_token
-
-        self.reward_tokenizer = reward_tokenizer or AutoTokenizer.from_pretrained(
-            self.reward.config._name_or_path
-        )
-        if self.reward_tokenizer.pad_token is None:
-            self.reward_tokenizer.pad_token = self.reward_tokenizer.eos_token
-        # Make sure reward model uses same pad id so masking is correct
-        self.reward.config.pad_token_id = self.reward_tokenizer.pad_token_id
+        self.policy_tokenizer = policy_tokenizer
+        self.reward_tokenizer = reward_tokenizer 
+        
+        # AIRL specific arguments
+        self.use_outcome_rewards = args.use_outcome_rewards
+        self.reward_updates_per_policy_step = args.reward_updates_per_policy_step
 
         # Internal buffers --------------------------------------------------------------
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
@@ -159,12 +152,32 @@ class AIRLTrainer(GRPOTrainer):
         if args.disable_dropout:
             disable_dropout_in_model(self.policy)
             disable_dropout_in_model(self.reward)
+            
+            
+        # Reward functions --------------------------------------------------------------
+        if reward_funcs is None:
+            reward_funcs = [self.reward_model]
+        if not isinstance(reward_funcs, list):
+            reward_funcs = [self.reward_model, reward_funcs]
+        else:
+            reward_funcs = [self.reward_model] + reward_funcs
+            
+        # Reward processing class --------------------------------------------------------------
+        if reward_processing_classes is None:
+            reward_processing_classes = [self.reward_tokenizer] + [None] * (len(reward_funcs)-1)
+        elif not isinstance(reward_processing_classes, list):
+            reward_processing_classes = [self.reward_tokenizer, reward_processing_classes]
+        else:
+            reward_processing_classes = [self.reward_tokenizer] + [reward_processing_classes]
+            if len(reward_processing_classes) != len(reward_funcs):
+                raise ValueError("The number of reward processing classes must match the number of reward functions.")
 
         # ---- Prepare backend  ---------------------------------------------------------
         super().__init__(
             model=self.policy,  # base Trainer still expects a *single* model; we wrap reward manually
             args=args,
-            reward_funcs=self.reward_funcs,
+            reward_funcs=reward_funcs,
+            reward_processing_classes=reward_processing_classes,
             train_dataset=train_dataset,
             eval_dataset=eval_dataset,
             processing_class=self.policy_tokenizer,
@@ -174,8 +187,17 @@ class AIRLTrainer(GRPOTrainer):
 
         # Reward optimiser (separate from policy) --------------------------------------
         self.reward_optimizer = torch.optim.AdamW(
-            self.reward.parameters(), lr=args.reward_learning_rate
+            self.reward_model.parameters(), lr=args.reward_learning_rate
         )
+        self.reward_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.reward_optimizer,
+            T_max=args.max_steps * self.reward_updates_per_policy_step,  # Total number of epochs
+            eta_min=0  # Minimum learning rate
+        )
+        
+        if not self.use_outcome_rewards:
+            self.reward_weights = torch.zeros_like(self.reward_weights, dtype=torch.float32)
+            self.reward_weights[0] = 1.0  # Only the reward model is used for training
 
     # -----------------------------------------------------------------------
     # Data utilities
@@ -215,9 +237,14 @@ class AIRLTrainer(GRPOTrainer):
                     reward_inputs = reward_processing_class(
                         text=texts, return_tensors="pt", padding=True, padding_side="right", add_special_tokens=False
                     )
-                    reward_inputs = super()._prepare_inputs(reward_inputs)
+                    reward_inputs = super(GRPOTrainer, self)._prepare_inputs(reward_inputs)
                     with torch.inference_mode():
-                        rewards_per_func[:, i] = reward_func(**reward_inputs).logits[:, 0]  # Shape (B*G,)
+                        if i == 0: # This is only for the reward model
+                            rews = reward_func(**reward_inputs).logits[:, 0]  # Shape (B*G,)
+                            # IMPORTANT: key line of code for AIRL
+                            rewards_per_func[:, i] = torch.log(torch.sigmoid(rews)) - torch.log(1-torch.sigmoid(rews))
+                        else:
+                            rewards_per_func[:, i] = reward_func(**reward_inputs).logits[:, 0]  # Shape (B*G,)
                 else:
                     output_reward_func = reward_func(
                         prompts=prompts, completions=completions, completion_ids=completion_ids_list, **reward_kwargs
@@ -255,7 +282,7 @@ class AIRLTrainer(GRPOTrainer):
         prompt_inputs = self.processing_class(
             text=prompts_text, return_tensors="pt", padding=True, padding_side="left", add_special_tokens=False
         )
-        prompt_inputs = super()._prepare_inputs(prompt_inputs)
+        prompt_inputs = super(GRPOTrainer, self)._prepare_inputs(prompt_inputs)
         prompt_ids, prompt_mask = prompt_inputs["input_ids"], prompt_inputs["attention_mask"]
 
         if self.max_prompt_length is not None:
@@ -541,7 +568,7 @@ class AIRLTrainer(GRPOTrainer):
         tok = self._tokenise_examples(batch, tokenizer=self.reward_tokenizer)
         tok = {k: v.to(self.accelerator.device) for k, v in tok.items()}
 
-        logits = self.reward(**tok).logits.squeeze(-1)
+        logits = self.reward_model(**tok).logits.squeeze(-1)
         loss = F.binary_cross_entropy_with_logits(logits, labels)
 
         self.reward_optimizer.zero_grad()

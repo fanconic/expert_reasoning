@@ -80,6 +80,13 @@ class IRLConfig(GRPOConfig):
             "help": "Number of discriminator (reward) optimisation steps per policy optimisation step."
         },
     )
+    
+    use_outcome_rewards: bool = field(
+        default=False,
+        metadata={
+            "help": "If reward_funcs is not None, use reward functions in addition to reward model. If false, but reward_funcs is not None use them only for validation metrics"
+        },
+    )
 
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===

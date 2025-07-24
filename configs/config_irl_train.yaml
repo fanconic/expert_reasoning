@@ -21,7 +21,11 @@ model:
   
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
-  reward_learning_rate: 2e-5
+  reward_learning_rate: 1e-4
+
+  # Reward model settings
+  use_outcome_rewards: false  # Use outcome rewards in addition to reward model
+  reward_updates_per_policy_step: 10
 
 dataset:
   name: "gsm8k_kd"

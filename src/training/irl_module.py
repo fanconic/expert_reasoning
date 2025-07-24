@@ -62,6 +62,8 @@ def run_irl_training(
         top_p=cfg.sampling.top_p,
         log_completions=True,
         num_completions_to_print=2,
+        use_outcome_rewards=cfg.model.use_outcome_rewards,
+        reward_updates_per_policy_step=cfg.model.reward_updates_per_policy_step,
     )
 
     # sampling params for generation
