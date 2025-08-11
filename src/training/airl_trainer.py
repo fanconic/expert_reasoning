@@ -203,14 +203,28 @@ class AIRLTrainer(GRPOTrainer):
     # Data utilities
     # -----------------------------------------------------------------------
     def _tokenise_examples(
-        self, examples: List[Dict[str, Any]], *, tokenizer: PreTrainedTokenizerBase
-    ) -> Dict[str, torch.Tensor]:
+        self, prompts, expert_completions, policy_completions, tokenizer
+    ):
         """Tokenise list of {prompt, completion} dicts into model inputs."""
-        texts = [ex["prompt"] + ex["completion"] for ex in examples]
-        tok = tokenizer(
-            text=texts, padding=True, return_tensors="pt", add_special_tokens=False
+        # Create texts
+        expert_messages = [{"messages": p + c} for p, c in zip(prompts, expert_completions)]
+        expert_texts = [apply_chat_template(x, tokenizer)["text"] for x in expert_messages]
+        policy_messages = [{"messages": p + c} for p, c in zip(prompts, policy_completions)]
+        policy_texts = [apply_chat_template(x, tokenizer)["text"] for x in policy_messages]
+
+        # Tokenize
+        expert_tokens = tokenizer(
+            text=expert_texts, padding="max_length", return_tensors="pt", add_special_tokens=False, padding_side="right",
         )
-        return tok
+        policy_tokens = tokenizer(
+            text=policy_texts, padding="max_length", return_tensors="pt", add_special_tokens=False, padding_side="right",
+        )
+        
+        # Put on right device
+        expert_tokens = {k: v.to(self.accelerator.device) for k, v in expert_tokens.items()}
+        policy_tokens = {k: v.to(self.accelerator.device) for k, v in policy_tokens.items()}
+        return expert_tokens, policy_tokens
+
 
     # -----------------------------------------------------------------------
     # Core overwrites overrides
@@ -465,6 +479,12 @@ class AIRLTrainer(GRPOTrainer):
         else:
             completions = completions_text
 
+        # After the generations and before assigning the reward, we need to fit the classifier
+        if mode == "train":
+            classifier_loss = self._update_reward_model(inputs, prompts, completions)
+            self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
+        
+        
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
         # rewards_per_func to extract each process's subset.
@@ -557,18 +577,21 @@ class AIRLTrainer(GRPOTrainer):
 
     def _update_reward_model(
         self,
-        expert_batch: List[Dict[str, str]],
-        policy_batch: List[Dict[str, str]],
+        inputs: List[Dict[str, Any]], # contains all the inputs (including the "targets", which are the expert demonstrations)
+        prompts: List[List[Dict[str, str]]],  # contains all the prompts in conversation format
+        policy_completions: List[List[Dict]] # contains all the responses in conversation format.
     ) -> torch.Tensor:
         """One discriminator step (binary‑CE) on combined batch."""
-        batch = expert_batch + policy_batch
+        expert_completions = [[{"role": "assistant", "content": element["target"]}] for element in inputs]
+        
+        expert_tokens, policy_tokens = self._tokenise_examples(prompts, expert_completions, policy_completions, tokenizer=self.reward_tokenizer)
+        
+        batch = {key: torch.cat([expert_tokens[key], policy_tokens[key]]) for key in expert_tokens.keys()}
         labels = torch.cat(
-            [torch.ones(len(expert_batch)), torch.zeros(len(policy_batch))]
+            [torch.ones(len(expert_tokens["input_ids"])), torch.zeros(len(policy_tokens["input_ids"]))]
         ).to(self.accelerator.device)
-        tok = self._tokenise_examples(batch, tokenizer=self.reward_tokenizer)
-        tok = {k: v.to(self.accelerator.device) for k, v in tok.items()}
 
-        logits = self.reward_model(**tok).logits.squeeze(-1)
+        logits = self.reward_model(**batch).logits.squeeze(-1)
         loss = F.binary_cross_entropy_with_logits(logits, labels)
 
         self.reward_optimizer.zero_grad()

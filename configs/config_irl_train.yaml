@@ -41,25 +41,25 @@ training:
   weight_decay: 0.1
   lr_scheduler_type: "cosine"
   optim: "paged_adamw_8bit"
-  logging_steps: 3
+  logging_steps: 2
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "none"
-  per_device_train_batch_size: 16
+  per_device_train_batch_size: 6
   gradient_accumulation_steps: 2
-  max_steps: 10
+  max_steps: 100
   epochs: 2
   
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 16
+  num_generations: 6
 
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 50
-  per_device_eval_batch_size: 16
+  eval_steps: 10
+  per_device_eval_batch_size: 6
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
