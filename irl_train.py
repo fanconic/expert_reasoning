@@ -37,7 +37,7 @@ def main(cfg: DictConfig):
     policy_model, reward_model, policy_tokenizer, reward_tokenizer = (
         irl_load_model_and_tokenizer_trl(cfg)
     )
-    
+
     # Get reward functions
     reward_funcs = get_reward_functions()
 

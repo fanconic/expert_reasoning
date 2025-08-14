@@ -103,26 +103,15 @@ def run_irl_training(
         batched=True,
     )
 
-    # create the callback
-    gen_eval_cb = GenerationEvalCallback(
-        val_dataset=val_dataset,
-        tokenizer=policy_tokenizer,
-        reward_fns=reward_fns,
-        sampling_params=sampling_params,
-        batch_size=cfg.eval.per_device_eval_batch_size,
-        output_dir=cfg.training.output_dir,
-    )
-
     trainer = AIRLTrainer(
         policy_model=policy_model,
         reward_model=reward_model,
-        reward_funcs=reward_funcs, # Shall only use them for logging to start (or potential sparse reward)
+        reward_funcs=reward_funcs,  # Shall only use them for logging to start (or potential sparse reward)
         policy_tokenizer=policy_tokenizer,
         reward_tokenizer=reward_tokenizer,
         args=irl_config,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
-        callbacks=[gen_eval_cb],
     )
 
     trainer.train()

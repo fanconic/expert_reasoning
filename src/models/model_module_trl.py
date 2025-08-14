@@ -2,12 +2,17 @@ from typing import Tuple
 
 import torch
 from peft import (
+    PeftModel,
     LoraConfig,
     TaskType,
     get_peft_model,
     prepare_model_for_kbit_training,
 )
-from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModelForSequenceClassification
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+)
 
 try:
     # BitsAndBytes is optional; only needed for 4-bit loading
@@ -16,7 +21,11 @@ except ImportError:
     BitsAndBytesConfig = None
 
 
-def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.Module, AutoTokenizer, AutoTokenizer]:
+def irl_load_model_and_tokenizer_trl(
+    config,
+    pretrained=False,
+    checkpoint=None
+) -> Tuple[torch.nn.Module, torch.nn.Module, AutoTokenizer, AutoTokenizer]:
     """
     Load policy and reward models with separate LoRA adapters for adversarial IRL training.
     Both models can share the same base architecture but use different adapters for independent training.
@@ -97,7 +106,7 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
     ]
     policy_lora_rank = getattr(config.model, "policy_lora_rank", lora_rank)
     reward_lora_rank = getattr(config.model, "reward_lora_rank", lora_rank)
-    
+
     # --------------------------------------------------------------
     # Policy Model
     policy_model = AutoModelForCausalLM.from_pretrained(
@@ -113,22 +122,29 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
 
     # ----- Prep for k-bit (QLoRA) training if quantized -----
     if load_in_4bit:
-        policy_model = prepare_model_for_kbit_training(policy_model, use_gradient_checkpointing=use_grad_ckpt)
+        policy_model = prepare_model_for_kbit_training(
+            policy_model, use_gradient_checkpointing=use_grad_ckpt
+        )
+        
+    if pretrained:
+        policy_model = PeftModel.from_pretrained(policy_model, checkpoint)
 
-    # Create policy model with its own LoRA adapter
-    policy_lora_config = LoraConfig(
-        r=policy_lora_rank,
-        lora_alpha=policy_lora_rank * 2,
-        lora_dropout=0.0,
-        bias="none",
-        task_type=TaskType.CAUSAL_LM,
-        target_modules=target_modules,
-        inference_mode=False,
-    )
-    policy_model = get_peft_model(policy_model, policy_lora_config)
-    
-    if hasattr(policy_model, "enable_input_require_grads"):
-        policy_model.enable_input_require_grads()
+    else:
+
+        # Create policy model with its own LoRA adapter
+        policy_lora_config = LoraConfig(
+            r=policy_lora_rank,
+            lora_alpha=policy_lora_rank * 2,
+            lora_dropout=0.0,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM,
+            target_modules=target_modules,
+            inference_mode=False,
+        )
+        policy_model = get_peft_model(policy_model, policy_lora_config)
+
+        if hasattr(policy_model, "enable_input_require_grads"):
+            policy_model.enable_input_require_grads()
 
     # --------------------------------------------------------------
     # Reward Model
@@ -142,8 +158,10 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
     reward_model.config.pad_token_id = reward_tokenizer.pad_token_id
 
     if load_in_4bit:
-        reward_model = prepare_model_for_kbit_training(reward_model, use_gradient_checkpointing=use_grad_ckpt)
-        
+        reward_model = prepare_model_for_kbit_training(
+            reward_model, use_gradient_checkpointing=use_grad_ckpt
+        )
+
     # Add LoRA adapter to reward model with potentially different config
     reward_lora_config = LoraConfig(
         r=reward_lora_rank,
@@ -155,10 +173,10 @@ def irl_load_model_and_tokenizer_trl(config) -> Tuple[torch.nn.Module, torch.nn.
         inference_mode=False,
     )
     reward_model = get_peft_model(reward_model, reward_lora_config)
-            
+
     if hasattr(reward_model, "enable_input_require_grads"):
         reward_model.enable_input_require_grads()
-        
+
     def configure_gradient_checkpointing(model: torch.nn.Module, enable: bool):
         """Helper function to configure gradient checkpointing for a model"""
         if enable:

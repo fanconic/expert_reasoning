@@ -31,4 +31,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "qwen7b_sft"
+  run_name: "grpo_7B_6gen"

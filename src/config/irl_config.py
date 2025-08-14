@@ -80,7 +80,7 @@ class IRLConfig(GRPOConfig):
             "help": "Number of discriminator (reward) optimisation steps per policy optimisation step."
         },
     )
-    
+
     use_outcome_rewards: bool = field(
         default=False,
         metadata={
