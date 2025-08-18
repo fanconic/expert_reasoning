@@ -5,7 +5,7 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-7B-Instruct"
+  policy_name: "Qwen/Qwen2.5-3B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct" #Qwen/Qwen2.5-0.5B-Instruct
   max_seq_length: 1024
   load_in_4bit: true
@@ -22,10 +22,18 @@ model:
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
   reward_learning_rate: 1e-5
+  disc_label_smoothing: 0.1
 
   # Reward model settings
   use_outcome_rewards: true  # Use outcome rewards in addition to reward model
-  reward_updates_per_policy_step: 10
+  reward_updates_per_policy_step: 5
+  disc_temperature: 5.0
+
+  # Clip the reward of the discriminator
+  clip_reward_model: true
+  reward_lb: -1.0
+  reward_ub: 1.0
+  
 
 dataset:
   name: "gsm8k_kd"
@@ -45,25 +53,25 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
-  per_device_train_batch_size: 6
+  per_device_train_batch_size: 7
   gradient_accumulation_steps: 2
-  max_steps: 500
+  max_steps: 1000
   epochs: 2
   
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 6
+  num_generations: 7
 
 eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 50
-  per_device_eval_batch_size: 6
+  per_device_eval_batch_size: 7
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "irl_run_7B_mixed_1e-5"
+  run_name: "lr1e-5_5temp_5step_noise_3B_mixed"

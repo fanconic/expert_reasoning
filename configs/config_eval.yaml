@@ -6,7 +6,7 @@ defaults:
 
 model:
   checkpoint: 500
-  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
+  name: "Qwen/Qwen2.5-7B-Instruct" 
   max_seq_length: 1024
   load_in_4bit: true
   fast_inference: true
@@ -31,4 +31,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "grpo_7B_6gen"
+  run_name: "grpo_3B_untrained"

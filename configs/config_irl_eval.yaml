@@ -5,7 +5,7 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  checkpoint: 500
+  checkpoint: 250
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}"
   policy_name: "Qwen/Qwen2.5-7B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct" #Qwen/Qwen2.5-0.5B-Instruct
@@ -24,7 +24,7 @@ model:
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
   reward_learning_rate: 1e-5
-  
+
 dataset:
   name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
@@ -43,4 +43,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "irl_run_7B_mixed_1e-5"
+  run_name: "lr1e-5_5temp_5step_noise_7B"

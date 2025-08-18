@@ -133,7 +133,7 @@ class AIRLTrainer(GRPOTrainer):
 
         # ---------- Reward model --------------------------------------------------------
         if isinstance(reward_model, str):
-            self.reward: PreTrainedModel = (
+            self.reward_model: PreTrainedModel = (
                 AutoModelForSequenceClassification.from_pretrained(
                     reward_model, num_labels=1, **(args.model_init_kwargs or {})
                 )
@@ -151,11 +151,6 @@ class AIRLTrainer(GRPOTrainer):
 
         # Internal buffers --------------------------------------------------------------
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
-
-        # Disable dropout if requested
-        if args.disable_dropout:
-            disable_dropout_in_model(self.policy)
-            disable_dropout_in_model(self.reward)
 
         # Reward functions --------------------------------------------------------------
         if reward_funcs is None:
@@ -199,13 +194,9 @@ class AIRLTrainer(GRPOTrainer):
 
         # Reward optimiser (separate from policy) --------------------------------------
         self.reward_optimizer = torch.optim.AdamW(
-            self.reward_model.parameters(), lr=args.reward_learning_rate
-        )
-        self.reward_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.reward_optimizer,
-            T_max=args.max_steps
-            * self.reward_updates_per_policy_step,  # Total number of epochs
-            eta_min=0,  # Minimum learning rate
+            self.reward_model.parameters(),
+            lr=args.reward_learning_rate,
+            weight_decay=getattr(args, "reward_weight_decay", 0.01),
         )
 
         if not self.use_outcome_rewards:
@@ -213,6 +204,12 @@ class AIRLTrainer(GRPOTrainer):
                 self.reward_weights, dtype=torch.float32
             )
             self.reward_weights[0] = 1.0  # Only the reward model is used for training
+
+        self.eps = getattr(args, "disc_label_smoothing", 0.1)
+        self.disc_temperature = getattr(args, "disc_temperature", 1.0)
+        self.clip_reward_model = getattr(args, "clip_reward_model", False)
+        self.reward_lb = getattr(args, "reward_lb", -1.0)
+        self.reward_ub = getattr(args, "reward_ub", 1.0)
 
     # -----------------------------------------------------------------------
     # Data utilities
@@ -314,8 +311,11 @@ class AIRLTrainer(GRPOTrainer):
                         reward_inputs
                     )
                     with torch.inference_mode():
-                        # At this point we use the logits of the reward model as reward scores
-                        rewards_per_func[:, i] = reward_func(**reward_inputs).logits[:, 0]
+                        # At this point we use the logits of the reward model as reward scores (IMPORTANT)
+                        reward_from_model =  reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
+                        if self.clip_rewards:
+                            reward_from_model = torch.clamp(reward_from_model, self.reward_lb, self.reward_ub)
+                        rewards_per_func[:, i] = reward_from_model
                 else:
                     output_reward_func = reward_func(
                         prompts=prompts,
@@ -624,8 +624,10 @@ class AIRLTrainer(GRPOTrainer):
 
         # After the generations and before assigning the reward, we need to fit the classifier
         if mode == "train":
-            classifier_loss = self._update_reward_model(inputs, prompts, completions)
-            self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
+            
+            if self.state.global_step % self.reward_updates_per_policy_step == 0:
+                classifier_loss = self._update_reward_model(inputs, prompts, completions)
+                self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
@@ -741,15 +743,6 @@ class AIRLTrainer(GRPOTrainer):
     # -----------------------------------------------------------------------
     # Reward model utilities
     # -----------------------------------------------------------------------
-    def _reward_scores(self, samples: List[Dict[str, str]]) -> torch.Tensor:
-        """Return r̂(s,a) for each (prompt,completion)."""
-        tok = self._tokenise_examples(samples, tokenizer=self.reward_tokenizer)
-        tok = {k: v.to(self.accelerator.device) for k, v in tok.items()}
-        logits = self.reward(**tok).logits.squeeze(-1)  # (B,)
-        # Convert logits → probability via sigmoid then AIRL shaping
-        d = torch.sigmoid(logits)
-        r_hat = torch.log(d + 1e-8) - torch.log(1 - d + 1e-8)
-        return r_hat.detach()
 
     def _update_reward_model(
         self,
@@ -785,12 +778,15 @@ class AIRLTrainer(GRPOTrainer):
                 torch.zeros(len(policy_tokens["input_ids"])),
             ]
         ).to(self.accelerator.device)
+        
+        labels = labels * (1 - self.eps) + self.eps * 0.5
 
         logits = self.reward_model(**batch).logits.squeeze(-1)
         loss = F.binary_cross_entropy_with_logits(logits, labels)
 
         self.reward_optimizer.zero_grad()
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
         self.reward_optimizer.step()
         return loss.detach()
 

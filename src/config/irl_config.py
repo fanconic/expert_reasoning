@@ -80,6 +80,35 @@ class IRLConfig(GRPOConfig):
             "help": "Number of discriminator (reward) optimisation steps per policy optimisation step."
         },
     )
+    
+    disc_label_smoothing: float = field(
+        default=0.0,
+        metadata={
+            "help": "Label smoother for the discriminator"
+        },
+    )
+    
+    disc_temperature: float = field(
+        default=1.0,
+        metadata={
+            "help": "temperature of the logit rewards"
+        },
+    )
+    
+    clip_rewards: bool = field(
+        default=False,
+        metadata={
+            "help": "Clip the rewards to the range [reward_lb, reward_ub]"
+        },
+    )
+    reward_lb: float = field(
+        default=-1.0,
+        metadata={"help": "Lower bound for the rewards"},
+    )
+    reward_ub: float = field(
+        default=1.0,
+        metadata={"help": "Upper bound for the rewards"},
+    )
 
     use_outcome_rewards: bool = field(
         default=False,

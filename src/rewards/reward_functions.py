@@ -78,7 +78,7 @@ def correctness_reward_func(prompts, completions, answer, **kwargs):
     """
     responses = [completion[0]["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
-    return [2.0 if int(r) == int(a) else 0.0 for r, a in zip(extracted_responses, answer)]
+    return [2.0 if r == a else 0.0 for r, a in zip(extracted_responses, answer)]
 
 
 def int_reward_func(completions, **kwargs):
@@ -170,4 +170,4 @@ def eval_correctness(completions, answer):
     """
     responses = [completion["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
-    return [int(r) == int(answer) for r in extracted_responses]
+    return [r == answer for r in extracted_responses]

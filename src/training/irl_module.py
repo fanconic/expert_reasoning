@@ -64,6 +64,11 @@ def run_irl_training(
         num_completions_to_print=2,
         use_outcome_rewards=cfg.model.use_outcome_rewards,
         reward_updates_per_policy_step=cfg.model.reward_updates_per_policy_step,
+        disc_label_smoothing=cfg.model.disc_label_smoothing,
+        disc_temperature=cfg.model.disc_temperature,
+        clip_reward_model=cfg.model.clip_reward_model,
+        reward_lb=cfg.model.reward_lb,
+        reward_ub=cfg.model.reward_ub,
     )
 
     # sampling params for generation
