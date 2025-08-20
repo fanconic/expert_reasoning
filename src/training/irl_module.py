@@ -1,4 +1,5 @@
 from vllm import SamplingParams
+from src.rewards.perturbations import PERTURB_FN_MAP
 from src.training.callbacks import GenerationEvalCallback
 from src.config.irl_config import IRLConfig
 from src.training.irl_trainer import IRLTrainer
@@ -69,6 +70,11 @@ def run_irl_training(
         clip_reward_model=cfg.model.clip_reward_model,
         reward_lb=cfg.model.reward_lb,
         reward_ub=cfg.model.reward_ub,
+        response_only=cfg.model.response_only,
+        num_neg_perturbations_per_expert=cfg.model.num_neg_perturbations_per_expert,
+        neg_perturb_fns=[PERTURB_FN_MAP[name] for name in cfg.model.neg_perturb_fns],
+        neg_sample_weight=cfg.model.neg_sample_weight,
+        disc_pairwise_margin=cfg.model.disc_pairwise_margin,
     )
 
     # sampling params for generation

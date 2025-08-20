@@ -6,7 +6,7 @@ defaults:
 
 model:
   checkpoint: 500
-  name: "Qwen/Qwen2.5-7B-Instruct" 
+  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
   max_seq_length: 1024
   load_in_4bit: true
   fast_inference: true

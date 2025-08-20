@@ -94,8 +94,7 @@ class IRLConfig(GRPOConfig):
             "help": "temperature of the logit rewards"
         },
     )
-    
-    clip_rewards: bool = field(
+    clip_reward_model: bool = field(
         default=False,
         metadata={
             "help": "Clip the rewards to the range [reward_lb, reward_ub]"
@@ -108,6 +107,36 @@ class IRLConfig(GRPOConfig):
     reward_ub: float = field(
         default=1.0,
         metadata={"help": "Upper bound for the rewards"},
+    )
+    response_only: bool = field(
+        default=False,
+        metadata={
+            "help": "If true, only the response tokens are used for the reward model loss"
+        },
+    )
+    num_neg_perturbations_per_expert: int = field(
+        default=0,
+        metadata={
+            "help": "Number of perturbations to apply to each expert trace (0 = no perturbations)."
+        },
+    )
+    neg_perturb_fns: list[str] = field(
+        default_factory=None,
+        metadata={
+            "help": "List of perturbation functions to apply to the expert traces."
+        },
+    )
+    neg_sample_weight: float = field(
+        default=1.0,
+        metadata={
+            "help": "Weight for the perturbed negative samples in the reward model loss."
+        },
+    )
+    disc_pairwise_margin: float = field(
+        default=0.0,
+        metadata={  
+            "help": "Margin for the pairwise loss in the discriminator (0 = no margin)."
+        },
     )
 
     use_outcome_rewards: bool = field(

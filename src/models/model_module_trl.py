@@ -1,4 +1,5 @@
 from typing import Tuple
+import os
 
 import torch
 from peft import (
@@ -161,18 +162,24 @@ def irl_load_model_and_tokenizer_trl(
         reward_model = prepare_model_for_kbit_training(
             reward_model, use_gradient_checkpointing=use_grad_ckpt
         )
+        
+    if pretrained:
+        reward_checkpoint = os.path.join(checkpoint, "reward_model")
+        reward_model = PeftModel.from_pretrained(reward_model, reward_checkpoint)
+        
+    else:
 
-    # Add LoRA adapter to reward model with potentially different config
-    reward_lora_config = LoraConfig(
-        r=reward_lora_rank,
-        lora_alpha=reward_lora_rank * 2,
-        lora_dropout=0.0,
-        bias="none",
-        task_type=TaskType.SEQ_CLS,  # Use sequence classification for reward model
-        target_modules=target_modules,
-        inference_mode=False,
-    )
-    reward_model = get_peft_model(reward_model, reward_lora_config)
+        # Add LoRA adapter to reward model with potentially different config
+        reward_lora_config = LoraConfig(
+            r=reward_lora_rank,
+            lora_alpha=reward_lora_rank * 2,
+            lora_dropout=0.0,
+            bias="none",
+            task_type=TaskType.SEQ_CLS,  # Use sequence classification for reward model
+            target_modules=target_modules,
+            inference_mode=False,
+        )
+        reward_model = get_peft_model(reward_model, reward_lora_config)
 
     if hasattr(reward_model, "enable_input_require_grads"):
         reward_model.enable_input_require_grads()

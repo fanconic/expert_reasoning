@@ -23,9 +23,9 @@
             ],
             "justMyCode": false,
             "env": {
-                "CUDA_VISIBLE_DEVICES": "3",
-                "USE_NUMACTL": "3",
-                "NUMA_NODE": "3",
+                "CUDA_VISIBLE_DEVICES": "0",
+                "USE_NUMACTL": "0",
+                "NUMA_NODE": "0",
                 "UNSLOTH_COMPILE_DISABLE": "1"
             }
         }

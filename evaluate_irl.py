@@ -14,9 +14,9 @@ from src.rewards.reward_functions import (
     xmlcount_reward_func,
     correctness_reward_func,
 )
+import torch
 import numpy as np
-from src.eval.eval_module import compute_pass_at_k
-from vllm import SamplingParams
+from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_scores, compute_oracle_at_1_from_N
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template
 
@@ -28,6 +28,55 @@ reward_fns = [
     ("int_reward_func", int_reward_func),
     ("correctness_reward_func", correctness_reward_func),
 ]
+
+
+from trl.data_utils import apply_chat_template  # add this import at top
+
+@torch.no_grad()
+def score_with_reward_model(
+    reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt
+):
+    """
+    Args:
+        prompts_msgs:        list[list[dict]]  # your 'prompts' (chat messages)
+        decoded_per_prompt:  list[list[str]]   # per prompt N completions (strings)
+    Returns:
+        all_scores: list[list[float]] aligned with decoded_per_prompt
+    """
+    device = next(reward_model.parameters()).device
+    texts = []
+    idx_slices = []  # [(start, end), ...] per prompt to split back
+    start = 0
+    for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
+        for c in completions:
+            msgs = p_msgs + [{"role": "assistant", "content": c}]
+            texts.append(apply_chat_template({"messages": msgs}, reward_tokenizer)["text"])
+        end = start + len(completions)
+        idx_slices.append((start, end))
+        start = end
+
+    if len(texts) == 0:
+        return [[] for _ in prompts_msgs]
+
+    enc = reward_tokenizer(
+        text=texts,
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+        add_special_tokens=False,
+        padding_side="right",
+    ).to(device)
+
+    with torch.autocast("cuda"):
+        logits = reward_model(**enc).logits.squeeze(-1)  # [total]
+    logits = logits.detach().float().cpu().tolist()
+
+    # split back per prompt
+    all_scores = []
+    for s, e in idx_slices:
+        all_scores.append(logits[s:e])
+    return all_scores
+
 
 
 @hydra.main(config_path="configs", config_name="config_irl_eval", version_base="1.3")
@@ -60,11 +109,14 @@ def main(cfg: DictConfig):
     )
 
     # Load model and tokenizer
-    model, _, tokenizer, _ = irl_load_model_and_tokenizer_trl(cfg, pretrained=True, checkpoint=cfg.model.name)
+    model, reward_model, tokenizer, reward_tokenizer = irl_load_model_and_tokenizer_trl(cfg, pretrained=True, checkpoint=cfg.model.name)
     model.eval()
+    reward_model.eval()
 
     # Generation loop
     all_correct_flags = []  # list[list[bool]]  (per-problem)
+    all_reward_scores = []   # list[list[float]]  per problem
+    
     n = cfg.sampling.n_samples
     sampling_params = {
         "max_new_tokens": int(cfg.model.max_seq_length),
@@ -141,14 +193,38 @@ def main(cfg: DictConfig):
                 sums[name] += batch_score
                 sum_sqs[name] += batch_score**2
             count += 1
+            
+            batch_scores = score_with_reward_model(
+                reward_model=reward_model,
+                reward_tokenizer=reward_tokenizer,
+                prompts_msgs=prompts,                 # the original chat messages per prompt
+                decoded_per_prompt=decoded_per_prompt # list[list[str]] same order as flags
+            )
+            all_reward_scores.extend(batch_scores)
 
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
+    
+    success_at_k = compute_success_at_k_from_scores(
+        all_correct_flags=all_correct_flags,
+        all_scores=all_reward_scores,
+        ks=cfg.eval.ks,
+    )
+    oracle_at_1 = compute_oracle_at_1_from_N(all_correct_flags)
 
     print("\n--- Final metrics ---")
     for k, v in pass_at_k.items():
         if cfg.eval.report_to == "wandb":
             wandb.log({f"test/pass@{k}": v})
         print(f"pass@{k}: {v:.4f}")
+        
+    for k, v in success_at_k.items():
+        if cfg.eval.report_to == "wandb":
+            wandb.log({f"test/success@{k}|N={n}": v})
+        print(f"success@{k}|N={n}: {v:.4f}")
+
+    if cfg.eval.report_to == "wandb":
+        wandb.log({"test/oracle@1|N": oracle_at_1})
+    print(f"oracle@1|N={n}: {oracle_at_1:.4f}")
 
     metrics_mean = {
         f"test/rewards/{name}/mean": sums[name] / count for name, _ in reward_fns

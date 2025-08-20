@@ -30,6 +30,8 @@ from contextlib import nullcontext
 import re
 from typing import Any, Dict, List, Optional, Union, Callable
 import warnings
+import os
+from pathlib import Path
 
 # Third-party imports
 import torch
@@ -210,27 +212,95 @@ class AIRLTrainer(GRPOTrainer):
         self.clip_reward_model = getattr(args, "clip_reward_model", False)
         self.reward_lb = getattr(args, "reward_lb", -1.0)
         self.reward_ub = getattr(args, "reward_ub", 1.0)
+        self.response_only = getattr(args, "response_only", False)
+        
+        # Negatives from perturbed expert reasonings
+        self.neg_perturb_fns = getattr(args, "neg_perturb_fns", None)  # List[Callable[[str], str]] or None
+        self.num_neg_perturbations_per_expert = getattr(args, "num_neg_perturbations_per_expert", 1)
+        self.neg_sample_weight = getattr(args, "neg_sample_weight", 1.0)  # weight in BCE
+        self.disc_pairwise_margin = getattr(args, "disc_pairwise_margin", 0.0)  # >0 to enable pairwise hinge
+        self.neg_label_smoothing = getattr(args, "neg_label_smoothing", None)  # defaults to self.eps if None
 
     # -----------------------------------------------------------------------
     # Data utilities
     # -----------------------------------------------------------------------
+    def _make_perturbed_completions(self, expert_completions: List[List[Dict]]) -> List[List[Dict]]:
+        """
+        expert_completions: list of chat-format completions
+            [[{"role": "assistant", "content": "..."}], ...]
+        Returns the same format, but perturbed.
+        """
+        if not self.neg_perturb_fns:
+            return [], []
+        fns = self.neg_perturb_fns if isinstance(self.neg_perturb_fns, list) else [self.neg_perturb_fns]
+        import random
+        perturbed, src_idx = [], []
+        for i, comp in enumerate(expert_completions):
+            base = comp[0]["content"]
+            for _ in range(max(1, int(self.num_neg_perturbations_per_expert))):
+                fn = random.choice(fns)
+                try:
+                    corrupted = fn(base)
+                except Exception:
+                    corrupted = base
+                perturbed.append([{"role": "assistant", "content": corrupted}])
+                src_idx.append(i)
+        return perturbed, src_idx
+    
+    def _dedup_token_batch(
+        self, tokens: Dict[str, torch.Tensor]
+    ) -> tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
+        """
+        Deduplicate rows in a token batch by (input_ids, attention_mask).
+        Returns:
+        - unique_tokens: same dict with only unique rows
+        - counts: float tensor [n_unique] with multiplicity per unique row
+        - inverse: long tensor [n_rows] mapping each original row -> unique idx
+        """
+        ids = tokens["input_ids"]
+        mask = tokens["attention_mask"]
+
+        key_to_uidx = {}
+        unique_idx = []
+        counts_py = []
+        # Build inverse map on CPU to keep it light
+        inv = torch.empty(ids.size(0), dtype=torch.long)
+
+        for i in range(ids.size(0)):
+            # bytes keys avoid huge tuples and are fast to hash
+            key = (ids[i].detach().cpu().numpy().tobytes(),
+                mask[i].detach().cpu().numpy().tobytes())
+            j = key_to_uidx.get(key)
+            if j is None:
+                j = len(unique_idx)
+                key_to_uidx[key] = j
+                unique_idx.append(i)
+                counts_py.append(1)
+            else:
+                counts_py[j] += 1
+            inv[i] = j
+
+        unique_tokens = {k: v[unique_idx] for k, v in tokens.items()}
+        counts = torch.tensor(counts_py, dtype=torch.float32, device=ids.device)
+        inverse = inv.to(ids.device)
+        return unique_tokens, counts, inverse
+        
     def _tokenise_examples(
         self, prompts, expert_completions, policy_completions, tokenizer
     ):
         """Tokenise list of {prompt, completion} dicts into model inputs."""
-        # Create texts
-        expert_messages = [
-            {"messages": p + c} for p, c in zip(prompts, expert_completions)
-        ]
-        expert_texts = [
-            apply_chat_template(x, tokenizer)["text"] for x in expert_messages
-        ]
-        policy_messages = [
-            {"messages": p + c} for p, c in zip(prompts, policy_completions)
-        ]
-        policy_texts = [
-            apply_chat_template(x, tokenizer)["text"] for x in policy_messages
-        ]
+        if self.response_only:
+            expert_messages = [{"messages": c} for c in expert_completions]
+            expert_texts = [apply_chat_template(x, tokenizer)["text"] for x in expert_messages]
+            policy_messages = [{"messages": c} for c in policy_completions]
+            policy_texts = [ apply_chat_template(x, tokenizer)["text"] for x in policy_messages]
+        
+        else:
+            # Create texts
+            expert_messages = [{"messages": p + c} for p, c in zip(prompts, expert_completions)]
+            expert_texts = [apply_chat_template(x, tokenizer)["text"] for x in expert_messages]
+            policy_messages = [{"messages": p + c} for p, c in zip(prompts, policy_completions)]
+            policy_texts = [apply_chat_template(x, tokenizer)["text"] for x in policy_messages]
 
         # Tokenize
         expert_tokens = tokenizer(
@@ -313,7 +383,7 @@ class AIRLTrainer(GRPOTrainer):
                     with torch.inference_mode():
                         # At this point we use the logits of the reward model as reward scores (IMPORTANT)
                         reward_from_model =  reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
-                        if self.clip_rewards:
+                        if self.clip_reward_model:
                             reward_from_model = torch.clamp(reward_from_model, self.reward_lb, self.reward_ub)
                         rewards_per_func[:, i] = reward_from_model
                 else:
@@ -746,21 +816,26 @@ class AIRLTrainer(GRPOTrainer):
 
     def _update_reward_model(
         self,
-        inputs: List[
-            Dict[str, Any]
-        ],  # contains all the inputs (including the "targets", which are the expert demonstrations)
-        prompts: List[
-            List[Dict[str, str]]
-        ],  # contains all the prompts in conversation format
-        policy_completions: List[
-            List[Dict]
-        ],  # contains all the responses in conversation format.
+        inputs: List[Dict[str, Any]],
+        prompts: List[List[Dict[str, str]]],
+        policy_completions: List[List[Dict]],
     ) -> torch.Tensor:
-        """One discriminator step (binary‑CE) on combined batch."""
+        """One discriminator step with expert positives, policy negatives, and (optional) perturbed expert negatives."""
+        device = self.accelerator.device
+
+        # Positives = expert completions
         expert_completions = [
             [{"role": "assistant", "content": element["target"]}] for element in inputs
         ]
 
+        # Build perturbed negatives from experts (and track source expert index if available)
+        _per_out = self._make_perturbed_completions(expert_completions)
+        if isinstance(_per_out, tuple):
+            perturbed_completions, per_source_orig_idx = _per_out
+        else:
+            perturbed_completions, per_source_orig_idx = _per_out, None
+
+        # Tokenise experts and policy negatives
         expert_tokens, policy_tokens = self._tokenise_examples(
             prompts,
             expert_completions,
@@ -768,21 +843,68 @@ class AIRLTrainer(GRPOTrainer):
             tokenizer=self.reward_tokenizer,
         )
 
-        batch = {
-            key: torch.cat([expert_tokens[key], policy_tokens[key]])
-            for key in expert_tokens.keys()
-        }
-        labels = torch.cat(
-            [
-                torch.ones(len(expert_tokens["input_ids"])),
-                torch.zeros(len(policy_tokens["input_ids"])),
-            ]
-        ).to(self.accelerator.device)
-        
-        labels = labels * (1 - self.eps) + self.eps * 0.5
+        # Deduplicate expert tokens and get multiplicities
+        expert_tokens, pos_counts, expert_inverse = self._dedup_token_batch(expert_tokens)
+        n_pos = expert_tokens["input_ids"].size(0)
 
-        logits = self.reward_model(**batch).logits.squeeze(-1)
-        loss = F.binary_cross_entropy_with_logits(logits, labels)
+        # Tokenise perturbed negatives (if any)
+        if len(perturbed_completions) > 0:
+            _, perturbed_tokens = self._tokenise_examples(
+                prompts[: len(perturbed_completions)],            # ignored when response_only=True
+                expert_completions[: len(perturbed_completions)], # placeholder
+                perturbed_completions,
+                tokenizer=self.reward_tokenizer,
+            )
+            have_perturbed = True
+            n_per = perturbed_tokens["input_ids"].size(0)
+        else:
+            have_perturbed = False
+            n_per = 0
+
+        n_pol = policy_tokens["input_ids"].size(0)
+
+        # Build batch: [ unique_experts | policy | perturbed ]
+        cat_keys = expert_tokens.keys()
+        if have_perturbed:
+            batch = {
+                k: torch.cat([expert_tokens[k], policy_tokens[k], perturbed_tokens[k]], dim=0)
+                for k in cat_keys
+            }
+        else:
+            batch = {
+                k: torch.cat([expert_tokens[k], policy_tokens[k]], dim=0)
+                for k in cat_keys
+            }
+
+        # Labels (with smoothing)
+        eps_pos = self.eps
+        eps_neg = self.neg_label_smoothing if self.neg_label_smoothing is not None else self.eps
+
+        pos_labels = torch.ones(n_pos, device=device) * (1 - eps_pos) + eps_pos * 0.5
+        pol_labels = torch.zeros(n_pol, device=device) * (1 - eps_neg) + eps_neg * 0.5
+
+        if have_perturbed:
+            per_labels = torch.zeros(n_per, device=device) * (1 - eps_neg) + eps_neg * 0.5
+            labels = torch.cat([pos_labels, pol_labels, per_labels], dim=0)
+        else:
+            labels = torch.cat([pos_labels, pol_labels], dim=0)
+
+        # Sample weights:
+        # - deduped positives get their multiplicity 'pos_counts'
+        # - perturbed negatives can be emphasised by self.neg_sample_weight
+        weights = torch.ones_like(labels)
+        weights[:n_pos] = pos_counts * 2 # account for deduplication
+        if have_perturbed and (self.neg_sample_weight != 1.0):
+            start_per = n_pos + n_pol
+            weights[start_per : start_per + n_per] *= self.neg_sample_weight
+
+        # Forward with autocast to reduce memory
+        with self.accelerator.autocast():
+            logits = self.reward_model(**batch).logits.squeeze(-1)
+
+        # BCE with weights; normalise by sum of weights for scale invariance
+        bce = F.binary_cross_entropy_with_logits(logits, labels, reduction="none")
+        loss = (bce * weights).sum() / weights.sum()
 
         self.reward_optimizer.zero_grad()
         loss.backward()
@@ -800,6 +922,48 @@ class AIRLTrainer(GRPOTrainer):
                 logs[k] = sum(vlist) / len(vlist)
         self._metrics["train"].clear()
         super().log(logs, start_time)
+        
+        
+    def save_model(self, output_dir, _internal_call=True):
+        """
+        Save the policy (handled by super) AND the reward model (+ tokenizer).
+        If the reward model is a PEFT PeftModel, this saves only the adapters.
+        Otherwise, it saves the full reward model.
+        """
+        # First, let the base class save the policy (this already handles LoRA adapters).
+        super().save_model(output_dir=output_dir, _internal_call=_internal_call)
+
+        if not self.accelerator.is_main_process:
+            return
+
+        output_dir = output_dir or self.args.output_dir
+        reward_dir = os.path.join(output_dir, "reward_model")
+        os.makedirs(reward_dir, exist_ok=True)
+
+        # Unwrap reward model in case it's wrapped by accelerate/FS*DP etc.
+        reward_model_unwrapped = self.accelerator.unwrap_model(self.reward_model)
+        reward_model_unwrapped.save_pretrained(reward_dir, safe_serialization=True)
+
+        # Save reward tokenizer if available (kept separate from policy tokenizer on purpose)
+        if self.reward_tokenizer is not None:
+            self.reward_tokenizer.save_pretrained(reward_dir)
+
+    def save_state(self):
+        """
+        Extend Trainer.save_state to also save the reward optimizer state.
+        """
+        super().save_state()
+
+        if not self.accelerator.is_main_process:
+            return
+
+        output_dir = output_dir or self.args.output_dir
+        reward_dir = os.path.join(output_dir, "reward_model")
+        os.makedirs(reward_dir, exist_ok=True)
+
+        # Reward optimizer state dict (so we can resume properly)
+        if getattr(self, "reward_optimizer", None) is not None:
+            torch.save(self.reward_optimizer.state_dict(), reward_dir / "reward_optimizer.pt")
 
 
 # ---------------------------------------------------------------------------

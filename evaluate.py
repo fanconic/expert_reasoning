@@ -15,7 +15,7 @@ from src.rewards.reward_functions import (
     correctness_reward_func,
 )
 import numpy as np
-from src.eval.eval_module import compute_pass_at_k
+from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_scores, compute_oracle_at_1_from_N
 from vllm import SamplingParams
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template
@@ -66,9 +66,11 @@ def main(cfg: DictConfig):
     lora_req = model.load_lora(cfg.model.name, load_tensors=True)
 
     # Generation loop
-    all_correct_flags = []  # list[list[bool]]  (per-problem)
+    all_correct_flags = []  
+    all_reward_scores = []
+    n = cfg.sampling.n_samples
     sampling_params = SamplingParams(
-        n=cfg.sampling.n_samples,
+        n=n,
         seed=cfg.seed,
         max_tokens=cfg.model.max_seq_length,
         temperature=cfg.sampling.temperature,
@@ -115,14 +117,39 @@ def main(cfg: DictConfig):
                 sums[name] += batch_score
                 sum_sqs[name] += batch_score**2
             count += 1
+            
+            batch_scores = [1] * len(correct_flags)
+            all_reward_scores.append(batch_scores)
 
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
+    
+    success_at_k = compute_success_at_k_from_scores(
+        all_correct_flags=all_correct_flags,
+        all_scores=all_reward_scores,
+        ks=cfg.eval.ks,
+    )
+    
+    oracle_at_1 = compute_oracle_at_1_from_N(all_correct_flags)
 
     print("\n--- Final metrics ---")
     for k, v in pass_at_k.items():
         if cfg.eval.report_to == "wandb":
             wandb.log({f"test/pass@{k}": v})
         print(f"pass@{k}: {v:.4f}")
+        
+    for k, v in success_at_k.items():
+        if cfg.eval.report_to == "wandb":
+            wandb.log({f"test/success@{k}|N={n}": v})
+        print(f"success@{k}|N={n}: {v:.4f}")
+
+    if cfg.eval.report_to == "wandb":
+        wandb.log({"test/oracle@1|N": oracle_at_1})
+    print(f"oracle@1|N={n}: {oracle_at_1:.4f}")
+    
+    
+    import IPython
+    IPython.embed()
+    
 
     metrics_mean = {
         f"test/rewards/{name}/mean": sums[name] / count for name, _ in reward_fns
