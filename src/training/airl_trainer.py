@@ -290,10 +290,10 @@ class AIRLTrainer(GRPOTrainer):
     ):
         """Tokenise list of {prompt, completion} dicts into model inputs."""
         if self.response_only:
-            expert_messages = [{"messages": c} for c in expert_completions]
+            expert_messages = [{"messages": [{"role": "system", "content": ""}] + c} for c in expert_completions]
             expert_texts = [apply_chat_template(x, tokenizer)["text"] for x in expert_messages]
-            policy_messages = [{"messages": c} for c in policy_completions]
-            policy_texts = [ apply_chat_template(x, tokenizer)["text"] for x in policy_messages]
+            policy_messages = [{"messages": [{"role": "system", "content": ""}] + c} for c in policy_completions]
+            policy_texts = [apply_chat_template(x, tokenizer)["text"] for x in policy_messages]
         
         else:
             # Create texts
@@ -904,6 +904,13 @@ class AIRLTrainer(GRPOTrainer):
 
         # BCE with weights; normalise by sum of weights for scale invariance
         bce = F.binary_cross_entropy_with_logits(logits, labels, reduction="none")
+        
+        # probs = torch.sigmoid(logits).clamp(1e-6, 1-1e-6)
+        # p_t = torch.where(labels > 0.5, probs, 1 - probs)
+        # gamma = 2.0
+        # focal = (1 - p_t).pow(gamma)
+        # bce = focal * bce
+        
         loss = (bce * weights).sum() / weights.sum()
 
         self.reward_optimizer.zero_grad()

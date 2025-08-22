@@ -19,6 +19,7 @@ import numpy as np
 from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_scores, compute_oracle_at_1_from_N
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template
+import json
 
 
 reward_fns = [
@@ -79,6 +80,13 @@ def score_with_reward_model(
 
 
 
+def save_results_to_jsonl(filename, results):
+    """Save evaluation results to a JSONL file."""
+    with open(filename, 'w') as f:
+        for item in results:
+            f.write(json.dumps(item) + '\n')
+
+
 @hydra.main(config_path="configs", config_name="config_irl_eval", version_base="1.3")
 def main(cfg: DictConfig):
     """
@@ -130,6 +138,9 @@ def main(cfg: DictConfig):
     sum_sqs = {name: 0.0 for name, _ in reward_fns}
     count = 0
 
+    # Before generation loop
+    all_results = []
+    
     for batch in tqdm(loader):
 
         # each batch is a dict with “prompt” and “answer”
@@ -180,6 +191,36 @@ def main(cfg: DictConfig):
         completions = [[{"content": t} for t in texts] for texts in decoded_per_prompt]
 
 
+        # Collect reward function scores
+        batch_rewards = []
+        for prompt, completion, answer in zip(prompts, completions, answers):
+            rewards = {}
+            for name, fn in reward_fns:
+                rewards[name] = float(np.mean(fn(prompts=[prompt], completions=[completion], answer=[answer])))
+            batch_rewards.append(rewards)
+            
+        # Get reward model scores
+        batch_scores = score_with_reward_model(
+            reward_model=reward_model,
+            reward_tokenizer=reward_tokenizer,
+            prompts_msgs=prompts,
+            decoded_per_prompt=decoded_per_prompt
+        )
+        
+        # Store results for this batch - modified to create separate entries
+        for prompt, generations, scores, rewards in zip(prompts, decoded_per_prompt, batch_scores, batch_rewards):
+            for gen_idx, (generation, score) in enumerate(zip(generations, scores)):
+                result = {
+                    "prompt": prompt,
+                    "generation": generation,
+                    "generation_idx": gen_idx,
+                    "reward_model_score": score,
+                }
+                # Add individual reward function scores
+                for name, fn in reward_fns:
+                    result[f"reward_{name}"] = rewards[name]
+                all_results.append(result)
+
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)
             all_correct_flags.append(correct_flags)
@@ -194,14 +235,6 @@ def main(cfg: DictConfig):
                 sum_sqs[name] += batch_score**2
             count += 1
             
-            batch_scores = score_with_reward_model(
-                reward_model=reward_model,
-                reward_tokenizer=reward_tokenizer,
-                prompts_msgs=prompts,                 # the original chat messages per prompt
-                decoded_per_prompt=decoded_per_prompt # list[list[str]] same order as flags
-            )
-            all_reward_scores.extend(batch_scores)
-
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
     
     success_at_k = compute_success_at_k_from_scores(
@@ -245,6 +278,11 @@ def main(cfg: DictConfig):
         print(
             f"{name} mean: {metrics[f'test/rewards/{name}/mean']:.2f}, std: {metrics[f'test/rewards/{name}/std']:.2f}"
         )
+
+    # Save results to JSONL
+    output_file = f"{cfg.model.name}/eval_results.jsonl"
+    save_results_to_jsonl(output_file, all_results)
+    print(f"\nSaved evaluation results to {output_file}")
 
 
 if __name__ == "__main__":

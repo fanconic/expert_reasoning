@@ -2,6 +2,7 @@
 unsloth_compiled_cache
 wandb
 outputs
+*.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

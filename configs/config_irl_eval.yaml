@@ -5,9 +5,9 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  checkpoint: 500
+  checkpoint: 1000
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}"
-  policy_name: "Qwen/Qwen2.5-3B-Instruct"
+  policy_name: "Qwen/Qwen2.5-7B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct" #Qwen/Qwen2.5-0.5B-Instruct
   max_seq_length: 1024
   load_in_4bit: true
@@ -43,4 +43,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "3B_1step_2perturbations"
+  run_name: "7B_1step_2perturbations"

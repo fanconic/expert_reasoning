@@ -146,10 +146,6 @@ def main(cfg: DictConfig):
         wandb.log({"test/oracle@1|N": oracle_at_1})
     print(f"oracle@1|N={n}: {oracle_at_1:.4f}")
     
-    
-    import IPython
-    IPython.embed()
-    
 
     metrics_mean = {
         f"test/rewards/{name}/mean": sums[name] / count for name, _ in reward_fns
