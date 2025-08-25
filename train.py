@@ -5,6 +5,7 @@ numba.config.DISABLE_JIT = True
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
+wandb.login()
 from src.utils.utils import set_seed
 from src.data.dataset import get_dataset
 from src.models.model_module import load_model_and_tokenizer
@@ -40,7 +41,7 @@ def main(cfg: DictConfig):
     model, tokenizer = load_model_and_tokenizer(cfg)
 
     # Get reward functions
-    reward_funcs = get_reward_functions()
+    reward_funcs = get_reward_functions(cfg.dataset.name)
 
     # Run GRPO training with periodic evaluation
     run_grpo_training(

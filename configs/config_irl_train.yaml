@@ -5,7 +5,7 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-7B-Instruct"
+  policy_name: "Qwen/Qwen2.5-3B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct" #Qwen/Qwen2.5-0.5B-Instruct
   max_seq_length: 1024
   load_in_4bit: true
@@ -25,7 +25,7 @@ model:
   disc_label_smoothing: 0.1
 
   # Reward model settings
-  use_outcome_rewards: true  # Use outcome rewards in addition to reward model
+  use_outcome_rewards: false  # Use outcome rewards in addition to reward model
   reward_updates_per_policy_step: 1
   disc_temperature: 1.0
 
@@ -62,7 +62,7 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
-  per_device_train_batch_size: 6
+  per_device_train_batch_size: 7
   gradient_accumulation_steps: 2
   max_steps: 500
   epochs: 2
@@ -70,17 +70,17 @@ training:
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 6
+  num_generations: 7
 
 eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 50
-  per_device_eval_batch_size: 6
+  per_device_eval_batch_size: 7
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "7B_perturbation_QA"
+  run_name: "3B_prompt_response"

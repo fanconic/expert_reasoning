@@ -4,7 +4,6 @@ from transformers import TrainerCallback, TrainerState, TrainerControl
 from vllm import SamplingParams
 import wandb
 from tqdm import tqdm
-import glob
 import os
 
 

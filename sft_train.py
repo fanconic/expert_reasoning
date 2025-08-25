@@ -1,6 +1,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
+wandb.login()
 from src.models.model_module import load_model_and_tokenizer
 from src.data.dataset import get_dataset
 from src.training.sft_module import run_sft_training

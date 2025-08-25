@@ -1,6 +1,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
+wandb.login()
 from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
 from src.data.dataset import get_dataset
 from src.training.irl_module import run_irl_training
@@ -39,7 +40,7 @@ def main(cfg: DictConfig):
     )
 
     # Get reward functions
-    reward_funcs = get_reward_functions()
+    reward_funcs = get_reward_functions(cfg.dataset.name)
 
     # Run SFT training
     trainer = run_irl_training(

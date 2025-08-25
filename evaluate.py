@@ -18,6 +18,7 @@ import numpy as np
 from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_scores, compute_oracle_at_1_from_N
 from vllm import SamplingParams
 import wandb
+wandb.login()
 from trl.trainer.grpo_trainer import maybe_apply_chat_template
 
 

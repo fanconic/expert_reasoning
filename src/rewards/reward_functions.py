@@ -1,4 +1,7 @@
 import re
+from typing import List, Optional
+
+### GSM8K REWARD FUNCTIONS
 
 
 # compile once, with DOTALL so '.' matches newlines
@@ -141,20 +144,36 @@ def xmlcount_reward_func(completions, **kwargs):
     return [count_xml(c) for c in contents]
 
 
-def get_reward_functions():
+def get_reward_functions(dataset_name: str) -> List:
     """
     Return a list of all reward functions to be used during training.
 
     Returns:
         list: A list of reward functions in the order they should be applied.
     """
-    return [
-        xmlcount_reward_func,
-        soft_format_reward_func,
-        strict_format_reward_func,
-        int_reward_func,
-        correctness_reward_func,
-    ]
+    if dataset_name == "gsm8k" or dataset_name == "gsm8k_kd":
+        return [
+            xmlcount_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func,
+            int_reward_func,
+            correctness_reward_func,
+        ]
+    elif dataset_name == "countdown" or dataset_name == "countdown_kd":
+        return [
+            xmlcount_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func,
+            answer_reward_function,
+        ]
+    elif dataset_name == "medical" or dataset_name == "medical_kd":
+        return [
+            xmlcount_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func
+        ]
+    else:
+        raise ValueError(f"Dataset {dataset_name} not supported")
 
 
 def eval_correctness(completions, answer):
@@ -171,3 +190,39 @@ def eval_correctness(completions, answer):
     responses = [completion["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
     return [r == answer for r in extracted_responses]
+
+
+### COUNTDOWN REWARD FUNCTIONS
+def answer_reward_function(
+    response: str, numbers: List[int] = None, target: int = None
+) -> float:
+    """
+    Checks if the answer uses all numbers exactly once and evaluates to the target
+    """
+    answer_regex = r"<answer>(.*?)<\/answer>"
+    answer_match = re.search(answer_regex, response, re.DOTALL)
+    if not answer_match:
+        return 0.0
+
+    answer_content = answer_match.group(1)
+    if not answer_content:
+        return 0.0
+
+    allowed_chars = r"^[0-9+\-*/() ]+$"
+    if not re.match(allowed_chars, answer_content):
+        return 0.0
+
+    # Check if the answer uses all numbers exactly once
+    used_numbers = [int(n) for n in re.findall(r"\d+", answer_content)]
+    if sorted(used_numbers) != sorted(numbers):
+        return 0.0
+
+    # Check if the answer evaluates to the target
+    try:
+        result = eval(answer_content, {"__builtins__": None}, {})
+        if abs(float(result) - float(target)) < 1e-5:
+            return 2.0
+    except:
+        pass
+
+    return 0.0

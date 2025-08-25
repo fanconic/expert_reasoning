@@ -8,6 +8,7 @@ SYSTEM_PROMPT = (
     "<think> reasoning process here </think><answer> answer here </answer>"
 )
 
+# UTILS
 
 def extract_hash_answer(text: str) -> str:
     """
@@ -34,6 +35,7 @@ def extract_think_content(input_string: str) -> str:
     match = re.search(r"<think>(.*?)</think>", input_string, re.DOTALL)
     return match.group(1).strip() if match else input_string.strip()
 
+# GSM8K Dataset
 
 def get_gsm8k_grpo(split="train", ratio: float = 1.0):
     """
@@ -97,6 +99,131 @@ def get_gsm8k_distillation(split: str = "train", ratio: float = 1.0) -> Dataset:
 
     return ds.map(munge, remove_columns=ds.column_names)
 
+# Countdown dataset
+
+def get_countdown_grpo(split="train", ratio: float = 1.0):
+    """
+    Load and preprocess the countdown dataset.
+
+    Args:
+        split (str): Dataset split to load ('train', 'test', etc.).
+
+    Returns:
+        Dataset: Processed dataset with prompts formatted for model input
+                and extracted answers.
+    """
+    data = load_dataset("data/countdown")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+    data = data.map(
+        lambda x: {
+            "prompt": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": x["question"]},
+            ],
+            "answer": extract_hash_answer(x["answer"]),
+        }
+    )
+    return data
+
+
+def get_countdown_distillation(split: str = "train", ratio: float = 1.0) -> Dataset:
+    """
+    Load countdown questions plus CuratedThoughts reasoning for KD:
+    Returns a Dataset with fields:
+      - prompt: list[dict(role,content)]  (system + user)
+      - target: str containing <think>…</think><answer>…</answer>
+    """
+    # this curated set has both the question and the full COT+boxed answer
+    ds = load_dataset("data/countdown", split=split)
+    # optionally subsample
+    if ratio < 1.0:
+        ds = ds.select(range(int(len(ds) * ratio)))
+
+    def munge(example):
+        reasoning = extract_think_content(example["answer"])
+        answer = extract_boxed_integer(example["answer"])
+        # build prompt + target
+        prompt = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": example["question"]},
+        ]
+        target = (
+            "<think>\n"
+            f"{reasoning}\n"
+            "</think>\n"
+            "<answer>\n"
+            f"{answer}\n"
+            "</answer>"
+        )
+        return {"prompt": prompt, "target": target, "answer": answer}
+
+    return ds.map(munge, remove_columns=ds.column_names)
+
+
+# Medical Dataset
+def get_medical_grpo(split="train", ratio: float = 1.0):
+    """
+    Load and preprocess the medical o1 dataset.
+
+    Args:
+        split (str): Dataset split to load ('train', 'test', etc.).
+
+    Returns:
+        Dataset: Processed dataset with prompts formatted for model input
+                and extracted answers.
+    """
+    data = load_dataset("FreedomIntelligence/medical-o1-verifiable-problem", "main")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+    data = data.map(
+        lambda x: {
+            "prompt": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": x["question"]},
+            ],
+            "answer": extract_hash_answer(x["answer"]),
+        }
+    )
+    return data
+
+
+def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Dataset:
+    """
+    Load o1 medical questions for KD:
+    Returns a Dataset with fields:
+      - prompt: list[dict(role,content)]  (system + user)
+      - target: str containing <think>…</think><answer>…</answer>
+    """
+    # this curated set has both the question and the full COT+boxed answer
+    ds = load_dataset("FreedomIntelligence/medical-o1-reasoning-SFT", split=split)
+    # optionally subsample
+    if ratio < 1.0:
+        ds = ds.select(range(int(len(ds) * ratio)))
+
+    def munge(example):
+        reasoning = extract_think_content(example["answer"])
+        answer = extract_boxed_integer(example["answer"])
+        # build prompt + target
+        prompt = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": example["question"]},
+        ]
+        target = (
+            "<think>\n"
+            f"{reasoning}\n"
+            "</think>\n"
+            "<answer>\n"
+            f"{answer}\n"
+            "</answer>"
+        )
+        return {"prompt": prompt, "target": target, "answer": answer}
+
+    return ds.map(munge, remove_columns=ds.column_names)
+
+
 
 def get_dataset(name: str, split: str = "train", ratio: float = 1.0):
     """
@@ -117,5 +244,13 @@ def get_dataset(name: str, split: str = "train", ratio: float = 1.0):
         return get_gsm8k_grpo(split, ratio)
     elif name.lower() == "gsm8k_kd":
         return get_gsm8k_distillation(split, ratio)
+    elif name.lower() == "countdown":
+        return get_countdown_grpo(split, ratio)
+    elif name.lower() == "countdown_kd":
+        return get_countdown_distillation(split, ratio)
+    elif name.lower() == "medical":
+        return get_medical_grpo(split, ratio)
+    elif name.lower() == "medical_kd":
+        return get_medical_distillation(split, ratio)
     else:
         raise ValueError(f"Dataset {name} not supported")
