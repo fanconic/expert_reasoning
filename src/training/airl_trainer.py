@@ -173,9 +173,8 @@ class AIRLTrainer(GRPOTrainer):
                 reward_processing_classes,
             ]
         else:
-            reward_processing_classes = [self.reward_tokenizer] + [
-                reward_processing_classes
-            ]
+            reward_processing_classes = [self.reward_tokenizer] + reward_processing_classes
+            
             if len(reward_processing_classes) != len(reward_funcs):
                 raise ValueError(
                     "The number of reward processing classes must match the number of reward functions."

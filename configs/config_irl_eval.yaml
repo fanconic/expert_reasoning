@@ -43,4 +43,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "3B_1step_2perturbations"
+  run_name: "3B_prompt_response"

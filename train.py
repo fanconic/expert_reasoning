@@ -33,7 +33,7 @@ def main(cfg: DictConfig):
         cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio
     )
     val_dataset = get_dataset(
-        cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio
+        cfg.dataset.name, split="eval", ratio=cfg.dataset.val_ratio
     )  # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
@@ -41,7 +41,7 @@ def main(cfg: DictConfig):
     model, tokenizer = load_model_and_tokenizer(cfg)
 
     # Get reward functions
-    reward_funcs = get_reward_functions(cfg.dataset.name)
+    reward_funcs, reward_processing_classes = get_reward_functions(cfg.dataset.name)
 
     # Run GRPO training with periodic evaluation
     run_grpo_training(
@@ -51,6 +51,7 @@ def main(cfg: DictConfig):
         reward_funcs,
         cfg,
         val_dataset=val_dataset,
+        reward_processing_classes=reward_processing_classes
     )
 
 

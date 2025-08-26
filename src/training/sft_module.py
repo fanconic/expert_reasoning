@@ -11,18 +11,38 @@ from src.rewards.reward_functions import (
     strict_format_reward_func,
     int_reward_func,
     correctness_reward_func,
+    answer_reward_function
 )
 
-reward_fns = [
-    ("xmlcount_reward_func", xmlcount_reward_func),
-    ("soft_format_reward_func", soft_format_reward_func),
-    ("strict_format_reward_func", strict_format_reward_func),
-    ("int_reward_func", int_reward_func),
-    ("correctness_reward_func", correctness_reward_func),
-]
+
 
 
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
+    
+    if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":
+        reward_fns = [
+            ("xmlcount_reward_func", xmlcount_reward_func),
+            ("soft_format_reward_func", soft_format_reward_func),
+            ("strict_format_reward_func", strict_format_reward_func),
+            ("int_reward_func", int_reward_func),
+            ("correctness_reward_func", correctness_reward_func),
+        ]
+    elif cfg.dataset.name == "countdown" or cfg.dataset.name == "countdown_kd":
+        reward_fns = [
+            ("xmlcount_reward_func", xmlcount_reward_func),
+            ("soft_format_reward_func", soft_format_reward_func),
+            ("strict_format_reward_func", strict_format_reward_func),
+            ("answer_reward_function", answer_reward_function),
+        ]
+    elif cfg.dataset.name == "medical" or cfg.dataset.name == "medical_kd":
+        reward_fns = [
+            ("xmlcount_reward_func", xmlcount_reward_func),
+            ("soft_format_reward_func", soft_format_reward_func),
+            ("strict_format_reward_func", strict_format_reward_func),
+        ]
+    else:
+        raise ValueError(f"Unknown dataset name: {cfg.dataset.name}")
+    
 
     sft_config = SFTConfig(
         learning_rate=cfg.training.learning_rate,

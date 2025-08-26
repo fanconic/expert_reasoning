@@ -40,7 +40,7 @@ def main(cfg: DictConfig):
     )
 
     # Get reward functions
-    reward_funcs = get_reward_functions(cfg.dataset.name)
+    reward_funcs, reward_processing_classes = get_reward_functions(cfg.dataset.name)
 
     # Run SFT training
     trainer = run_irl_training(
@@ -52,6 +52,7 @@ def main(cfg: DictConfig):
         train_dataset=train_dataset,
         cfg=cfg,
         val_dataset=val_dataset,
+        reward_processing_classes=reward_processing_classes
     )
     trainer.evaluate()
 

@@ -1,4 +1,4 @@
-from datasets import load_dataset, Dataset
+from datasets import load_dataset, Dataset, load_from_disk
 import re
 
 SYSTEM_PROMPT = (
@@ -112,7 +112,7 @@ def get_countdown_grpo(split="train", ratio: float = 1.0):
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_dataset("data/countdown")[split]
+    data = load_from_disk("data/countdown")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -122,7 +122,7 @@ def get_countdown_grpo(split="train", ratio: float = 1.0):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": x["question"]},
             ],
-            "answer": extract_hash_answer(x["answer"]),
+            "answer": x["reward_model"],
         }
     )
     return data
@@ -136,14 +136,15 @@ def get_countdown_distillation(split: str = "train", ratio: float = 1.0) -> Data
       - target: str containing <think>…</think><answer>…</answer>
     """
     # this curated set has both the question and the full COT+boxed answer
-    ds = load_dataset("data/countdown", split=split)
+    ds = load_from_disk("data/countdown")[split]
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
 
     def munge(example):
-        reasoning = extract_think_content(example["answer"])
-        answer = extract_boxed_integer(example["answer"])
+        reasoning = example["target"]
+        answer = example["answer"]
+        reward_model_answer = example["reward_model"]
         # build prompt + target
         prompt = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -157,7 +158,7 @@ def get_countdown_distillation(split: str = "train", ratio: float = 1.0) -> Data
             f"{answer}\n"
             "</answer>"
         )
-        return {"prompt": prompt, "target": target, "answer": answer}
+        return {"prompt": prompt, "target": target, "answer": reward_model_answer}
 
     return ds.map(munge, remove_columns=ds.column_names)
 
@@ -174,7 +175,7 @@ def get_medical_grpo(split="train", ratio: float = 1.0):
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_dataset("FreedomIntelligence/medical-o1-verifiable-problem", "main")[split]
+    data = load_from_disk("/data/medical_o1")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -184,7 +185,7 @@ def get_medical_grpo(split="train", ratio: float = 1.0):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": x["question"]},
             ],
-            "answer": extract_hash_answer(x["answer"]),
+            "answer": x["answer"],
         }
     )
     return data
@@ -198,14 +199,14 @@ def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Datase
       - target: str containing <think>…</think><answer>…</answer>
     """
     # this curated set has both the question and the full COT+boxed answer
-    ds = load_dataset("FreedomIntelligence/medical-o1-reasoning-SFT", split=split)
+    ds = load_from_disk("/data/medical_o1")[split]
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
 
     def munge(example):
-        reasoning = extract_think_content(example["answer"])
-        answer = extract_boxed_integer(example["answer"])
+        reasoning = example["reasoning"]
+        answer = example["answer"]
         # build prompt + target
         prompt = [
             {"role": "system", "content": SYSTEM_PROMPT},

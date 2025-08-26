@@ -49,3 +49,25 @@ Run the SFT training script:
 ```bash
 bash runner_scripts/{$node}_run_gpu_node.sh pyhton sft_train.py
 ```
+
+
+# Dataset Builders
+
+These scripts create two Hugging Face `DatasetDict`s and save them to disk.
+```bash
+python create_countdown_dataset.py \
+  --outdir ../data/countdown \
+  --test_size 400 \
+  --val_size 400 \
+  --seed 42
+  --max_len 2048
+```
+
+```bash
+python create_medical_o1_dataset.py \
+  --outdir ../../data/medical_o1 \
+  --test_size 2000 \
+  --val_size 2000 \
+  --seed 42
+  --max_len 512
+```

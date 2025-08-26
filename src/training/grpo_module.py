@@ -3,7 +3,13 @@ import wandb
 
 
 def run_grpo_training(
-    model, tokenizer, train_dataset, reward_funcs, cfg, val_dataset=None
+    model, 
+    tokenizer, 
+    train_dataset, 
+    reward_funcs, 
+    cfg, 
+    val_dataset=None, 
+    reward_processing_classes=None
 ):
     """
     Runs GRPO training and periodically evaluates on validation and test sets.
@@ -55,6 +61,7 @@ def run_grpo_training(
         args=grpo_config,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
+        reward_processing_classes=reward_processing_classes,
     )
 
     trainer.train()

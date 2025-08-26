@@ -31,6 +31,7 @@ def run_irl_training(
     reward_funcs,
     cfg,
     val_dataset=None,
+    reward_processing_classes=None
 ):
 
     irl_config = IRLConfig(
@@ -123,6 +124,7 @@ def run_irl_training(
         args=irl_config,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
+        reward_processing_classes=reward_processing_classes,
     )
 
     trainer.train()

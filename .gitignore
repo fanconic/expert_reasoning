@@ -4,11 +4,14 @@ wandb
 outputs
 *.ipynb
 *azure*
+cache-*.arrow
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+grpo_trainer_lora_model
 
 # C extensions
 *.so

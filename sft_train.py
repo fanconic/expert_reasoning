@@ -29,7 +29,7 @@ def main(cfg: DictConfig):
         cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio
     )
     val_dataset = get_dataset(
-        cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio
+        cfg.dataset.name, split="eval", ratio=cfg.dataset.val_ratio
     )  # Make sure your dataset loader supports this split.  # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
