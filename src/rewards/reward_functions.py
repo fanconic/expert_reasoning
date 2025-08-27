@@ -177,7 +177,7 @@ def get_reward_functions(dataset_name: str) -> List:
         raise ValueError(f"Dataset {dataset_name} not supported")
 
 
-def eval_correctness(completions, answer):
+def eval_correctness_gsm8k(completions, answer):
     """
     Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
 
@@ -193,6 +193,37 @@ def eval_correctness(completions, answer):
     return [r == answer for r in extracted_responses]
 
 
+def eval_correctness_countdown(completions, answer):
+    """
+    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
+
+    Args:
+        completions: List of model completions, each containing response content.
+        answer: The ground truth answer to compare against.
+
+    Returns:
+        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
+    """
+    responses = [completion["content"] for completion in completions]
+    numbers = [answer["nums"]] * len(responses)
+    targets = [answer["target"]] * len(responses)
+    rewards = [answer_reward_function_single(r,a,t) for r, a, t in zip(responses, numbers, targets)]
+    return [r == 2.0 for r in rewards]
+
+def eval_correctness_medical_o1(completions, answer):
+    """
+    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
+
+    Args:
+        completions: List of model completions, each containing response content.
+        answer: The ground truth answer to compare against.
+
+    Returns:
+        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
+    """
+    pass
+
+
 ### COUNTDOWN REWARD FUNCTIONS
 def answer_reward_function_single(
     response: str, numbers: List[int] = None, target: int = None
@@ -206,6 +237,7 @@ def answer_reward_function_single(
         return 0.0
 
     answer_content = answer_match.group(1)
+    answer_content = answer_content.replace("\n","")
     if not answer_content:
         return 0.0
 

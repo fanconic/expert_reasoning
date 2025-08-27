@@ -145,6 +145,12 @@ class IRLConfig(GRPOConfig):
             "help": "If reward_funcs is not None, use reward functions in addition to reward model. If false, but reward_funcs is not None use them only for validation metrics"
         },
     )
+    standard_grpo: bool = field(
+        default=False,
+        metadata={
+            "help": "Only trains with the verifiable rewards (no discriminator)."
+        },
+    )
 
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===

@@ -155,30 +155,53 @@ class AIRLTrainer(GRPOTrainer):
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
 
         # Reward functions --------------------------------------------------------------
-        if reward_funcs is None:
-            reward_funcs = [self.reward_model]
-        if not isinstance(reward_funcs, list):
-            reward_funcs = [self.reward_model, reward_funcs]
+        self.standard_grpo = args.standard_grpo
+        
+        if self.standard_grpo:
+            self.use_outcome_rewards = True
+            if not isinstance(reward_funcs, list):
+                reward_funcs = [reward_funcs]
+            else:
+                reward_funcs = reward_funcs
         else:
-            reward_funcs = [self.reward_model] + reward_funcs
+            if reward_funcs is None:
+                reward_funcs = [self.reward_model]
+            if not isinstance(reward_funcs, list):
+                reward_funcs = [self.reward_model, reward_funcs]
+            else:
+                reward_funcs = [self.reward_model] + reward_funcs
 
         # Reward processing class --------------------------------------------------------------
-        if reward_processing_classes is None:
-            reward_processing_classes = [self.reward_tokenizer] + [None] * (
-                len(reward_funcs) - 1
-            )
-        elif not isinstance(reward_processing_classes, list):
-            reward_processing_classes = [
-                self.reward_tokenizer,
-                reward_processing_classes,
-            ]
+        if self.standard_grpo:
+            self.use_outcome_rewards = True
+            if reward_processing_classes is None:
+                reward_processing_classes =  [None] * (len(reward_funcs))
+            elif not isinstance(reward_processing_classes, list):
+                reward_processing_classes = [reward_processing_classes]
+            else:
+                reward_processing_classes = reward_processing_classes
+                
+                if len(reward_processing_classes) != len(reward_funcs):
+                    raise ValueError(
+                        "The number of reward processing classes must match the number of reward functions."
+                    )
         else:
-            reward_processing_classes = [self.reward_tokenizer] + reward_processing_classes
-            
-            if len(reward_processing_classes) != len(reward_funcs):
-                raise ValueError(
-                    "The number of reward processing classes must match the number of reward functions."
+            if reward_processing_classes is None:
+                reward_processing_classes = [self.reward_tokenizer] + [None] * (
+                    len(reward_funcs) - 1
                 )
+            elif not isinstance(reward_processing_classes, list):
+                reward_processing_classes = [
+                    self.reward_tokenizer,
+                    reward_processing_classes,
+                ]
+            else:
+                reward_processing_classes = [self.reward_tokenizer] + reward_processing_classes
+                
+                if len(reward_processing_classes) != len(reward_funcs):
+                    raise ValueError(
+                        "The number of reward processing classes must match the number of reward functions."
+                    )
 
         # ---- Prepare backend  ---------------------------------------------------------
         super().__init__(
@@ -694,7 +717,7 @@ class AIRLTrainer(GRPOTrainer):
         # After the generations and before assigning the reward, we need to fit the classifier
         if mode == "train":
             
-            if self.state.global_step % self.reward_updates_per_policy_step == 0:
+            if self.state.global_step % self.reward_updates_per_policy_step == 0 and not self.standard_grpo: 
                 classifier_loss = self._update_reward_model(inputs, prompts, completions)
                 self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
 

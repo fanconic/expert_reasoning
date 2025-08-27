@@ -14,7 +14,7 @@ model:
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "gsm8k"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "countdown_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
 
 sampling:
@@ -31,4 +31,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "grpo_3B_untrained"
+  run_name: "sft_countdown"

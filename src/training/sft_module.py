@@ -14,9 +14,6 @@ from src.rewards.reward_functions import (
     answer_reward_function
 )
 
-
-
-
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
     
     if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":

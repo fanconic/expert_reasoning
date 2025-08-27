@@ -6,7 +6,7 @@ defaults:
 
 model:
   name: "Qwen/Qwen2.5-7B-Instruct"  #"microsoft/Phi-4-mini-instruct", "google/gemma-3-4b-it", "meta-llama/Llama-3.2-3B-Instruct. "Qwen/Qwen2.5-3B-Instruct"
-  max_seq_length: 2048
+  max_seq_length: 1024
   load_in_4bit: true
   fast_inference: true
   lora_rank: 128
@@ -16,7 +16,7 @@ dataset:
   name: "countdown_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "train"
   train_ratio: 1.0
-  val_ratio: 0.1
+  val_ratio: 0.5
 
 training:
   learning_rate: 1e-5
@@ -53,4 +53,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "sft_countdown"
+  run_name: sft_countdown

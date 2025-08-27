@@ -5,7 +5,7 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-3B-Instruct"
+  policy_name: "Qwen/Qwen2.5-7B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct" #Qwen/Qwen2.5-0.5B-Instruct
   max_seq_length: 1024
   load_in_4bit: true
@@ -38,20 +38,21 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert : 1 # set to 0 if unused
+  num_neg_perturbations_per_expert : 0 # set to 0 if unused
   neg_perturb_fns : [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
   neg_sample_weight : 1.0
   disc_pairwise_margin : 0.0
   
 
 dataset:
-  name: "gsm8k_kd"
+  name: "countdown_kd"
   split: "train"
   train_ratio: 1
-  val_ratio: 0.1
+  val_ratio: 0.5
 
 training:
   # Common training params
+  standard_grpo: true
   warmup_ratio: 0.1
   adam_beta1: 0.9
   adam_beta2: 0.99
@@ -62,7 +63,7 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
-  per_device_train_batch_size: 7
+  per_device_train_batch_size: 6
   gradient_accumulation_steps: 2
   max_steps: 500
   epochs: 2
@@ -70,17 +71,17 @@ training:
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 7
+  num_generations: 6
 
 eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 50
-  per_device_eval_batch_size: 7
+  per_device_eval_batch_size: 6
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "3B_prompt_response"
+  run_name: "7B_countdown_grpo"

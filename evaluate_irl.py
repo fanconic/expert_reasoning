@@ -9,7 +9,10 @@ from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
 from src.rewards.reward_functions import (
     strict_format_reward_func,
     soft_format_reward_func,
-    eval_correctness,
+    answer_reward_function,
+    eval_correctness_gsm8k,
+    eval_correctness_countdown,
+    eval_correctness_medical_o1,
     int_reward_func,
     xmlcount_reward_func,
     correctness_reward_func,
@@ -21,17 +24,6 @@ import wandb
 wandb.login()
 from trl.trainer.grpo_trainer import maybe_apply_chat_template
 import json
-
-
-reward_fns = [
-    ("xmlcount_reward_func", xmlcount_reward_func),
-    ("soft_format_reward_func", soft_format_reward_func),
-    ("strict_format_reward_func", strict_format_reward_func),
-    ("int_reward_func", int_reward_func),
-    ("correctness_reward_func", correctness_reward_func),
-]
-
-
 from trl.data_utils import apply_chat_template  # add this import at top
 
 @torch.no_grad()
@@ -97,6 +89,35 @@ def main(cfg: DictConfig):
     print("Evaluation configuration:\n", OmegaConf.to_yaml(cfg))
 
     set_seed(cfg.seed)
+    
+    
+    if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":
+        reward_fns = [
+            ("xmlcount_reward_func", xmlcount_reward_func),
+            ("soft_format_reward_func", soft_format_reward_func),
+            ("strict_format_reward_func", strict_format_reward_func),
+            ("int_reward_func", int_reward_func),
+            ("correctness_reward_func", correctness_reward_func),
+        ]
+        eval_correctness = eval_correctness_gsm8k
+    elif cfg.dataset.name == "countdown" or cfg.dataset.name == "countdown_kd":
+        reward_fns = [
+            ("xmlcount_reward_func", xmlcount_reward_func),
+            ("soft_format_reward_func", soft_format_reward_func),
+            ("strict_format_reward_func", strict_format_reward_func),
+            ("answer_reward_function", answer_reward_function),
+        ]
+        eval_correctness = eval_correctness_countdown
+    elif cfg.dataset.name == "medical" or cfg.dataset.name == "medical_kd":
+        reward_fns = [
+            ("xmlcount_reward_func", xmlcount_reward_func),
+            ("soft_format_reward_func", soft_format_reward_func),
+            ("strict_format_reward_func", strict_format_reward_func),
+        ]
+        eval_correctness = eval_correctness_medical_o1
+    else:
+        raise ValueError(f"Unknown dataset name: {cfg.dataset.name}")
+    
 
     # Initialize wandb
     if cfg.eval.report_to == "wandb":

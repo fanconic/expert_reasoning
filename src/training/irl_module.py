@@ -1,8 +1,6 @@
 from vllm import SamplingParams
 from src.rewards.perturbations import PERTURB_FN_MAP
-from src.training.callbacks import GenerationEvalCallback
 from src.config.irl_config import IRLConfig
-from src.training.irl_trainer import IRLTrainer
 from src.training.airl_trainer import AIRLTrainer
 
 from src.rewards.reward_functions import (
@@ -76,6 +74,7 @@ def run_irl_training(
         neg_perturb_fns=[PERTURB_FN_MAP[name] for name in cfg.model.neg_perturb_fns],
         neg_sample_weight=cfg.model.neg_sample_weight,
         disc_pairwise_margin=cfg.model.disc_pairwise_margin,
+        standard_grpo=cfg.training.standard_grpo,
     )
 
     # sampling params for generation
