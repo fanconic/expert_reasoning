@@ -146,7 +146,7 @@ def main(cfg: DictConfig):
             
         
         # Store results for this batch - modified to create separate entries
-        for prompt, generations, rewards in zip(prompts, completions, batch_rewards):
+        for prompt, generations, answer in zip(prompts, completions, answers):
             for gen_idx, generation in enumerate(generations):
                 result = {
                     "prompt": prompt,
@@ -155,7 +155,7 @@ def main(cfg: DictConfig):
                 }
                 # Add individual reward function scores
                 for name, fn in reward_fns:
-                    result[f"reward_{name}"] = rewards[name]
+                    result[f"reward_{name}"] = fn(completions=[[generation]], prompts=[prompt], answer=[answer])
                 all_results.append(result)
 
         for completion, answer in zip(completions, answers):
@@ -174,9 +174,6 @@ def main(cfg: DictConfig):
             
             batch_scores = [1] * len(correct_flags)
             all_reward_scores.append(batch_scores)
-            
-        
-        break
 
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
     

@@ -115,16 +115,16 @@ def count_xml(text) -> float:
         float: A score between 0.0 and 0.5 based on XML formatting quality.
     """
     count = 0.0
-    if text.count("<think>\n") == 1:
+    if text.count("<think>") == 1:
         count += 0.125
-    if text.count("\n</think>\n") == 1:
+    if text.count("</think>") == 1:
         count += 0.125
-    if text.count("\n<answer>\n") == 1:
+    if text.count("<answer>") == 1:
         count += 0.125
-        count -= len(text.split("\n</answer>\n")[-1]) * 0.001
-    if text.count("\n</answer>") == 1:
+        count -= len(text.split("</answer>")[-1]) * 0.001
+    if text.count("</answer>") == 1:
         count += 0.125
-        count -= (len(text.split("\n</answer>")[-1]) - 1) * 0.001
+        count -= (len(text.split("</answer>")[-1]) - 1) * 0.001
     return count
 
 

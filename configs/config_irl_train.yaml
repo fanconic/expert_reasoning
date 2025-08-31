@@ -26,8 +26,8 @@ model:
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
-  reward_updates_per_policy_step: 1
-  disc_temperature: 1.0
+  reward_updates_per_policy_step: 5
+  disc_temperature: 5.0
 
   # Clip the reward of the discriminator
   clip_reward_model: true
@@ -48,11 +48,11 @@ dataset:
   name: "countdown_kd"
   split: "train"
   train_ratio: 1
-  val_ratio: 0.5
+  val_ratio: 0.3
 
 training:
   # Common training params
-  standard_grpo: true
+  standard_grpo: false
   warmup_ratio: 0.1
   adam_beta1: 0.9
   adam_beta2: 0.99
@@ -76,7 +76,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 50
+  eval_steps: 100
   per_device_eval_batch_size: 6
   eval_accumulation_steps: 2
   prediction_loss_only: false
@@ -84,4 +84,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "7B_countdown_grpo"
+  run_name: "countdown_airl_7B"

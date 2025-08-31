@@ -13,10 +13,10 @@ model:
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "countdown_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "countdown"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "train"
   train_ratio: 1.0
-  val_ratio: 0.5
+  val_ratio: 0.3
 
 training:
   learning_rate: 1e-5
@@ -27,9 +27,9 @@ training:
   lr_scheduler_type: "cosine"
   optim: "paged_adamw_8bit"
   logging_steps: 10
-  per_device_train_batch_size: 16
+  per_device_train_batch_size: 6
   gradient_accumulation_steps: 2
-  num_generations: 16
+  num_generations: 6
   epochs: 2
   max_steps: 500
   max_grad_norm: 1.0
@@ -46,11 +46,11 @@ eval:
   eval_strategy: "steps"
   eval_steps: 50
   use_vllm: true
-  per_device_eval_batch_size: 16
+  per_device_eval_batch_size: 6
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: sft_countdown
+  run_name: countdown_grpo_7B_sanity

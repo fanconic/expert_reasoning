@@ -31,4 +31,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "sft_countdown"
+  run_name: "countdown_grpo_3B_sanity"
