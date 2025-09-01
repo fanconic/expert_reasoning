@@ -48,6 +48,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
     TrainerCallback,
+    Trainer,
     is_wandb_available,
 )
 from trl import GRPOTrainer
@@ -64,6 +65,8 @@ from trl.trainer.utils import (
     disable_dropout_in_model,
     pad,
 )
+import copy
+import random
 
 # Local imports
 from src.config.irl_config import IRLConfig
@@ -217,12 +220,14 @@ class AIRLTrainer(GRPOTrainer):
         )
 
         # Reward optimiser (separate from policy) --------------------------------------
-        self.reward_optimizer = torch.optim.AdamW(
-            self.reward_model.parameters(),
-            lr=args.reward_learning_rate,
-            weight_decay=getattr(args, "reward_weight_decay", 0.01),
-        )
-
+        tmp_args = copy.copy(args)
+        opt_cls, opt_kwargs = Trainer.get_optimizer_cls_and_kwargs(tmp_args)
+        # Use reward-specific hyperparams
+        opt_kwargs["lr"] = args.reward_learning_rate
+        opt_kwargs["weight_decay"] = getattr(args, "reward_weight_decay", opt_kwargs.get("weight_decay", 0.0))
+        self.reward_optimizer = opt_cls(self.reward_model.parameters(), **opt_kwargs)
+        self.reward_optimizer.zero_grad()
+        
         if not self.use_outcome_rewards:
             self.reward_weights = torch.zeros_like(
                 self.reward_weights, dtype=torch.float32
@@ -252,10 +257,9 @@ class AIRLTrainer(GRPOTrainer):
             [[{"role": "assistant", "content": "..."}], ...]
         Returns the same format, but perturbed.
         """
-        if not self.neg_perturb_fns:
+        if not self.neg_perturb_fns or self.num_neg_perturbations_per_expert == 0:
             return [], []
         fns = self.neg_perturb_fns if isinstance(self.neg_perturb_fns, list) else [self.neg_perturb_fns]
-        import random
         perturbed, src_idx = [], []
         for i, comp in enumerate(expert_completions):
             base = comp[0]["content"]
@@ -450,7 +454,6 @@ class AIRLTrainer(GRPOTrainer):
     ) -> dict[str, Union[torch.Tensor, Any]]:
         device = self.accelerator.device
         mode = "train" if self.model.training else "eval"
-
         prompts = [x["prompt"] for x in inputs]
         prompts_text = [
             maybe_apply_chat_template(example, self.processing_class)["prompt"]
@@ -463,7 +466,9 @@ class AIRLTrainer(GRPOTrainer):
             padding_side="left",
             add_special_tokens=False,
         )
-        prompt_inputs = super(GRPOTrainer, self)._prepare_inputs(prompt_inputs)
+        
+        prompt_inputs = {k: v.to(self.accelerator.device) for k, v in prompt_inputs.items()}
+        #prompt_inputs = super(GRPOTrainer, self)._prepare_inputs(prompt_inputs)
         prompt_ids, prompt_mask = (
             prompt_inputs["input_ids"],
             prompt_inputs["attention_mask"],
@@ -716,10 +721,8 @@ class AIRLTrainer(GRPOTrainer):
 
         # After the generations and before assigning the reward, we need to fit the classifier
         if mode == "train":
-            
-            if self.state.global_step % self.reward_updates_per_policy_step == 0 and not self.standard_grpo: 
-                classifier_loss = self._update_reward_model(inputs, prompts, completions)
-                self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
+            classifier_loss = self._update_reward_model(inputs, prompts, completions)
+            self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
@@ -915,31 +918,96 @@ class AIRLTrainer(GRPOTrainer):
         # - deduped positives get their multiplicity 'pos_counts'
         # - perturbed negatives can be emphasised by self.neg_sample_weight
         weights = torch.ones_like(labels)
-        weights[:n_pos] = pos_counts * 2 # account for deduplication
+        multiplier = 1 if self.num_neg_perturbations_per_expert == 0 else 2
+        weights[:n_pos] = pos_counts * multiplier # account for deduplication
         if have_perturbed and (self.neg_sample_weight != 1.0):
             start_per = n_pos + n_pol
             weights[start_per : start_per + n_per] *= self.neg_sample_weight
 
-        # Forward with autocast to reduce memory
-        with self.accelerator.autocast():
-            logits = self.reward_model(**batch).logits.squeeze(-1)
-
-        # BCE with weights; normalise by sum of weights for scale invariance
-        bce = F.binary_cross_entropy_with_logits(logits, labels, reduction="none")
+        # Divide batch into gradient accumulation steps
+        total_batch_size = weights.shape[0]
         
-        # probs = torch.sigmoid(logits).clamp(1e-6, 1-1e-6)
-        # p_t = torch.where(labels > 0.5, probs, 1 - probs)
-        # gamma = 2.0
-        # focal = (1 - p_t).pow(gamma)
-        # bce = focal * bce
+        # Compute samples per class per accumulation step
+        pos_per_step = n_pos // self.args.gradient_accumulation_steps
+        pol_per_step = n_pol // self.args.gradient_accumulation_steps
+        per_per_step = n_per // self.args.gradient_accumulation_steps if have_perturbed else 0
         
-        loss = (bce * weights).sum() / weights.sum()
+        total_loss = 0
+        for step in range(self.args.gradient_accumulation_steps):
+            # Calculate balanced slice indices for each group
+            pos_start = step * pos_per_step
+            pos_end = pos_start + pos_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pos
+            
+            pol_start = step * pol_per_step
+            pol_end = pol_start + pol_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pol
+            
+            if have_perturbed:
+                per_start = step * per_per_step
+                per_end = per_start + per_per_step if step < self.args.gradient_accumulation_steps - 1 else n_per
+                
+                # Combine slices while maintaining group ordering
+                step_batch = {
+                    k: torch.cat([
+                        expert_tokens[k][pos_start:pos_end],
+                        policy_tokens[k][pol_start:pol_end],
+                        perturbed_tokens[k][per_start:per_end]
+                    ], dim=0)
+                    for k in cat_keys
+                }
+                step_labels = torch.cat([
+                    labels[:n_pos][pos_start:pos_end],
+                    labels[n_pos:n_pos+n_pol][pol_start:pol_end],
+                    labels[n_pos+n_pol:][per_start:per_end]
+                ])
+                step_weights = torch.cat([
+                    weights[:n_pos][pos_start:pos_end],
+                    weights[n_pos:n_pos+n_pol][pol_start:pol_end],
+                    weights[n_pos+n_pol:][per_start:per_end]
+                ])
+            else:
+                # Combine slices for expert and policy only
+                step_batch = {
+                    k: torch.cat([
+                        expert_tokens[k][pos_start:pos_end],
+                        policy_tokens[k][pol_start:pol_end]
+                    ], dim=0)
+                    for k in cat_keys
+                }
+                step_labels = torch.cat([
+                    labels[:n_pos][pos_start:pos_end],
+                    labels[n_pos:][pol_start:pol_end]
+                ])
+                step_weights = torch.cat([
+                    weights[:n_pos][pos_start:pos_end],
+                    weights[n_pos:][pol_start:pol_end]
+                ])
 
-        self.reward_optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
-        self.reward_optimizer.step()
-        return loss.detach()
+            # Forward with autocast to reduce memory
+            with self.accelerator.autocast():
+                step_logits = self.reward_model(**step_batch).logits.squeeze(-1)
+                
+                # BCE with weights; normalise by sum of weights for scale invariance
+                step_bce = F.binary_cross_entropy_with_logits(
+                    step_logits, 
+                    step_labels,
+                    reduction="none"
+                )
+                step_loss = (step_bce * step_weights).sum() / step_weights.sum()
+                
+                # Scale loss by number of accumulation steps
+                scaled_loss = step_loss / self.args.gradient_accumulation_steps
+            
+            # Backward pass
+            scaled_loss.backward()
+            total_loss += step_loss.detach()
+
+        # Clip gradients and update after accumulation
+        if self.state.global_step % self.reward_updates_per_policy_step == 0 and not self.standard_grpo: 
+            torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
+            self.reward_optimizer.step()
+            self.reward_optimizer.zero_grad()
+        
+        return total_loss / self.args.gradient_accumulation_steps
 
     # -----------------------------------------------------------------------
     def log(

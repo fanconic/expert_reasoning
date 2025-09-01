@@ -2,6 +2,7 @@ from vllm import SamplingParams
 from src.rewards.perturbations import PERTURB_FN_MAP
 from src.config.irl_config import IRLConfig
 from src.training.airl_trainer import AIRLTrainer
+#from src.training.UnslothAIRLTrainer import UnslothAIRLTrainer
 
 from src.rewards.reward_functions import (
     xmlcount_reward_func,
@@ -114,6 +115,7 @@ def run_irl_training(
         batched=True,
     )
 
+    #trainer = UnslothAIRLTrainer(
     trainer = AIRLTrainer(
         policy_model=policy_model,
         reward_model=reward_model,

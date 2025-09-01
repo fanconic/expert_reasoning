@@ -6,10 +6,12 @@ defaults:
 
 model:
   policy_name: "Qwen/Qwen2.5-7B-Instruct"
-  reward_name: "Qwen/Qwen2.5-0.5B-Instruct" #Qwen/Qwen2.5-0.5B-Instruct
+  reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
   max_seq_length: 1024
   load_in_4bit: true
   fast_inference: false
+  policy_gpu_memory_utilization: 0.6
+  reward_gpu_memory_utilization: 0.15
   
   # Common settings
   lora_rank: 64  # Base LoRA rank
@@ -26,8 +28,8 @@ model:
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
-  reward_updates_per_policy_step: 5
-  disc_temperature: 5.0
+  reward_updates_per_policy_step: 1
+  disc_temperature: 1
 
   # Clip the reward of the discriminator
   clip_reward_model: true
@@ -38,17 +40,17 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert : 0 # set to 0 if unused
+  num_neg_perturbations_per_expert : 1 # set to 0 if unused
   neg_perturb_fns : [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
   neg_sample_weight : 1.0
   disc_pairwise_margin : 0.0
   
 
 dataset:
-  name: "countdown_kd"
+  name: "gsm8k_kd"
   split: "train"
   train_ratio: 1
-  val_ratio: 0.3
+  val_ratio: 0.1
 
 training:
   # Common training params
@@ -84,4 +86,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "countdown_airl_7B"
+  run_name: "gsm8k_airl_7B"

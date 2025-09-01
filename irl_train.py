@@ -3,6 +3,7 @@ from omegaconf import DictConfig, OmegaConf
 import wandb
 wandb.login()
 from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
+#from src.models.model_module import irl_load_model_and_tokenizer
 from src.data.dataset import get_dataset
 from src.training.irl_module import run_irl_training
 from src.utils.utils import set_seed
@@ -54,7 +55,6 @@ def main(cfg: DictConfig):
         val_dataset=val_dataset,
         reward_processing_classes=reward_processing_classes
     )
-    trainer.evaluate()
 
 
 if __name__ == "__main__":
