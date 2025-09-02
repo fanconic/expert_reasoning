@@ -11,15 +11,6 @@ from src.rewards.reward_functions import (
     correctness_reward_func,
 )
 
-reward_fns = [
-    ("xmlcount_reward_func", xmlcount_reward_func),
-    ("soft_format_reward_func", soft_format_reward_func),
-    ("strict_format_reward_func", strict_format_reward_func),
-    ("int_reward_func", int_reward_func),
-    ("correctness_reward_func", correctness_reward_func),
-]
-
-
 def run_irl_training(
     policy_model,
     reward_model,
@@ -75,7 +66,8 @@ def run_irl_training(
         neg_sample_weight=cfg.model.neg_sample_weight,
         disc_pairwise_margin=cfg.model.disc_pairwise_margin,
         standard_grpo=cfg.training.standard_grpo,
-        mask_truncated_completions=False
+        mask_truncated_completions=False,
+        max_micro_batch=cfg.training.max_micro_batch
     )
 
     def formatting_prompt_func(examples):

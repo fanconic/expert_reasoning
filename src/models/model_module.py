@@ -19,7 +19,7 @@ def load_model_and_tokenizer(config):
         tuple: (model, tokenizer) - The configured model with LoRA adapters and its tokenizer
     """
     model_name = config.model.name
-    max_seq_length = config.model.max_seq_length
+    max_seq_length = config.model.max_prompt_length + config.model.max_completion_length
     load_in_4bit = config.model.load_in_4bit
     fast_inference = config.model.fast_inference
     lora_rank = config.model.lora_rank

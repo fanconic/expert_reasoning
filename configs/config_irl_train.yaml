@@ -65,8 +65,9 @@ training:
   logging_steps: 10
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
-  report_to: "none"
-  per_device_train_batch_size: 6
+  report_to: "wandb"
+  per_device_train_batch_size: 16
+  max_micro_batch: 6  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
   max_steps: 500
   epochs: 2
@@ -74,17 +75,17 @@ training:
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 6
+  num_generations: 16
 
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 2
-  per_device_eval_batch_size: 30
+  eval_steps: 50
+  per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "countdown_airl_3B_new"
+  run_name: "countdown_airl_3B"

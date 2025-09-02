@@ -151,6 +151,12 @@ class IRLConfig(GRPOConfig):
             "help": "Only trains with the verifiable rewards (no discriminator)."
         },
     )
+    max_micro_batch: int = field(
+        default=6,
+        metadata={
+            "help": "Maximum samples per micro-batch through reward model to avoid OOM."
+        },
+    )
 
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===

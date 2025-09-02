@@ -154,6 +154,7 @@ class AIRLTrainer(GRPOTrainer):
         # AIRL specific arguments
         self.use_outcome_rewards = args.use_outcome_rewards
         self.reward_updates_per_policy_step = args.reward_updates_per_policy_step
+        self.max_micro_batch = args.max_micro_batch
 
         # Internal buffers --------------------------------------------------------------
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
@@ -917,12 +918,13 @@ class AIRLTrainer(GRPOTrainer):
         n_per: int,
         pos_counts: torch.Tensor,
     ) -> torch.Tensor:
-        """Training loop for reward model with gradient accumulation."""
+        """Training loop for reward model with gradient accumulation and micro-batching."""
         # Compute samples per accumulation step
         pos_per_step = n_pos // self.args.gradient_accumulation_steps
         pol_per_step = n_pol // self.args.gradient_accumulation_steps
         per_per_step = n_per // self.args.gradient_accumulation_steps if n_per > 0 else 0
         have_perturbed = n_per > 0
+
         
         total_loss = 0
         for step in range(self.args.gradient_accumulation_steps):
@@ -977,17 +979,35 @@ class AIRLTrainer(GRPOTrainer):
                     weights[n_pos:][pol_slice]
                 ])
 
-            # Forward and backward pass
-            with self.accelerator.autocast():
-                step_logits = self.reward_model(**step_batch).logits.squeeze(-1)
-                step_bce = F.binary_cross_entropy_with_logits(
-                    step_logits, step_labels, reduction="none"
-                )
-                step_loss = (step_bce * step_weights).sum() / step_weights.sum()
-                scaled_loss = step_loss / self.args.gradient_accumulation_steps
+            # Process micro-batches
+            step_size = step_batch["input_ids"].size(0)
+            num_micro_batches = (step_size + self.max_micro_batch - 1) // self.max_micro_batch
+            micro_batch_size = (step_size + num_micro_batches - 1) // num_micro_batches
 
-            scaled_loss.backward()
-            total_loss += step_loss.detach()
+            step_loss = 0
+            for micro_idx in range(num_micro_batches):
+                start_idx = micro_idx * micro_batch_size
+                end_idx = min((micro_idx + 1) * micro_batch_size, step_size)
+                
+                micro_batch = {k: v[start_idx:end_idx] for k, v in step_batch.items()}
+                micro_labels = step_labels[start_idx:end_idx]
+                micro_weights = step_weights[start_idx:end_idx]
+
+                # Forward pass with micro-batch
+                with self.accelerator.autocast():
+                    micro_logits = self.reward_model(**micro_batch).logits.squeeze(-1)
+                    micro_bce = F.binary_cross_entropy_with_logits(
+                        micro_logits, micro_labels, reduction="none"
+                    )
+                    # Compute full loss but scale it down for proper gradient accumulation
+                    micro_loss = (micro_bce * micro_weights).sum() / step_weights.sum()
+                    scaled_loss = micro_loss / (self.args.gradient_accumulation_steps * num_micro_batches)
+                
+                # Backward pass on scaled loss for proper gradient accumulation
+                scaled_loss.backward()
+                step_loss += micro_loss.detach()  # Track full loss for return value
+
+            total_loss += step_loss
 
         return total_loss
     
