@@ -23,7 +23,7 @@ def load_model_and_tokenizer(config):
     load_in_4bit = config.model.load_in_4bit
     fast_inference = config.model.fast_inference
     lora_rank = config.model.lora_rank
-    gpu_memory_utilization = config.model.policy_gpu_memory_utilization
+    gpu_memory_utilization = config.model.gpu_memory_utilization
     random_state = config.seed
 
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -85,13 +85,12 @@ def irl_load_model_and_tokenizer(config):
     
     policy_model_name = config.model.policy_name
     reward_model_name = config.model.reward_name
-    max_seq_length = config.model.max_seq_length
+    max_seq_length = config.model.max_prompt_length + config.model.max_completion_length
     load_in_4bit = config.model.load_in_4bit
     policy_lora_rank = config.model.policy_lora_rank
     reward_lora_rank = config.model.reward_lora_rank
     random_state = config.seed
     fast_inference = config.model.fast_inference
-    lora_rank = config.model.lora_rank
     policy_gpu_memory_utilization = config.model.policy_gpu_memory_utilization
     reward_gpu_memory_utilization = config.model.reward_gpu_memory_utilization
     
@@ -100,7 +99,7 @@ def irl_load_model_and_tokenizer(config):
         max_seq_length=max_seq_length,
         load_in_4bit=load_in_4bit,
         fast_inference=fast_inference,
-        max_lora_rank=lora_rank,
+        max_lora_rank=policy_lora_rank,
         gpu_memory_utilization=policy_gpu_memory_utilization,
     )
 
@@ -128,7 +127,7 @@ def irl_load_model_and_tokenizer(config):
         model_name=reward_model_name,
         max_seq_length=max_seq_length,
         load_in_4bit=load_in_4bit,
-        fast_inference=fast_inference,
+        fast_inference=False,
         max_lora_rank=reward_lora_rank,
         gpu_memory_utilization=reward_gpu_memory_utilization,
         num_labels = 1,
@@ -150,6 +149,11 @@ def irl_load_model_and_tokenizer(config):
         use_gradient_checkpointing="unsloth",
         random_state=random_state,
     )
+    
+    if hasattr(reward_model, "gradient_checkpointing_disable"):
+        reward_model.gradient_checkpointing_disable()   # avoids version mismatches
+    if hasattr(reward_model, "config"):
+        reward_model.config.use_cache = False           # saves VRAM in training
     print("Reward model loaded.")
     
     return policy_model, reward_model, policy_tokenizer, reward_tokenizer

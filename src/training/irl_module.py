@@ -2,7 +2,6 @@ from vllm import SamplingParams
 from src.rewards.perturbations import PERTURB_FN_MAP
 from src.config.irl_config import IRLConfig
 from src.training.airl_trainer import AIRLTrainer
-#from src.training.UnslothAIRLTrainer import UnslothAIRLTrainer
 
 from src.rewards.reward_functions import (
     xmlcount_reward_func,
@@ -47,8 +46,8 @@ def run_irl_training(
         per_device_eval_batch_size=cfg.eval.per_device_eval_batch_size,
         gradient_accumulation_steps=cfg.training.gradient_accumulation_steps,
         num_generations=cfg.sampling.num_generations,
-        max_prompt_length=None,
-        max_completion_length=cfg.model.max_seq_length,
+        max_prompt_length=cfg.model.max_prompt_length,
+        max_completion_length=cfg.model.max_completion_length,
         max_steps=cfg.training.max_steps,
         save_steps=cfg.eval.eval_steps,
         max_grad_norm=cfg.training.max_grad_norm,
@@ -76,13 +75,7 @@ def run_irl_training(
         neg_sample_weight=cfg.model.neg_sample_weight,
         disc_pairwise_margin=cfg.model.disc_pairwise_margin,
         standard_grpo=cfg.training.standard_grpo,
-    )
-
-    # sampling params for generation
-    sampling_params = SamplingParams(
-        max_tokens=cfg.model.max_seq_length,
-        temperature=cfg.sampling.temperature,
-        top_p=cfg.sampling.top_p,
+        mask_truncated_completions=False
     )
 
     def formatting_prompt_func(examples):
@@ -115,7 +108,6 @@ def run_irl_training(
         batched=True,
     )
 
-    #trainer = UnslothAIRLTrainer(
     trainer = AIRLTrainer(
         policy_model=policy_model,
         reward_model=reward_model,

@@ -68,7 +68,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
 
     # sampling params for generation
     sampling_params = SamplingParams(
-        max_tokens=cfg.model.max_seq_length,
+        max_tokens=cfg.model.prompt_length + cfg.model.max_completion_length,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )

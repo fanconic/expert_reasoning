@@ -2,8 +2,10 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
 wandb.login()
-from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
-#from src.models.model_module import irl_load_model_and_tokenizer
+import os
+os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
+#from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
+from src.models.model_module import irl_load_model_and_tokenizer
 from src.data.dataset import get_dataset
 from src.training.irl_module import run_irl_training
 from src.utils.utils import set_seed
@@ -37,7 +39,7 @@ def main(cfg: DictConfig):
 
     # Load model and tokenizer from unsloth
     policy_model, reward_model, policy_tokenizer, reward_tokenizer = (
-        irl_load_model_and_tokenizer_trl(cfg)
+        irl_load_model_and_tokenizer(cfg)
     )
 
     # Get reward functions

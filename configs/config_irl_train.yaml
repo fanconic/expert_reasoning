@@ -5,11 +5,12 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-7B-Instruct"
+  policy_name: "Qwen/Qwen2.5-3B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
-  max_seq_length: 1024
+  max_prompt_length: 200
+  max_completion_length: 824
   load_in_4bit: true
-  fast_inference: false
+  fast_inference: true
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
   
@@ -29,7 +30,7 @@ model:
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
   reward_updates_per_policy_step: 1
-  disc_temperature: 1
+  disc_temperature: 1.0
 
   # Clip the reward of the discriminator
   clip_reward_model: true
@@ -40,17 +41,17 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert : 1 # set to 0 if unused
+  num_neg_perturbations_per_expert : 0 # set to 0 if unused
   neg_perturb_fns : [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
   neg_sample_weight : 1.0
   disc_pairwise_margin : 0.0
   
 
 dataset:
-  name: "gsm8k_kd"
+  name: "countdown_kd"
   split: "train"
   train_ratio: 1
-  val_ratio: 0.1
+  val_ratio: 1
 
 training:
   # Common training params
@@ -64,7 +65,7 @@ training:
   logging_steps: 10
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
-  report_to: "wandb"
+  report_to: "none"
   per_device_train_batch_size: 6
   gradient_accumulation_steps: 2
   max_steps: 500
@@ -78,12 +79,12 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 100
-  per_device_eval_batch_size: 6
+  eval_steps: 2
+  per_device_eval_batch_size: 30
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "gsm8k_airl_7B"
+  run_name: "countdown_airl_3B_new"

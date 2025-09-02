@@ -67,6 +67,7 @@ from trl.trainer.utils import (
 )
 import copy
 import random
+from src.training.reward_model_utils import tokenize_examples, dedup_token_batch, prepare_reward_batch
 
 # Local imports
 from src.config.irl_config import IRLConfig
@@ -403,9 +404,7 @@ class AIRLTrainer(GRPOTrainer):
                         padding_side="right",
                         add_special_tokens=False,
                     )
-                    reward_inputs = super(GRPOTrainer, self)._prepare_inputs(
-                        reward_inputs
-                    )
+                    reward_inputs = {k: v.to(self.accelerator.device) for k, v in reward_inputs.items()}
                     with torch.inference_mode():
                         # At this point we use the logits of the reward model as reward scores (IMPORTANT)
                         reward_from_model =  reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
@@ -654,7 +653,6 @@ class AIRLTrainer(GRPOTrainer):
 
         # Concatenate prompt_mask with completion_mask for logit computation
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)  # (B, P+C)
-
         logits_to_keep = completion_ids.size(
             1
         )  # we only need to compute the logits for the completion tokens
@@ -846,6 +844,7 @@ class AIRLTrainer(GRPOTrainer):
         policy_completions: List[List[Dict]],
     ) -> torch.Tensor:
         """One discriminator step with expert positives, policy negatives, and (optional) perturbed expert negatives."""
+        
         device = self.accelerator.device
 
         # Positives = expert completions
@@ -853,161 +852,145 @@ class AIRLTrainer(GRPOTrainer):
             [{"role": "assistant", "content": element["target"]}] for element in inputs
         ]
 
-        # Build perturbed negatives from experts (and track source expert index if available)
+        # Build perturbed negatives from experts
         _per_out = self._make_perturbed_completions(expert_completions)
-        if isinstance(_per_out, tuple):
-            perturbed_completions, per_source_orig_idx = _per_out
-        else:
-            perturbed_completions, per_source_orig_idx = _per_out, None
+        perturbed_completions = _per_out[0] if isinstance(_per_out, tuple) else _per_out
 
-        # Tokenise experts and policy negatives
-        expert_tokens, policy_tokens = self._tokenise_examples(
-            prompts,
-            expert_completions,
-            policy_completions,
-            tokenizer=self.reward_tokenizer,
+        # Tokenise and prepare all inputs
+        expert_tokens, policy_tokens = tokenize_examples(
+            prompts, expert_completions, policy_completions,
+            self.reward_tokenizer, self.max_completion_length,
+            device, self.response_only
         )
 
         # Deduplicate expert tokens and get multiplicities
-        expert_tokens, pos_counts, expert_inverse = self._dedup_token_batch(expert_tokens)
+        expert_tokens, pos_counts, _ = dedup_token_batch(expert_tokens)
         n_pos = expert_tokens["input_ids"].size(0)
-
-        # Tokenise perturbed negatives (if any)
-        if len(perturbed_completions) > 0:
-            _, perturbed_tokens = self._tokenise_examples(
-                prompts[: len(perturbed_completions)],            # ignored when response_only=True
-                expert_completions[: len(perturbed_completions)], # placeholder
-                perturbed_completions,
-                tokenizer=self.reward_tokenizer,
-            )
-            have_perturbed = True
-            n_per = perturbed_tokens["input_ids"].size(0)
-        else:
-            have_perturbed = False
-            n_per = 0
-
         n_pol = policy_tokens["input_ids"].size(0)
 
-        # Build batch: [ unique_experts | policy | perturbed ]
-        cat_keys = expert_tokens.keys()
-        if have_perturbed:
-            batch = {
-                k: torch.cat([expert_tokens[k], policy_tokens[k], perturbed_tokens[k]], dim=0)
-                for k in cat_keys
-            }
-        else:
-            batch = {
-                k: torch.cat([expert_tokens[k], policy_tokens[k]], dim=0)
-                for k in cat_keys
-            }
+        # Handle perturbed examples if present
+        perturbed_tokens = None
+        n_per = 0
+        if perturbed_completions:
+            _, perturbed_tokens = tokenize_examples(
+                prompts[:len(perturbed_completions)],
+                expert_completions[:len(perturbed_completions)],
+                perturbed_completions,
+                self.reward_tokenizer,
+                self.max_completion_length,
+                device,
+                self.response_only
+            )
+            n_per = perturbed_tokens["input_ids"].size(0)
 
-        # Labels (with smoothing)
-        eps_pos = self.eps
-        eps_neg = self.neg_label_smoothing if self.neg_label_smoothing is not None else self.eps
+        # Prepare batched data for training
+        batch, labels, weights = prepare_reward_batch(
+            expert_tokens, policy_tokens, perturbed_tokens,
+            n_pos, n_pol, n_per, device,
+            self.eps, self.neg_label_smoothing,
+            self.neg_sample_weight,
+            self.num_neg_perturbations_per_expert
+        )
 
-        pos_labels = torch.ones(n_pos, device=device) * (1 - eps_pos) + eps_pos * 0.5
-        pol_labels = torch.zeros(n_pol, device=device) * (1 - eps_neg) + eps_neg * 0.5
+        # Training loop over gradient accumulation steps
+        total_loss = self._train_reward_model_loop(
+            batch, labels, weights,
+            n_pos, n_pol, n_per,
+            pos_counts
+        )
 
-        if have_perturbed:
-            per_labels = torch.zeros(n_per, device=device) * (1 - eps_neg) + eps_neg * 0.5
-            labels = torch.cat([pos_labels, pol_labels, per_labels], dim=0)
-        else:
-            labels = torch.cat([pos_labels, pol_labels], dim=0)
-
-        # Sample weights:
-        # - deduped positives get their multiplicity 'pos_counts'
-        # - perturbed negatives can be emphasised by self.neg_sample_weight
-        weights = torch.ones_like(labels)
-        multiplier = 1 if self.num_neg_perturbations_per_expert == 0 else 2
-        weights[:n_pos] = pos_counts * multiplier # account for deduplication
-        if have_perturbed and (self.neg_sample_weight != 1.0):
-            start_per = n_pos + n_pol
-            weights[start_per : start_per + n_per] *= self.neg_sample_weight
-
-        # Divide batch into gradient accumulation steps
-        total_batch_size = weights.shape[0]
-        
-        # Compute samples per class per accumulation step
-        pos_per_step = n_pos // self.args.gradient_accumulation_steps
-        pol_per_step = n_pol // self.args.gradient_accumulation_steps
-        per_per_step = n_per // self.args.gradient_accumulation_steps if have_perturbed else 0
-        
-        total_loss = 0
-        for step in range(self.args.gradient_accumulation_steps):
-            # Calculate balanced slice indices for each group
-            pos_start = step * pos_per_step
-            pos_end = pos_start + pos_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pos
-            
-            pol_start = step * pol_per_step
-            pol_end = pol_start + pol_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pol
-            
-            if have_perturbed:
-                per_start = step * per_per_step
-                per_end = per_start + per_per_step if step < self.args.gradient_accumulation_steps - 1 else n_per
-                
-                # Combine slices while maintaining group ordering
-                step_batch = {
-                    k: torch.cat([
-                        expert_tokens[k][pos_start:pos_end],
-                        policy_tokens[k][pol_start:pol_end],
-                        perturbed_tokens[k][per_start:per_end]
-                    ], dim=0)
-                    for k in cat_keys
-                }
-                step_labels = torch.cat([
-                    labels[:n_pos][pos_start:pos_end],
-                    labels[n_pos:n_pos+n_pol][pol_start:pol_end],
-                    labels[n_pos+n_pol:][per_start:per_end]
-                ])
-                step_weights = torch.cat([
-                    weights[:n_pos][pos_start:pos_end],
-                    weights[n_pos:n_pos+n_pol][pol_start:pol_end],
-                    weights[n_pos+n_pol:][per_start:per_end]
-                ])
-            else:
-                # Combine slices for expert and policy only
-                step_batch = {
-                    k: torch.cat([
-                        expert_tokens[k][pos_start:pos_end],
-                        policy_tokens[k][pol_start:pol_end]
-                    ], dim=0)
-                    for k in cat_keys
-                }
-                step_labels = torch.cat([
-                    labels[:n_pos][pos_start:pos_end],
-                    labels[n_pos:][pol_start:pol_end]
-                ])
-                step_weights = torch.cat([
-                    weights[:n_pos][pos_start:pos_end],
-                    weights[n_pos:][pol_start:pol_end]
-                ])
-
-            # Forward with autocast to reduce memory
-            with self.accelerator.autocast():
-                step_logits = self.reward_model(**step_batch).logits.squeeze(-1)
-                
-                # BCE with weights; normalise by sum of weights for scale invariance
-                step_bce = F.binary_cross_entropy_with_logits(
-                    step_logits, 
-                    step_labels,
-                    reduction="none"
-                )
-                step_loss = (step_bce * step_weights).sum() / step_weights.sum()
-                
-                # Scale loss by number of accumulation steps
-                scaled_loss = step_loss / self.args.gradient_accumulation_steps
-            
-            # Backward pass
-            scaled_loss.backward()
-            total_loss += step_loss.detach()
-
-        # Clip gradients and update after accumulation
-        if self.state.global_step % self.reward_updates_per_policy_step == 0 and not self.standard_grpo: 
+        # Optimizer step if needed
+        if self.state.global_step % self.reward_updates_per_policy_step == 0 and not self.standard_grpo:
             torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
             self.reward_optimizer.step()
             self.reward_optimizer.zero_grad()
-        
+
         return total_loss / self.args.gradient_accumulation_steps
+
+    def _train_reward_model_loop(
+        self,
+        batch: Dict[str, torch.Tensor],
+        labels: torch.Tensor,
+        weights: torch.Tensor,
+        n_pos: int,
+        n_pol: int,
+        n_per: int,
+        pos_counts: torch.Tensor,
+    ) -> torch.Tensor:
+        """Training loop for reward model with gradient accumulation."""
+        # Compute samples per accumulation step
+        pos_per_step = n_pos // self.args.gradient_accumulation_steps
+        pol_per_step = n_pol // self.args.gradient_accumulation_steps
+        per_per_step = n_per // self.args.gradient_accumulation_steps if n_per > 0 else 0
+        have_perturbed = n_per > 0
+        
+        total_loss = 0
+        for step in range(self.args.gradient_accumulation_steps):
+            # Get slices for this step
+            pos_slice = slice(
+                step * pos_per_step,
+                (step + 1) * pos_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pos
+            )
+            pol_slice = slice(
+                step * pol_per_step,
+                (step + 1) * pol_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pol
+            )
+
+            # Prepare step data
+            if have_perturbed:
+                per_slice = slice(
+                    step * per_per_step,
+                    (step + 1) * per_per_step if step < self.args.gradient_accumulation_steps - 1 else n_per
+                )
+                step_batch = {
+                    k: torch.cat([
+                        batch[k][:n_pos][pos_slice],
+                        batch[k][n_pos:n_pos+n_pol][pol_slice],
+                        batch[k][n_pos+n_pol:][per_slice]
+                    ], dim=0)
+                    for k in batch.keys()
+                }
+                step_labels = torch.cat([
+                    labels[:n_pos][pos_slice],
+                    labels[n_pos:n_pos+n_pol][pol_slice],
+                    labels[n_pos+n_pol:][per_slice]
+                ])
+                step_weights = torch.cat([
+                    weights[:n_pos][pos_slice],
+                    weights[n_pos:n_pos+n_pol][pol_slice],
+                    weights[n_pos+n_pol:][per_slice]
+                ])
+            else:
+                step_batch = {
+                    k: torch.cat([
+                        batch[k][:n_pos][pos_slice],
+                        batch[k][n_pos:][pol_slice]
+                    ], dim=0)
+                    for k in batch.keys()
+                }
+                step_labels = torch.cat([
+                    labels[:n_pos][pos_slice],
+                    labels[n_pos:][pol_slice]
+                ])
+                step_weights = torch.cat([
+                    weights[:n_pos][pos_slice],
+                    weights[n_pos:][pol_slice]
+                ])
+
+            # Forward and backward pass
+            with self.accelerator.autocast():
+                step_logits = self.reward_model(**step_batch).logits.squeeze(-1)
+                step_bce = F.binary_cross_entropy_with_logits(
+                    step_logits, step_labels, reduction="none"
+                )
+                step_loss = (step_bce * step_weights).sum() / step_weights.sum()
+                scaled_loss = step_loss / self.args.gradient_accumulation_steps
+
+            scaled_loss.backward()
+            total_loss += step_loss.detach()
+
+        return total_loss
+    
 
     # -----------------------------------------------------------------------
     def log(
