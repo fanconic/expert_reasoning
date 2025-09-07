@@ -12,7 +12,8 @@ from peft import (
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    AutoModelForSequenceClassification,
+    AutoModelForTokenClassification,
+    AutoModelForSequenceClassification
 )
 
 try:
@@ -56,11 +57,13 @@ def irl_load_model_and_tokenizer_trl(
     """
     policy_model_name = config.model.policy_name
     reward_model_name = config.model.reward_name
-    max_seq_length = config.model.max_seq_length
+    max_seq_length = config.model.max_prompt_length + config.model.max_completion_length
     load_in_4bit = config.model.load_in_4bit
     lora_rank = config.model.lora_rank
     random_state = config.seed
     use_grad_ckpt = config.model.use_gradient_checkpointing
+    
+    reward_model_class = AutoModelForTokenClassification if config.model.dense_rewards else AutoModelForSequenceClassification
 
     torch.manual_seed(random_state)
 
@@ -149,7 +152,7 @@ def irl_load_model_and_tokenizer_trl(
 
     # --------------------------------------------------------------
     # Reward Model
-    reward_model = AutoModelForSequenceClassification.from_pretrained(
+    reward_model = reward_model_class.from_pretrained(
         reward_model_name,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         quantization_config=quantization_config,

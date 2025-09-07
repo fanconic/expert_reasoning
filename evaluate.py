@@ -101,7 +101,7 @@ def main(cfg: DictConfig):
     sampling_params = SamplingParams(
         n=n,
         seed=cfg.seed,
-        max_tokens=cfg.model.max_seq_length,
+        max_tokens=cfg.model.max_prompt_length + cfg.model.max_completion_length,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )

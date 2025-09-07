@@ -7,15 +7,15 @@ defaults:
 model:
   policy_name: "Qwen/Qwen2.5-3B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
-  max_prompt_length: 200
+  max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
-  fast_inference: true
+  fast_inference: false
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
   
   # Common settings
-  lora_rank: 64  # Base LoRA rank
+  lora_rank: 128  # Base LoRA rank
   use_gradient_checkpointing: true
   
   # Policy model specific
@@ -26,6 +26,7 @@ model:
   reward_lora_rank: 32  # Optional: override base rank for reward
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
+  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
@@ -33,7 +34,7 @@ model:
   disc_temperature: 1.0
 
   # Clip the reward of the discriminator
-  clip_reward_model: true
+  clip_reward_model: false
   reward_lb: -3.0
   reward_ub: 3.0
 
@@ -41,17 +42,17 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert : 0 # set to 0 if unused
+  num_neg_perturbations_per_expert : 1 # set to 0 if unused
   neg_perturb_fns : [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
   neg_sample_weight : 1.0
   disc_pairwise_margin : 0.0
   
 
 dataset:
-  name: "countdown_kd"
+  name: "gsm8k_kd"
   split: "train"
   train_ratio: 1
-  val_ratio: 1
+  val_ratio: 0.1
 
 training:
   # Common training params
@@ -65,8 +66,8 @@ training:
   logging_steps: 10
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
-  report_to: "wandb"
-  per_device_train_batch_size: 16
+  report_to: "none"
+  per_device_train_batch_size: 6
   max_micro_batch: 6  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
   max_steps: 500
@@ -75,17 +76,17 @@ training:
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 16
+  num_generations: 6
 
 eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 50
-  per_device_eval_batch_size: 32
+  per_device_eval_batch_size: 30
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "countdown_airl_3B"
+  run_name: "gsm8k_airl_3B_unsloth_6gen"

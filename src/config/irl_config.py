@@ -157,7 +157,12 @@ class IRLConfig(GRPOConfig):
             "help": "Maximum samples per micro-batch through reward model to avoid OOM."
         },
     )
-
+    dense_rewards: bool = field(
+        default=False,
+        metadata={
+            "help": "If true, use token-level (dense) rewards instead of sequence-level (sparse) rewards."
+        },
+    )
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===
     max_prompt_length: Optional[int] = field(

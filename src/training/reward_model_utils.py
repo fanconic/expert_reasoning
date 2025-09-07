@@ -22,7 +22,18 @@ def tokenize_examples(
         policy_messages = [{"messages": [{"role": "system", "content": ""}] + c} for c in policy_completions]
         policy_texts = [apply_chat_template(x, tokenizer)["text"] for x in policy_messages]
     else:
-        # Create texts
+        # First tokenize just the prompts to get their lengths
+        prompt_messages = [{"messages": p} for p in prompts]
+        prompt_texts = [apply_chat_template(x, tokenizer)["text"] for x in prompt_messages]
+        prompt_tokens = tokenizer(
+            text=prompt_texts,
+            padding=False,
+            return_tensors=None,
+            add_special_tokens=False,
+        )
+        prompt_lengths = [len(ids) for ids in prompt_tokens["input_ids"]]
+        
+        # Create texts with full sequences
         expert_messages = [{"messages": p + c} for p, c in zip(prompts, expert_completions)]
         expert_texts = [apply_chat_template(x, tokenizer)["text"] for x in expert_messages]
         policy_messages = [{"messages": p + c} for p, c in zip(prompts, policy_completions)]
@@ -48,6 +59,23 @@ def tokenize_examples(
         truncation=True
     )
 
+    # Add response masks when not in response_only mode
+    if not response_only:
+        expert_response_mask = torch.zeros_like(expert_tokens["attention_mask"])
+        policy_response_mask = torch.zeros_like(policy_tokens["attention_mask"])
+        
+        for i, prompt_len in enumerate(prompt_lengths):
+            max_idx = min(max_completion_length, expert_tokens["attention_mask"].size(1))
+            if prompt_len < max_idx:
+                expert_response_mask[i, prompt_len:] = expert_tokens["attention_mask"][i, prompt_len:]
+                policy_response_mask[i, prompt_len:] = policy_tokens["attention_mask"][i, prompt_len:]
+        
+        expert_tokens["response_mask"] = expert_response_mask
+        policy_tokens["response_mask"] = policy_response_mask
+    else:
+        expert_tokens["response_mask"] = expert_tokens["attention_mask"].clone()
+        policy_tokens["response_mask"] = policy_tokens["attention_mask"].clone()
+    
     # Put on right device
     expert_tokens = {k: v.to(device) for k, v in expert_tokens.items()}
     policy_tokens = {k: v.to(device) for k, v in policy_tokens.items()}
@@ -101,7 +129,8 @@ def prepare_reward_batch(
     eps: float,
     neg_label_smoothing: Optional[float],
     neg_sample_weight: float,
-    num_neg_perturbations_per_expert: int
+    num_neg_perturbations_per_expert: int,
+    gradient_accumulation_steps: int
 ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
     """Prepare batched data for reward model training."""
     # Build batch: [ unique_experts | policy | perturbed ]
@@ -135,7 +164,7 @@ def prepare_reward_batch(
     # Sample weights
     weights = torch.ones_like(labels)
     multiplier = 1 if num_neg_perturbations_per_expert == 0 else 2
-    weights[:n_pos] *= multiplier  # account for deduplication
+    weights[:n_pos] *= (multiplier * n_pol // gradient_accumulation_steps)  # account for deduplication
     
     if have_perturbed and (neg_sample_weight != 1.0):
         start_per = n_pos + n_pol

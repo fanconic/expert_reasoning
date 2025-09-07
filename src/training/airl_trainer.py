@@ -161,6 +161,7 @@ class AIRLTrainer(GRPOTrainer):
 
         # Reward functions --------------------------------------------------------------
         self.standard_grpo = args.standard_grpo
+        self.dense_rewards = args.dense_rewards
         
         if self.standard_grpo:
             self.use_outcome_rewards = True
@@ -359,6 +360,9 @@ class AIRLTrainer(GRPOTrainer):
         }
         return expert_tokens, policy_tokens
 
+
+    #def _move_model_to_vllm(self, *args, **kwargs): return None
+    
     # -----------------------------------------------------------------------
     # Core overwrites overrides
     # -----------------------------------------------------------------------
@@ -405,13 +409,42 @@ class AIRLTrainer(GRPOTrainer):
                         padding_side="right",
                         add_special_tokens=False,
                     )
+
+                    # Create response mask that's 1 only for completion tokens
+                    prompt_only_tokens = reward_processing_class(
+                        text=[p[0]["content"] if is_conversational(inputs[0]) else p for p in prompts],
+                        return_tensors="pt",
+                        padding=True,
+                        padding_side="right",
+                        add_special_tokens=False,
+                    )
+                    prompt_lengths = prompt_only_tokens["input_ids"].shape[1]
+                    response_mask = torch.zeros_like(reward_inputs["attention_mask"])
+                    response_mask[:, prompt_lengths:] = reward_inputs["attention_mask"][:, prompt_lengths:]
+                    reward_inputs["response_mask"] = response_mask
                     reward_inputs = {k: v.to(self.accelerator.device) for k, v in reward_inputs.items()}
+                    
+                    # expand the rewards_per_func if dense rewards
+                    if self.dense_rewards and rewards_per_func.dim() == 2:
+                        seq_len = reward_inputs["input_ids"].shape[1]
+                        rewards_per_func = rewards_per_func.unsqueeze(-1).expand(-1, -1, seq_len).contiguous()
+                        
                     with torch.inference_mode():
                         # At this point we use the logits of the reward model as reward scores (IMPORTANT)
-                        reward_from_model =  reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
-                        if self.clip_reward_model:
-                            reward_from_model = torch.clamp(reward_from_model, self.reward_lb, self.reward_ub)
-                        rewards_per_func[:, i] = reward_from_model
+                        if not self.dense_rewards:
+                            reward_from_model =  reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
+                            if self.clip_reward_model:
+                                reward_from_model = torch.clamp(reward_from_model, self.reward_lb, self.reward_ub)
+                            rewards_per_func[:, i] = reward_from_model
+                        else:
+                            reward_from_model =  reward_func(
+                                input_ids = reward_inputs["input_ids"],
+                                attention_mask = reward_inputs["attention_mask"],
+                                ).logits[:, :, 0] / self.disc_temperature
+                            reward_from_model = reward_from_model * reward_inputs["response_mask"]
+                            if self.clip_reward_model:
+                                reward_from_model = torch.clamp(reward_from_model, self.reward_lb, self.reward_ub)
+                            rewards_per_func[:, i, :] = reward_from_model
                 else:
                     output_reward_func = reward_func(
                         prompts=prompts,
@@ -425,9 +458,15 @@ class AIRLTrainer(GRPOTrainer):
                         for reward in output_reward_func
                     ]
 
-                    rewards_per_func[:, i] = torch.tensor(
-                        output_reward_func, dtype=torch.float32, device=device
-                    )
+                    if not self.dense_rewards:
+                        rewards_per_func[:, i] = torch.tensor(
+                            output_reward_func, dtype=torch.float32, device=device
+                        )
+                    else:
+                        seq_len = rewards_per_func.size(2)
+                        rewards_per_func[:, i, :] = torch.tensor(
+                            output_reward_func, dtype=torch.float32, device=device
+                            ).unsqueeze(1).repeat(1,seq_len)
 
         # If all reward functions return None for a given row, issue a detailed warning
         if torch.isnan(rewards_per_func).all(dim=1).any():
@@ -454,26 +493,14 @@ class AIRLTrainer(GRPOTrainer):
     ) -> dict[str, Union[torch.Tensor, Any]]:
         device = self.accelerator.device
         mode = "train" if self.model.training else "eval"
-        prompts = [x["prompt"] for x in inputs]
-        prompts_text = [
-            maybe_apply_chat_template(example, self.processing_class)["prompt"]
-            for example in inputs
-        ]
-        prompt_inputs = self.processing_class(
-            text=prompts_text,
-            return_tensors="pt",
-            padding=True,
-            padding_side="left",
-            add_special_tokens=False,
-        )
-        
-        prompt_inputs = {k: v.to(self.accelerator.device) for k, v in prompt_inputs.items()}
-        #prompt_inputs = super(GRPOTrainer, self)._prepare_inputs(prompt_inputs)
-        prompt_ids, prompt_mask = (
-            prompt_inputs["input_ids"],
-            prompt_inputs["attention_mask"],
-        )
 
+        prompts = [x["prompt"] for x in inputs]
+        prompts_text = [maybe_apply_chat_template(example, self.processing_class)["prompt"] for example in inputs]
+        prompt_inputs = self.processing_class(
+            text=prompts_text, return_tensors="pt", padding=True, padding_side="left", add_special_tokens=False
+        )
+        prompt_inputs = {k: v.to(self.accelerator.device) for k, v in prompt_inputs.items()}
+        prompt_ids, prompt_mask = prompt_inputs["input_ids"], prompt_inputs["attention_mask"]
         if self.max_prompt_length is not None:
             # If max_prompt_length is set, we trim the prompt to keep only the last `max_prompt_length` tokens.
             # Then we decode those tokens back into text. We manually remove leading pad tokens from the decoded text,
@@ -481,14 +508,18 @@ class AIRLTrainer(GRPOTrainer):
             prompt_ids = prompt_ids[:, -self.max_prompt_length :]
             prompt_mask = prompt_mask[:, -self.max_prompt_length :]
             prompts_text = self.processing_class.batch_decode(
-                prompt_ids,
-                skip_special_tokens=False,
-                clean_up_tokenization_spaces=False,
+                prompt_ids, skip_special_tokens=False, clean_up_tokenization_spaces=False
             )
-            prompts_text = [
-                re.sub(rf"^({re.escape(self.processing_class.pad_token)})+", "", text)
-                for text in prompts_text
-            ]
+            pad_token = self.processing_class.pad_token
+            def strip_leading_tokens(text):
+                while text.startswith(pad_token):
+                    text = text.removeprefix(pad_token)
+                return text
+
+            if pad_token is not None:
+                prompts_text = [
+                    strip_leading_tokens(text) for text in prompts_text
+                ]
 
         # Generate completions using either vLLM or regular generation
         if self.use_vllm:
@@ -532,9 +563,7 @@ class AIRLTrainer(GRPOTrainer):
             # Generate completions using colocated vLLM instances: each device holds vLLM copy and work on their own batch of prompts
             elif self.vllm_mode == "colocate":
                 if self.guided_decoding_regex:
-                    guided_decoding = GuidedDecodingParams(
-                        backend="outlines", regex=self.guided_decoding_regex
-                    )
+                    guided_decoding = GuidedDecodingParams(backend="outlines", regex=self.guided_decoding_regex)
                 else:
                     guided_decoding = None
 
@@ -556,57 +585,37 @@ class AIRLTrainer(GRPOTrainer):
                     # Gather prompts from all ranks in the TP group and flatten.
                     # Each rank starts with its own prompts; after gathering, all ranks see the full group set.
                     orig_size = len(prompts_text)
-                    gathered_prompts = [
-                        None for _ in range(self.vllm_tensor_parallel_size)
-                    ]
-                    torch.distributed.all_gather_object(
-                        gathered_prompts, prompts_text, group=self.tp_group
-                    )
-                    all_prompts_text = [
-                        p for sublist in gathered_prompts for p in sublist
-                    ]
+                    gathered_prompts = [None for _ in range(self.vllm_tensor_parallel_size)]
+                    torch.distributed.all_gather_object(gathered_prompts, prompts_text, group=self.tp_group)
+                    all_prompts_text = [p for sublist in gathered_prompts for p in sublist]
                 else:
                     all_prompts_text = prompts_text
 
                 with profiling_context(self, "vLLM.generate"):
                     all_outputs = self.llm.generate(
-                        all_prompts_text,
-                        sampling_params=sampling_params,
+                        all_prompts_text, 
+                        sampling_params=sampling_params, 
                         use_tqdm=False,
+                        lora_request = self.model.load_lora('grpo_trainer_lora_model', load_tensors = True)
                     )
 
-                completion_ids = [
-                    output.token_ids
-                    for outputs in all_outputs
-                    for output in outputs.outputs
-                ]
+                completion_ids = [output.token_ids for outputs in all_outputs for output in outputs.outputs]
 
                 if self.vllm_tensor_parallel_size > 1:
                     # Slice completions for this rank within its TP group.
                     # Each rank generates all outputs — we keep only our share.
-                    local_rank_in_group = torch.distributed.get_rank(
-                        group=self.tp_group
-                    )
-                    tp_slice = slice(
-                        local_rank_in_group * orig_size,
-                        (local_rank_in_group + 1) * orig_size,
-                    )
+                    local_rank_in_group = torch.distributed.get_rank(group=self.tp_group)
+                    tp_slice = slice(local_rank_in_group * orig_size, (local_rank_in_group + 1) * orig_size)
                     completion_ids = completion_ids[tp_slice]
 
             # Pad the completions, and concatenate them with the prompts
-            completion_ids = [
-                torch.tensor(ids, device=device) for ids in completion_ids
-            ]
-            completion_ids = pad(
-                completion_ids, padding_value=self.processing_class.pad_token_id
-            )
+            completion_ids = [torch.tensor(ids, device=device) for ids in completion_ids]
+            completion_ids = pad(completion_ids, padding_value=self.processing_class.pad_token_id)
             prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)
         else:
             # Regular generation path
             with unwrap_model_for_generation(
-                self.model_wrapped,
-                self.accelerator,
-                gather_deepspeed3_params=self.args.ds3_gather_for_generation,
+                self.model_wrapped, self.accelerator, gather_deepspeed3_params=self.args.ds3_gather_for_generation
             ) as unwrapped_model:
                 with (
                     FSDP.summon_full_params(self.model_wrapped, recurse=False)
@@ -614,9 +623,7 @@ class AIRLTrainer(GRPOTrainer):
                     else nullcontext()
                 ):
                     prompt_completion_ids = unwrapped_model.generate(
-                        prompt_ids,
-                        attention_mask=prompt_mask,
-                        generation_config=self.generation_config,
+                        prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config
                     )
 
             # Compute prompt length and extract completion ids
@@ -626,20 +633,15 @@ class AIRLTrainer(GRPOTrainer):
 
         # Mask everything after the first EOS token
         is_eos = completion_ids == self.processing_class.eos_token_id
-        eos_idx = torch.full(
-            (is_eos.size(0),), is_eos.size(1), dtype=torch.long, device=device
-        )
+        eos_idx = torch.full((is_eos.size(0),), is_eos.size(1), dtype=torch.long, device=device)
         eos_idx[is_eos.any(dim=1)] = is_eos.int().argmax(dim=1)[is_eos.any(dim=1)]
-        sequence_indices = torch.arange(is_eos.size(1), device=device).expand(
-            is_eos.size(0), -1
-        )
+        sequence_indices = torch.arange(is_eos.size(1), device=device).expand(is_eos.size(0), -1)
         completion_mask = (sequence_indices <= eos_idx.unsqueeze(1)).int()
 
         # Convert tensor to a list of lists of token IDs. This will be passed to the reward function, avoiding the need
         # to re-tokenize completions if the reward is computed from tokens.
         completion_ids_list = [
-            [id.item() for id, m in zip(row, mask_row) if m]
-            for row, mask_row in zip(completion_ids, completion_mask)
+            [id.item() for id, m in zip(row, mask_row) if m] for row, mask_row in zip(completion_ids, completion_mask)
         ]
 
         # Sum along sequence dimension (dim=1) to get completion length per sequence, used for logging
@@ -648,36 +650,21 @@ class AIRLTrainer(GRPOTrainer):
         # If mask_truncated_completions is enabled, zero out truncated completions in completion_mask
         if self.mask_truncated_completions:
             truncated_completions = ~is_eos.any(dim=1)
-            completion_mask = (
-                completion_mask * (~truncated_completions).unsqueeze(1).int()
-            )
+            completion_mask = completion_mask * (~truncated_completions).unsqueeze(1).int()
 
         # Concatenate prompt_mask with completion_mask for logit computation
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)  # (B, P+C)
-        logits_to_keep = completion_ids.size(
-            1
-        )  # we only need to compute the logits for the completion tokens
-        batch_size = (
-            self.args.per_device_train_batch_size
-            if mode == "train"
-            else self.args.per_device_eval_batch_size
-        )
+
+        logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
+        batch_size = self.args.per_device_train_batch_size if mode == "train" else self.args.per_device_eval_batch_size
 
         with torch.no_grad():
             # When using num_iterations == 1 and steps_per_generation <= gradient_accumulation_steps
             # old_per_token_logps == per_token_logps, so we can skip it's computation here, and use
             # per_token_logps.detach() instead.
-            if (
-                self.num_iterations > 1
-                or self.args.steps_per_generation
-                > self.args.gradient_accumulation_steps
-            ):
+            if self.num_iterations > 1 or self.args.steps_per_generation > self.args.gradient_accumulation_steps:
                 old_per_token_logps = self._get_per_token_logps(
-                    self.model,
-                    prompt_completion_ids,
-                    attention_mask,
-                    logits_to_keep,
-                    batch_size,
+                    self.model, prompt_completion_ids, attention_mask, logits_to_keep, batch_size
                 )
             else:
                 old_per_token_logps = None
@@ -686,35 +673,23 @@ class AIRLTrainer(GRPOTrainer):
             if self.beta != 0.0:
                 if self.ref_model is not None:
                     ref_per_token_logps = self._get_per_token_logps(
-                        self.ref_model,
-                        prompt_completion_ids,
-                        attention_mask,
-                        logits_to_keep,
+                        self.ref_model, prompt_completion_ids, attention_mask, logits_to_keep
                     )
                 else:
                     with self.accelerator.unwrap_model(self.model).disable_adapter():
                         ref_per_token_logps = self._get_per_token_logps(
-                            self.model,
-                            prompt_completion_ids,
-                            attention_mask,
-                            logits_to_keep,
+                            self.model, prompt_completion_ids, attention_mask, logits_to_keep
                         )
             else:
                 ref_per_token_logps = None
 
         # Decode the generated completions
-        completions_text = self.processing_class.batch_decode(
-            completion_ids, skip_special_tokens=True
-        )
+        completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
         if is_conversational(inputs[0]):
             completions = []
             for prompt, completion in zip(prompts, completions_text):
-                bootstrap = (
-                    prompt.pop()["content"] if prompt[-1]["role"] == "assistant" else ""
-                )
-                completions.append(
-                    [{"role": "assistant", "content": bootstrap + completion}]
-                )
+                bootstrap = prompt.pop()["content"] if prompt[-1]["role"] == "assistant" else ""
+                completions.append([{"role": "assistant", "content": bootstrap + completion}])
         else:
             completions = completions_text
 
@@ -731,13 +706,24 @@ class AIRLTrainer(GRPOTrainer):
         )
 
         # Apply weights to each reward function's output and sum
-        rewards = (
-            rewards_per_func * self.reward_weights.to(device).unsqueeze(0)
-        ).nansum(dim=1)
-
-        # Compute grouped-wise rewards
-        mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
-        std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1)
+        if not self.dense_rewards:
+            rewards = (
+                rewards_per_func * self.reward_weights.to(device).unsqueeze(0)
+            ).nansum(dim=1)
+            
+             # Compute grouped-wise rewards
+            mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
+            std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1)
+            
+        else:
+            rewards = (
+                rewards_per_func * self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
+            ).nansum(dim=1)
+            
+             # Compute grouped-wise rewards
+            mean_grouped_rewards = rewards.view(-1, self.num_generations, rewards.size(1)).mean(dim=1)
+            std_grouped_rewards = rewards.view(-1, self.num_generations, rewards.size(1)).std(dim=1)
+            
         is_std_zero = torch.isclose(
             std_grouped_rewards, torch.zeros_like(std_grouped_rewards)
         )
@@ -749,6 +735,7 @@ class AIRLTrainer(GRPOTrainer):
         std_grouped_rewards = std_grouped_rewards.repeat_interleave(
             self.num_generations, dim=0
         )
+       
         advantages = rewards - mean_grouped_rewards
         if self.scale_rewards:
             advantages = advantages / (std_grouped_rewards + 1e-4)
@@ -821,8 +808,14 @@ class AIRLTrainer(GRPOTrainer):
         self._textual_logs["prompt"].extend(gather_object(prompts_text))
         self._textual_logs["completion"].extend(gather_object(completions_text))
         for i, name in enumerate(self.reward_func_names):
-            self._textual_logs["rewards"][name].extend(rewards_per_func[:, i].tolist())
-        self._textual_logs["advantages"].extend(all_process_advantages.tolist())
+            if not self.dense_rewards:
+                self._textual_logs["rewards"][name].extend(rewards_per_func[:, i].tolist())
+            else:
+                self._textual_logs["rewards"][name].extend(rewards_per_func[:, i].mean(-1).tolist())
+        if not self.dense_rewards:
+            self._textual_logs["advantages"].extend(all_process_advantages.tolist())
+        else:
+            self._textual_logs["advantages"].extend(all_process_advantages.mean(-1).tolist())
 
         return {
             "prompt_ids": prompt_ids,
@@ -890,7 +883,8 @@ class AIRLTrainer(GRPOTrainer):
             n_pos, n_pol, n_per, device,
             self.eps, self.neg_label_smoothing,
             self.neg_sample_weight,
-            self.num_neg_perturbations_per_expert
+            self.num_neg_perturbations_per_expert,
+            self.args.gradient_accumulation_steps
         )
 
         # Training loop over gradient accumulation steps
@@ -993,14 +987,26 @@ class AIRLTrainer(GRPOTrainer):
                 micro_labels = step_labels[start_idx:end_idx]
                 micro_weights = step_weights[start_idx:end_idx]
 
+                if self.dense_rewards:
+                    micro_labels = micro_labels.unsqueeze(1).repeat(1,micro_batch["input_ids"].size(1))
+                
                 # Forward pass with micro-batch
                 with self.accelerator.autocast():
-                    micro_logits = self.reward_model(**micro_batch).logits.squeeze(-1)
+                    micro_logits = self.reward_model(
+                        input_ids=micro_batch["input_ids"], 
+                        attention_mask=micro_batch["attention_mask"]).logits.squeeze(-1)
                     micro_bce = F.binary_cross_entropy_with_logits(
                         micro_logits, micro_labels, reduction="none"
                     )
                     # Compute full loss but scale it down for proper gradient accumulation
-                    micro_loss = (micro_bce * micro_weights).sum() / step_weights.sum()
+                    
+                    if self.dense_rewards:
+                        # Make sure only the tokens within the response mask contribute to the loss
+                        masked_micro_bce = micro_bce.masked_fill(micro_batch["response_mask"] == 0, 0.0)
+                        masked_micro_bce = masked_micro_bce / micro_batch["response_mask"].sum(1).unsqueeze(1)
+                        micro_loss = (masked_micro_bce * micro_weights.unsqueeze(1)).sum() / step_weights.sum()
+                    else:
+                        micro_loss = (micro_bce * micro_weights).sum() / step_weights.sum()
                     scaled_loss = micro_loss / (self.args.gradient_accumulation_steps * num_micro_batches)
                 
                 # Backward pass on scaled loss for proper gradient accumulation

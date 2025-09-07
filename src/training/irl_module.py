@@ -67,7 +67,8 @@ def run_irl_training(
         disc_pairwise_margin=cfg.model.disc_pairwise_margin,
         standard_grpo=cfg.training.standard_grpo,
         mask_truncated_completions=False,
-        max_micro_batch=cfg.training.max_micro_batch
+        max_micro_batch=cfg.training.max_micro_batch,
+        dense_rewards=cfg.model.dense_rewards
     )
 
     def formatting_prompt_func(examples):
