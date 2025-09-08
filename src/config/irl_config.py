@@ -163,6 +163,18 @@ class IRLConfig(GRPOConfig):
             "help": "If true, use token-level (dense) rewards instead of sequence-level (sparse) rewards."
         },
     )
+    advantage_calculation: str = field(
+        default="grpo",
+        metadata={
+            "help": "Way how the advantage is calculated. either `grpo` or `prime`"
+        }
+    )
+    dense_gamma: float = field(
+        default=1.0,
+        metadata={
+            "help": "Discount factor for the length of the response in dense reward"
+        }
+    )
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===
     max_prompt_length: Optional[int] = field(

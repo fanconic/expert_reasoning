@@ -5,7 +5,7 @@ wandb.login()
 import os
 os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
 from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
-#from src.models.model_module import irl_load_model_and_tokenizer
+#
 from src.data.dataset import get_dataset
 from src.training.irl_module import run_irl_training
 from src.utils.utils import set_seed
@@ -15,8 +15,12 @@ from src.rewards.reward_functions import get_reward_functions
 @hydra.main(config_path="configs", config_name="config_irl_train", version_base="1.3")
 def main(cfg: DictConfig):
     print("IRL Training Configuration:\n", OmegaConf.to_yaml(cfg))
-
     set_seed(cfg.seed)
+    if cfg.unsloth:
+        from src.models.model_module import irl_load_model_and_tokenizer
+        model_tokenizer_loader = irl_load_model_and_tokenizer
+    else:
+        model_tokenizer_loader = irl_load_model_and_tokenizer_trl
 
     # Initialize wandb
     if cfg.training.report_to == "wandb":
@@ -39,7 +43,7 @@ def main(cfg: DictConfig):
 
     # Load model and tokenizer from unsloth
     policy_model, reward_model, policy_tokenizer, reward_tokenizer = (
-        irl_load_model_and_tokenizer_trl(cfg)
+        model_tokenizer_loader(cfg)
     )
 
     # Get reward functions

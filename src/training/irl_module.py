@@ -68,7 +68,9 @@ def run_irl_training(
         standard_grpo=cfg.training.standard_grpo,
         mask_truncated_completions=False,
         max_micro_batch=cfg.training.max_micro_batch,
-        dense_rewards=cfg.model.dense_rewards
+        dense_rewards=cfg.model.dense_rewards,
+        advantage_calculation=cfg.model.advantage_calculation,
+        dense_gamma=cfg.model.dense_gamma
     )
 
     def formatting_prompt_func(examples):

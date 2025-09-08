@@ -14,8 +14,10 @@ def tokenize_examples(
     max_completion_length: int,
     device: torch.device,
     response_only: bool = False,
+    dense_rewards: bool = False
 ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
     """Tokenize expert and policy examples for reward model training."""
+    padding_side = "left" if dense_rewards else "right"
     if response_only:
         expert_messages = [{"messages": [{"role": "system", "content": ""}] + c} for c in expert_completions]
         expert_texts = [apply_chat_template(x, tokenizer)["text"] for x in expert_messages]
@@ -45,7 +47,7 @@ def tokenize_examples(
         padding="max_length",
         return_tensors="pt",
         add_special_tokens=False,
-        padding_side="right",
+        padding_side=padding_side,
         max_length=max_completion_length,
         truncation=True
     )
@@ -54,21 +56,42 @@ def tokenize_examples(
         padding="max_length",
         return_tensors="pt",
         add_special_tokens=False,
-        padding_side="right",
+        padding_side=padding_side,
         max_length=max_completion_length,
         truncation=True
     )
 
     # Add response masks when not in response_only mode
     if not response_only:
-        expert_response_mask = torch.zeros_like(expert_tokens["attention_mask"])
-        policy_response_mask = torch.zeros_like(policy_tokens["attention_mask"])
-        
-        for i, prompt_len in enumerate(prompt_lengths):
-            max_idx = min(max_completion_length, expert_tokens["attention_mask"].size(1))
-            if prompt_len < max_idx:
-                expert_response_mask[i, prompt_len:] = expert_tokens["attention_mask"][i, prompt_len:]
-                policy_response_mask[i, prompt_len:] = policy_tokens["attention_mask"][i, prompt_len:]
+        B, T = expert_tokens["attention_mask"].shape
+        e_am = expert_tokens["attention_mask"]
+        p_am = policy_tokens["attention_mask"]
+        prompt_lens = torch.as_tensor(prompt_lengths)
+
+        L_e = e_am.sum(dim=1) 
+        L_p = p_am.sum(dim=1)
+        e_left = T - L_e
+        p_left = T - L_p
+
+        e_start = e_left + torch.minimum(prompt_lens, L_e)
+        p_start = p_left + torch.minimum(prompt_lens, L_p)
+
+        e_real_end = e_left + L_e
+        p_real_end = p_left + L_p
+
+        if max_completion_length is None:
+            e_end, p_end = e_real_end, p_real_end
+        else:
+            e_end = torch.minimum(e_start + max_completion_length, e_real_end)
+            p_end = torch.minimum(p_start + max_completion_length, p_real_end)
+
+        idx = torch.arange(T).unsqueeze(0)      # (1, T)
+
+        e_mask = (idx >= e_start.unsqueeze(1)) & (idx < e_end.unsqueeze(1))
+        p_mask = (idx >= p_start.unsqueeze(1)) & (idx < p_end.unsqueeze(1))
+
+        expert_response_mask = (e_mask & e_am.bool()).to(e_am.dtype)
+        policy_response_mask = (p_mask & p_am.bool()).to(p_am.dtype)
         
         expert_tokens["response_mask"] = expert_response_mask
         policy_tokens["response_mask"] = policy_response_mask
@@ -171,3 +194,34 @@ def prepare_reward_batch(
         weights[start_per : start_per + n_per] *= neg_sample_weight
 
     return batch, labels, weights
+
+
+def get_last_token_indices(attention_mask):
+    # Method 1: Using max with range
+    arange = torch.arange(attention_mask.size(1), device=attention_mask.device)
+    last_tok_idx = (attention_mask * arange.unsqueeze(0)).max(dim=1).indices
+    
+    # Handle rows with all zeros by setting their index to 0 or another default
+    all_zeros = ~attention_mask.bool().any(dim=1)
+    last_tok_idx = last_tok_idx.masked_fill(all_zeros, 0)
+    
+    return last_tok_idx
+
+
+def left_to_right_pad(x, pad_value=0):
+    """
+    Convert a left-padded batch of sequences into right-padded.
+    x: (batch, seq_len) tensor
+    pad_value: value used for padding (e.g. 0)
+    """
+    batch_size, seq_len = x.shape
+    out = torch.full_like(x, pad_value)
+
+    for i in range(batch_size):
+        seq = x[i]
+        # find where padding ends
+        non_pad = seq[seq != pad_value]
+        # put tokens at the start (right padding at the end)
+        out[i, :len(non_pad)] = non_pad
+
+    return out

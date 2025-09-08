@@ -1,4 +1,5 @@
 seed: 42
+unsloth: false
 
 defaults:
    - override hydra/job_logging: default
@@ -6,7 +7,7 @@ defaults:
 
 model:
   policy_name: "Qwen/Qwen2.5-3B-Instruct"
-  reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
+  reward_name: "Qwen/Qwen2.5-3B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -27,6 +28,8 @@ model:
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_gamma: 0.99
+  advantage_calculation: "prime"
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
@@ -89,4 +92,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "gsm8k_airl_3B_unsloth_6gen"
+  run_name: "debug"
