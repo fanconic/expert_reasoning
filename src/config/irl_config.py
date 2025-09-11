@@ -175,6 +175,12 @@ class IRLConfig(GRPOConfig):
             "help": "Discount factor for the length of the response in dense reward"
         }
     )
+    add_expert_to_policy_optim: float = field(
+        default=False,
+        metadata={
+            "help": "Add the expert demonstration also to the advantage calculation"
+        }
+    )
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===
     max_prompt_length: Optional[int] = field(

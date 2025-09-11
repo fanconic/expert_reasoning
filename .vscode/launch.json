@@ -23,10 +23,11 @@
             ],
             "justMyCode": false,
             "env": {
-                "CUDA_VISIBLE_DEVICES": "2",
-                "USE_NUMACTL": "2",
-                "NUMA_NODE": "2",
-                "UNSLOTH_COMPILE_DISABLE": "1"
+                "CUDA_VISIBLE_DEVICES": "3",
+                "USE_NUMACTL": "3",
+                "NUMA_NODE": "3",
+                "UNSLOTH_COMPILE_DISABLE": "1",
+                "CUDA_LAUNCH_BLOCKING": "1"
             }
         }
     ]

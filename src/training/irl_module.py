@@ -70,7 +70,8 @@ def run_irl_training(
         max_micro_batch=cfg.training.max_micro_batch,
         dense_rewards=cfg.model.dense_rewards,
         advantage_calculation=cfg.model.advantage_calculation,
-        dense_gamma=cfg.model.dense_gamma
+        dense_gamma=cfg.model.dense_gamma,
+        add_expert_to_policy_optim=cfg.model.add_expert_to_policy_optim
     )
 
     def formatting_prompt_func(examples):

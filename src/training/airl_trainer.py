@@ -170,6 +170,7 @@ class AIRLTrainer(GRPOTrainer):
         self.dense_rewards = args.dense_rewards
         self.dense_gamma = args.dense_gamma
         self.advantage_calculation = args.advantage_calculation
+        self.add_expert_to_policy_optim = args.add_expert_to_policy_optim
         
         if self.standard_grpo:
             self.use_outcome_rewards = True
@@ -444,6 +445,10 @@ class AIRLTrainer(GRPOTrainer):
                             output_reward_func, dtype=torch.float32, device=device
                         )
                     else:
+                        if self.dense_rewards and rewards_per_func.dim() == 2:
+                            seq_len = max([len(l) for l in completion_ids_list])
+                            rewards_per_func = rewards_per_func.unsqueeze(-1).expand(-1, -1, seq_len).contiguous()
+                        
                         seq_len = rewards_per_func.size(2)
                         rewards_per_func[:, i, :] = torch.tensor(
                             output_reward_func, dtype=torch.float32, device=device
@@ -613,6 +618,28 @@ class AIRLTrainer(GRPOTrainer):
             completion_ids = prompt_completion_ids[:, prompt_length:]
 
         # Mask everything after the first EOS token
+        if self.add_expert_to_policy_optim:
+            expert_completion = [x["target"]+self.processing_class.eos_token for x in inputs]
+            expert_completion_ids = self.processing_class(
+                text=expert_completion, return_tensors="pt", padding=True, 
+                padding_side="right", add_special_tokens=False,
+            )["input_ids"].to(completion_ids.device)
+            
+            # Pad the completions to hav the same size
+            max_size =  max(completion_ids.size(1), expert_completion_ids.size(1))
+            expert_completion_ids = F.pad(expert_completion_ids, (0, max_size - expert_completion_ids.size(1)), value=self.processing_class.pad_token_id)
+            completion_ids = F.pad(completion_ids, (0, max_size - completion_ids.size(1)), value=self.processing_class.pad_token_id)
+            
+            stacked = torch.stack((completion_ids, expert_completion_ids), dim=1)
+            completion_ids = stacked.reshape(-1, completion_ids.size(-1))
+            
+            prompt_completion_expert_ids = torch.cat([prompt_ids, expert_completion_ids], dim=1)
+            stacked = torch.stack((prompt_completion_ids, prompt_completion_expert_ids), dim=1)
+            prompt_completion_ids = stacked.reshape(-1, prompt_completion_ids.size(-1))
+            prompt_mask = prompt_mask.repeat(2,1)
+            prompt_ids = prompt_ids.repeat(2,1)
+
+            
         is_eos = completion_ids == self.processing_class.eos_token_id
         eos_idx = torch.full((is_eos.size(0),), is_eos.size(1), dtype=torch.long, device=device)
         eos_idx[is_eos.any(dim=1)] = is_eos.int().argmax(dim=1)[is_eos.any(dim=1)]
@@ -682,20 +709,31 @@ class AIRLTrainer(GRPOTrainer):
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
         # rewards_per_func to extract each process's subset.
+        
+        if self.add_expert_to_policy_optim:
+            expert_inputs = inputs.copy()
+            expert_prompts = prompts.copy()
+            expert_completions = [[{"role": "assistant", "content": x["target"]}] for x in inputs]
+            
+            inputs = [i for sublist in zip(inputs, expert_inputs) for i in sublist]
+            prompts = [i for sublist in zip(prompts, expert_prompts) for i in sublist]
+            completions = [i for sublist in zip(completions, expert_completions) for i in sublist]
+             
         rewards_per_func = self._calculate_rewards(
             inputs, prompts, completions, completion_ids_list
         )
         
         # Apply weights to each reward function's output and sum
+        advantage_num_generation = self.num_generations * 2 if self.add_expert_to_policy_optim else self.num_generations
         if self.advantage_calculation == "grpo":
             if not self.dense_rewards:
                 rewards = (
                     rewards_per_func * self.reward_weights.to(device).unsqueeze(0)
                 ).nansum(dim=1)  # [N]
-                mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
-                std_grouped_rewards = rewards.view(-1, self.num_generations).std(dim=1, unbiased=False)
-                mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
-                std_grouped_rewards = std_grouped_rewards.repeat_interleave(self.num_generations, dim=0)
+                mean_grouped_rewards = rewards.view(-1, advantage_num_generation).mean(dim=1)
+                std_grouped_rewards = rewards.view(-1, advantage_num_generation).std(dim=1, unbiased=False)
+                mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(advantage_num_generation, dim=0)
+                std_grouped_rewards = std_grouped_rewards.repeat_interleave(advantage_num_generation, dim=0)
                 is_std_zero = torch.isclose(std_grouped_rewards, torch.zeros_like(std_grouped_rewards))
                 advantages = rewards - mean_grouped_rewards
                 if self.scale_rewards:
@@ -711,13 +749,13 @@ class AIRLTrainer(GRPOTrainer):
                 last_tok_rewards = rewards[:, -1]  # [N]
 
                 # 2) compute group-wise mean/std *across generations* using those last-token rewards only
-                last_tok_rewards_group = last_tok_rewards.view(-1, self.num_generations)  # [B, G]
+                last_tok_rewards_group = last_tok_rewards.view(-1, advantage_num_generation)  # [B, G]
                 mean_last = torch.mean(last_tok_rewards_group, dim=1)                  # [B]
                 std_last = torch.std(last_tok_rewards_group, dim=1)                    # [B] (population std)
 
                 # 3) expand mean/std back to the flattened [N, 1] and broadcast over tokens
-                mean_grouped_rewards = mean_last.repeat_interleave(self.num_generations, dim=0).unsqueeze(-1)  # [N, 1]
-                std_grouped_rewards = std_last.repeat_interleave(self.num_generations, dim=0).unsqueeze(-1)    # [N, 1]
+                mean_grouped_rewards = mean_last.repeat_interleave(advantage_num_generation, dim=0).unsqueeze(-1)  # [N, 1]
+                std_grouped_rewards = std_last.repeat_interleave(advantage_num_generation, dim=0).unsqueeze(-1)    # [N, 1]
                 is_std_zero = torch.isclose(std_grouped_rewards, torch.zeros_like(std_grouped_rewards))
 
                 # 4) normalise all token rewards by the last-token stats
@@ -737,7 +775,7 @@ class AIRLTrainer(GRPOTrainer):
 
                 # 1) r_i := reward at the last non-padding token
                 r_last = rewards[:, -1]               # [N]
-                r = r_last.view(-1, self.num_generations)              # [B, G]
+                r = r_last.view(-1, advantage_num_generation)              # [B, G]
 
                 # 2) Leave-one-out baseline on last-token rewards
                 sum_r = torch.nansum(r, dim=1, keepdim=True)           # [B, 1]
@@ -760,18 +798,23 @@ class AIRLTrainer(GRPOTrainer):
             a_tilde = a_tilde[:, -completion_mask.size(1):]
             reward_mask = torch.flip(completion_mask, dims=[-1])
             
-            # 4) Flip time, turn the suffix-sum into a prefix-sum, fix the geometric weights with a divide–then–multiply, then flip back.
-            p = torch.arange(rewards.size(1), device=device, dtype=a_tilde.dtype)
-            p_pow = (self.dense_gamma ** p).unsqueeze(0)          # [1, T]
-            x_rev = torch.flip(a_tilde, dims=[1])                 # [N, T]
-            s = torch.cumsum(x_rev / p_pow, dim=1)                # [N, T]
-            y_rev = s * p_pow                                     # [N, T]
-            advantages = torch.flip(y_rev, dims=[1])              # [N, T]
+            if self.dense_gamma <= 0.001:
+                # No future discount: advantages are just the per-token a_tilde
+                advantages = a_tilde
+            
+            else:
+                # 4) Flip time, turn the suffix-sum into a prefix-sum, fix the geometric weights with a divide–then–multiply, then flip back.
+                p = torch.arange(rewards.size(1), device=device, dtype=a_tilde.dtype)
+                p_pow = (self.dense_gamma ** p).unsqueeze(0)          # [1, T]
+                x_rev = torch.flip(a_tilde, dims=[1])                 # [N, T]
+                s = torch.cumsum(x_rev / p_pow, dim=1)                # [N, T]
+                y_rev = s * p_pow                                     # [N, T]
+                advantages = torch.flip(y_rev, dims=[1])              # [N, T]
+                
+            # Mask out non-response tokens and convert to right padding for the loss
             advantages = advantages.masked_fill(reward_mask == 0, 0.0)
-            
-            # In the loss calculation we need it right-padded, ugh
             advantages = left_to_right_pad(advantages, 0.0)
-            
+                        
             metric_mean_reward = (rewards * reward_mask).sum(1) / reward_mask.sum(1)
             metric_std_reward = (((rewards**2 - metric_mean_reward.unsqueeze(1)**2) * reward_mask).sum(1) / reward_mask.sum(1))**(1/2)
             metric_non_zero_std = torch.isclose(metric_std_reward, torch.zeros_like(metric_std_reward))
@@ -828,6 +871,10 @@ class AIRLTrainer(GRPOTrainer):
             term_completion_lengths.float().max().item()
         )
 
+        # Revert back rewards per func, because else we calculate the expert demonnstrations in the metrics too
+        if self.add_expert_to_policy_optim:
+            rewards_per_func = rewards_per_func[torch.arange(0, rewards_per_func.size(0), 2)]
+        
         # Calculate mean reward per function, but only for samples where the function was applied (non-NaN values)
         for i, reward_func_name in enumerate(self.reward_func_names):
             mean_rewards = torch.nanmean(rewards_per_func[:, i]).item()

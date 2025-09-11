@@ -49,7 +49,7 @@ def main(cfg: DictConfig):
     # Get reward functions
     reward_funcs, reward_processing_classes = get_reward_functions(cfg.dataset.name)
 
-    # Run SFT training
+    # Run AIRL training
     trainer = run_irl_training(
         policy_model=policy_model,
         reward_model=reward_model,
