@@ -2,6 +2,7 @@
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
+import numpy as np
 from torch.utils.data import DataLoader
 from src.utils.utils import set_seed
 from src.data.dataset import get_dataset  # same as training
@@ -28,7 +29,7 @@ from trl.data_utils import apply_chat_template  # add this import at top
 
 @torch.no_grad()
 def score_with_reward_model(
-    reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt
+    reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt, dense=False
 ):
     """
     Args:
@@ -56,13 +57,30 @@ def score_with_reward_model(
         text=texts,
         return_tensors="pt",
         padding=True,
-        truncation=True,
         add_special_tokens=False,
-        padding_side="right",
+        padding_side="left" if dense else "right",
     ).to(device)
 
     with torch.autocast("cuda"):
         logits = reward_model(**enc).logits.squeeze(-1)  # [total]
+        
+    if dense:
+        completion_texts = []
+        for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
+            for c in completions:
+                completion_texts.append(c + reward_tokenizer.eos_token)
+
+                
+        response_mask = reward_tokenizer(
+            text=completion_texts,
+            return_tensors="pt",
+            padding="max_length",
+            add_special_tokens=False,
+            padding_side="left",
+            max_length=logits.size(1)
+        ).to(device)["attention_mask"]
+        
+        logits = logits.masked_fill(response_mask == 0.0, np.nan)
     logits = logits.detach().float().cpu().tolist()
 
     # split back per prompt
@@ -139,7 +157,9 @@ def main(cfg: DictConfig):
     )
 
     # Load model and tokenizer
-    model, reward_model, tokenizer, reward_tokenizer = irl_load_model_and_tokenizer_trl(cfg, pretrained=True, checkpoint=cfg.model.name)
+    model, reward_model, tokenizer, reward_tokenizer = irl_load_model_and_tokenizer_trl(
+        cfg, pretrained=True, checkpoint=cfg.model.name
+    )
     model.eval()
     reward_model.eval()
 
@@ -149,7 +169,7 @@ def main(cfg: DictConfig):
     
     n = cfg.sampling.n_samples
     sampling_params = {
-        "max_new_tokens": int(cfg.model.max_seq_length),
+        "max_new_tokens": int(cfg.model.max_completion_length),
         "temperature": float(cfg.sampling.temperature),
         "top_p": float(cfg.sampling.top_p),
         "do_sample": True,
@@ -179,12 +199,11 @@ def main(cfg: DictConfig):
                 prompts_text,
                 return_tensors="pt",
                 padding=True,
-                truncation=True,
                 padding_side="left"
             )
         enc = {k: v.to(model.device) for k, v in enc.items()}
 
-        input_lengths = enc["attention_mask"].sum(dim=1).tolist()
+        input_lengths = enc["attention_mask"].size(1)
 
         # HF generate returns (batch * n) sequences; we regroup below
         gen_out = model.generate(
@@ -202,10 +221,9 @@ def main(cfg: DictConfig):
         decoded_per_prompt = [[] for _ in range(batch_size)]
         for row_idx in range(gen_out.size(0)):
             prompt_idx = row_idx // n
-            in_len = input_lengths[prompt_idx]
             seq = gen_out[row_idx]
             # slice off the prompt tokens so we only keep the completion
-            gen_only = seq[in_len:]
+            gen_only = seq[input_lengths:]
             text = tokenizer.decode(gen_only, skip_special_tokens=True)
             decoded_per_prompt[prompt_idx].append(text)
 
@@ -226,7 +244,8 @@ def main(cfg: DictConfig):
             reward_model=reward_model,
             reward_tokenizer=reward_tokenizer,
             prompts_msgs=prompts,
-            decoded_per_prompt=decoded_per_prompt
+            decoded_per_prompt=decoded_per_prompt,
+            dense=cfg.model.dense_rewards
         )
         
         # Store results for this batch - modified to create separate entries
@@ -257,6 +276,7 @@ def main(cfg: DictConfig):
                 sum_sqs[name] += batch_score**2
             count += 1
             
+
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
     
     success_at_k = compute_success_at_k_from_scores(

@@ -175,10 +175,16 @@ class IRLConfig(GRPOConfig):
             "help": "Discount factor for the length of the response in dense reward"
         }
     )
-    add_expert_to_policy_optim: float = field(
+    add_expert_to_policy_optim: bool = field(
         default=False,
         metadata={
             "help": "Add the expert demonstration also to the advantage calculation"
+        }
+    )
+    add_expert_to_policy_balanced: bool = field(
+        default=False,
+        metadata={
+            "help": "Add the expert demonstration also to the advantage calculation in a balanced or single fashion"
         }
     )
     # ------------------------------------------------------------------

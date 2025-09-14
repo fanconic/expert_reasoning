@@ -225,3 +225,19 @@ def left_to_right_pad(x, pad_value=0):
         out[i, :len(non_pad)] = non_pad
 
     return out
+
+
+def interleave_with_expert_lists(base_list, expert_list, num_generations, num_experts_per_prompt):
+    out = []
+    num_prompts = len(base_list) // num_generations
+    for i in range(num_prompts):
+        # group of completions
+        start = i * num_generations
+        end = (i + 1) * num_generations
+        out.extend(base_list[start:end])
+
+        # group of experts
+        start_e = i * num_experts_per_prompt
+        end_e = (i + 1) * num_experts_per_prompt
+        out.extend(expert_list[start_e:end_e])
+    return out

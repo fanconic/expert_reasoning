@@ -131,8 +131,8 @@ def irl_load_model_and_tokenizer_trl(
         )
         
     if pretrained:
-        policy_model = PeftModel.from_pretrained(policy_model, checkpoint)
-
+        policy_model = PeftModel.from_pretrained(policy_model, checkpoint, strict=True)
+        print("Loaded Policy Model strictly")
     else:
 
         # Create policy model with its own LoRA adapter
@@ -168,7 +168,8 @@ def irl_load_model_and_tokenizer_trl(
         
     if pretrained:
         reward_checkpoint = os.path.join(checkpoint, "reward_model")
-        reward_model = PeftModel.from_pretrained(reward_model, reward_checkpoint)
+        reward_model = PeftModel.from_pretrained(reward_model, reward_checkpoint, strict=True)
+        print("Loaded Reward Model strictly")
         
     else:
 

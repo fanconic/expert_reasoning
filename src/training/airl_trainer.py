@@ -72,7 +72,8 @@ from src.training.reward_model_utils import (
     dedup_token_batch, 
     prepare_reward_batch, 
     get_last_token_indices,
-    left_to_right_pad
+    left_to_right_pad,
+    interleave_with_expert_lists
 )
 
 # Local imports
@@ -171,6 +172,7 @@ class AIRLTrainer(GRPOTrainer):
         self.dense_gamma = args.dense_gamma
         self.advantage_calculation = args.advantage_calculation
         self.add_expert_to_policy_optim = args.add_expert_to_policy_optim
+        self.add_expert_to_policy_balanced = args.add_expert_to_policy_balanced
         
         if self.standard_grpo:
             self.use_outcome_rewards = True
@@ -619,25 +621,49 @@ class AIRLTrainer(GRPOTrainer):
 
         # Mask everything after the first EOS token
         if self.add_expert_to_policy_optim:
-            expert_completion = [x["target"]+self.processing_class.eos_token for x in inputs]
+            if self.add_expert_to_policy_balanced:
+                expert_completion = [x["target"]+self.processing_class.eos_token for x in inputs]
+                expert_prompt_ids = prompt_ids.copy()
+                expert_prompt_mask = prompt_mask.copy()
+            else:
+                expert_completion = [inputs[i]["target"]+self.processing_class.eos_token for i in range(0,len(inputs),self.num_generations)]
+                expert_prompt_ids = prompt_ids[torch.arange(0,prompt_ids.size(0), self.num_generations)]
+                expert_prompt_mask = prompt_mask[torch.arange(0,prompt_mask.size(0), self.num_generations)]
+                
             expert_completion_ids = self.processing_class(
                 text=expert_completion, return_tensors="pt", padding=True, 
                 padding_side="right", add_special_tokens=False,
             )["input_ids"].to(completion_ids.device)
             
             # Pad the completions to hav the same size
-            max_size =  max(completion_ids.size(1), expert_completion_ids.size(1))
-            expert_completion_ids = F.pad(expert_completion_ids, (0, max_size - expert_completion_ids.size(1)), value=self.processing_class.pad_token_id)
-            completion_ids = F.pad(completion_ids, (0, max_size - completion_ids.size(1)), value=self.processing_class.pad_token_id)
+            num_prompts = completion_ids.size(0) // self.num_generations
+            max_completion_size =  max(completion_ids.size(1), expert_completion_ids.size(1))
+            expert_completion_ids = F.pad(expert_completion_ids, (0, max_completion_size - expert_completion_ids.size(1)), value=self.processing_class.pad_token_id)
+            completion_ids = F.pad(completion_ids, (0, max_completion_size - completion_ids.size(1)), value=self.processing_class.pad_token_id)
+            prompt_completion_expert_ids = torch.cat([expert_prompt_ids, expert_completion_ids], dim=1)
+            prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)
+            max_prompt_size =  max(prompt_mask.size(1), expert_prompt_mask.size(1))
+            max_prompt_completion_size =  max(prompt_completion_expert_ids.size(1), prompt_completion_ids.size(1))
             
-            stacked = torch.stack((completion_ids, expert_completion_ids), dim=1)
-            completion_ids = stacked.reshape(-1, completion_ids.size(-1))
+            stacked = torch.cat((
+                completion_ids.view(num_prompts, self.num_generations, max_completion_size),
+                expert_completion_ids.view(num_prompts, -1, max_completion_size)), dim=1)
+            completion_ids = stacked.reshape(-1, max_completion_size)
             
-            prompt_completion_expert_ids = torch.cat([prompt_ids, expert_completion_ids], dim=1)
-            stacked = torch.stack((prompt_completion_ids, prompt_completion_expert_ids), dim=1)
-            prompt_completion_ids = stacked.reshape(-1, prompt_completion_ids.size(-1))
-            prompt_mask = prompt_mask.repeat(2,1)
-            prompt_ids = prompt_ids.repeat(2,1)
+            stacked = torch.cat(
+                (prompt_completion_ids.view(num_prompts, self.num_generations, max_prompt_completion_size), 
+                 prompt_completion_expert_ids.view(num_prompts, -1, max_prompt_completion_size)), dim=1)
+            prompt_completion_ids = stacked.reshape(-1, max_prompt_completion_size)
+            
+            stacked = torch.cat(
+                (prompt_mask.view(num_prompts, self.num_generations, max_prompt_size), 
+                 expert_prompt_mask.view(num_prompts, -1, max_prompt_size)), dim=1)
+            prompt_mask = stacked.reshape(-1, max_prompt_size)
+            
+            stacked = torch.cat(
+                (prompt_ids.view(num_prompts, self.num_generations, max_prompt_size), 
+                 expert_prompt_ids.view(num_prompts, -1, max_prompt_size)), dim=1)
+            prompt_ids = stacked.reshape(-1, max_prompt_size)
 
             
         is_eos = completion_ids == self.processing_class.eos_token_id
@@ -692,7 +718,19 @@ class AIRLTrainer(GRPOTrainer):
                 ref_per_token_logps = None
 
         # Decode the generated completions
-        completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
+        if self.add_expert_to_policy_optim:
+            if self.add_expert_to_policy_balanced:
+                period = 2 * self.num_generations
+                idx = torch.arange(completion_ids.size(0))
+                mask = (idx % period) < self.num_generations
+            else:
+                block = self.num_generations + 1
+                idx = torch.arange(completion_ids.size(0))
+                mask = (idx % block) < self.num_generations
+            completion_ids_to_decode = completion_ids[mask]  
+            completions_text = self.processing_class.batch_decode(completion_ids_to_decode, skip_special_tokens=True)
+        else:
+            completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
         if is_conversational(inputs[0]):
             completions = []
             for prompt, completion in zip(prompts, completions_text):
@@ -711,20 +749,40 @@ class AIRLTrainer(GRPOTrainer):
         # rewards_per_func to extract each process's subset.
         
         if self.add_expert_to_policy_optim:
-            expert_inputs = inputs.copy()
-            expert_prompts = prompts.copy()
-            expert_completions = [[{"role": "assistant", "content": x["target"]}] for x in inputs]
-            
-            inputs = [i for sublist in zip(inputs, expert_inputs) for i in sublist]
-            prompts = [i for sublist in zip(prompts, expert_prompts) for i in sublist]
-            completions = [i for sublist in zip(completions, expert_completions) for i in sublist]
+            if self.add_expert_to_policy_balanced:
+                expert_inputs = inputs.copy()
+                expert_prompts = prompts.copy()
+                expert_completions = [[{"role": "assistant", "content": x["target"]}] for x in inputs]
+            else:
+                expert_inputs = [inputs[i]for i in range(0, len(inputs), self.num_generations)]
+                expert_prompts = [prompts[i] for i in range(0, len(inputs), self.num_generations)]
+                expert_completions = [[{"role": "assistant", "content": inputs[i]["target"]}] for i in range(0, len(inputs), self.num_generations)]
+                
+            inputs = interleave_with_expert_lists(
+                inputs, expert_inputs, num_generations=self.num_generations, 
+                num_experts_per_prompt=len(expert_inputs) // (len(inputs) // self.num_generations)
+                )
+            prompts = interleave_with_expert_lists(
+                prompts, expert_prompts, num_generations=self.num_generations, 
+                num_experts_per_prompt=len(expert_prompts) // (len(prompts) // self.num_generations)
+                )
+            completions = interleave_with_expert_lists(
+                completions, expert_completions, num_generations=self.num_generations, 
+                num_experts_per_prompt=len(expert_completions) // (len(completions) // self.num_generations)
+                )
              
         rewards_per_func = self._calculate_rewards(
             inputs, prompts, completions, completion_ids_list
         )
         
         # Apply weights to each reward function's output and sum
-        advantage_num_generation = self.num_generations * 2 if self.add_expert_to_policy_optim else self.num_generations
+        if self.add_expert_to_policy_optim:
+            if self.add_expert_to_policy_balanced:
+                advantage_num_generation = self.num_generations * 2
+            else:
+                advantage_num_generation = self.num_generations + 1
+        else:
+            advantage_num_generation = self.num_generations
         if self.advantage_calculation == "grpo":
             if not self.dense_rewards:
                 rewards = (
@@ -826,7 +884,18 @@ class AIRLTrainer(GRPOTrainer):
         )
         all_process_advantages = (
             advantages.clone()
-        )  # keep the aggregated advantages for logging
+        )
+        if self.add_expert_to_policy_optim:
+            if self.add_expert_to_policy_balanced:
+                period = 2 * self.num_generations
+                idx = torch.arange(all_process_advantages.size(0))
+                mask = (idx % period) < self.num_generations
+            else:
+                block = self.num_generations + 1
+                idx = torch.arange(all_process_advantages.size(0))
+                mask = (idx % block) < self.num_generations
+            all_process_advantages = all_process_advantages[mask]  
+           
         advantages = advantages[process_slice]
 
         # Log the metrics
@@ -873,7 +942,16 @@ class AIRLTrainer(GRPOTrainer):
 
         # Revert back rewards per func, because else we calculate the expert demonnstrations in the metrics too
         if self.add_expert_to_policy_optim:
-            rewards_per_func = rewards_per_func[torch.arange(0, rewards_per_func.size(0), 2)]
+            if self.add_expert_to_policy_balanced:
+                period = 2 * self.num_generations
+                idx = torch.arange(rewards_per_func.size(0))
+                mask = (idx % period) < self.num_generations
+                rewards_per_func = rewards_per_func[mask]
+            else:
+                block = self.num_generations + 1
+                idx = torch.arange(rewards_per_func.size(0))
+                mask = (idx % block) < self.num_generations
+            rewards_per_func = rewards_per_func[mask]
         
         # Calculate mean reward per function, but only for samples where the function was applied (non-NaN values)
         for i, reward_func_name in enumerate(self.reward_func_names):

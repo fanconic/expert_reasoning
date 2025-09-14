@@ -6,8 +6,8 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-3B-Instruct"
-  reward_name: "Qwen/Qwen2.5-3B-Instruct"
+  policy_name: "Qwen/Qwen2.5-7B-Instruct"
+  reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -23,18 +23,19 @@ model:
   policy_lora_rank: 128  # Optional: override base rank for policy
   policy_learning_rate: 1e-5
   add_expert_to_policy_optim: true
+  add_expert_to_policy_balanced: false
   
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
-  dense_rewards: false  # Whether to use dense rewards (token-level) or sparse (sequence-level)
-  dense_gamma: 0.0
-  advantage_calculation: "grpo"
+  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_gamma: 0.9
+  advantage_calculation: "prime"
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
-  reward_updates_per_policy_step: 5
+  reward_updates_per_policy_step: 1
   disc_temperature: 1
 
   # Clip the reward of the discriminator
@@ -46,10 +47,10 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert : 0 # set to 0 if unused
-  neg_perturb_fns : [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
-  neg_sample_weight : 1.0
-  disc_pairwise_margin : 0.0
+  num_neg_perturbations_per_expert: 0 # set to 0 if unused
+  neg_perturb_fns: [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
+  neg_sample_weight: 1.0
+  disc_pairwise_margin: 0.0
   
 
 dataset:
@@ -85,7 +86,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 500
+  eval_steps: 50
   per_device_eval_batch_size: 30
   eval_accumulation_steps: 2
   prediction_loss_only: false
@@ -93,4 +94,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "airl_sparse_5"
+  run_name: airl_dense_1_09_help_smalldisc_prime
