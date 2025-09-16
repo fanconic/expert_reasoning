@@ -43,7 +43,7 @@ sampling:
 eval:
   ks : [1, 3, 5, 10]
   use_vllm: true
-  per_device_eval_batch_size: 8
+  per_device_eval_batch_size: 6
   report_to: "wandb"
 
 wandb:

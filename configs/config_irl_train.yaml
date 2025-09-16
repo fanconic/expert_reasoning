@@ -1,12 +1,12 @@
 seed: 42
-unsloth: false
+unsloth: true
 
 defaults:
    - override hydra/job_logging: default
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-7B-Instruct"
+  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/qwen7b_sft/checkpoint-500"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
@@ -22,7 +22,7 @@ model:
   # Policy model specific
   policy_lora_rank: 128  # Optional: override base rank for policy
   policy_learning_rate: 1e-5
-  add_expert_to_policy_optim: true
+  add_expert_to_policy_optim: false
   add_expert_to_policy_balanced: false
   
   # Reward model specific  
@@ -31,7 +31,7 @@ model:
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
-  advantage_calculation: "prime"
+  advantage_calculation: "grpo"
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
@@ -47,7 +47,7 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert: 0 # set to 0 if unused
+  num_neg_perturbations_per_expert: 2 # set to 0 if unused
   neg_perturb_fns: [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
   neg_sample_weight: 1.0
   disc_pairwise_margin: 0.0
@@ -72,8 +72,8 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
-  per_device_train_batch_size: 6
-  max_micro_batch: 7  #max batch for the reward model such that I don't run out of memory
+  per_device_train_batch_size: 16
+  max_micro_batch: 50  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
   max_steps: 500
   epochs: 2
@@ -81,17 +81,17 @@ training:
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 6
+  num_generations: 16
 
 eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 50
-  per_device_eval_batch_size: 30
+  per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: airl_dense_1_09_help_smalldisc_prime
+  run_name: pre_trained_unsloth_dense_09_per

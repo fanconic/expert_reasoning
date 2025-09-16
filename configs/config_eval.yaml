@@ -7,7 +7,7 @@ defaults:
 model:
   checkpoint: 500
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
-  max_prompt_length: 200
+  max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
   fast_inference: true
@@ -15,7 +15,7 @@ model:
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "countdown"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
 
 sampling:
@@ -32,4 +32,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: "countdown_grpo_3B"
+  run_name: "qwen7b_grpo"

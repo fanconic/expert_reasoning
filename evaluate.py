@@ -1,5 +1,6 @@
 # evaluate.py
 import hydra
+import torch
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 from torch.utils.data import DataLoader
@@ -22,7 +23,7 @@ from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_sc
 from vllm import SamplingParams
 import wandb
 wandb.login()
-from trl.trainer.grpo_trainer import maybe_apply_chat_template
+from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
 import json
 
 def save_results_to_jsonl(filename, results):
@@ -30,6 +31,69 @@ def save_results_to_jsonl(filename, results):
     with open(filename, 'w') as f:
         for item in results:
             f.write(json.dumps(item) + '\n')
+            
+            
+@torch.no_grad()
+def score_with_reward_model(
+    reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt, dense=False
+):
+    """
+    Args:
+        prompts_msgs:        list[list[dict]]  # your 'prompts' (chat messages)
+        decoded_per_prompt:  list[list[str]]   # per prompt N completions (strings)
+    Returns:
+        all_scores: list[list[float]] aligned with decoded_per_prompt
+    """
+    device = next(reward_model.parameters()).device
+    texts = []
+    idx_slices = []  # [(start, end), ...] per prompt to split back
+    start = 0
+    for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
+        for c in completions:
+            msgs = p_msgs + [{"role": "assistant", "content": c}]
+            texts.append(apply_chat_template({"messages": msgs}, reward_tokenizer)["text"])
+        end = start + len(completions)
+        idx_slices.append((start, end))
+        start = end
+
+    if len(texts) == 0:
+        return [[] for _ in prompts_msgs]
+
+    enc = reward_tokenizer(
+        text=texts,
+        return_tensors="pt",
+        padding=True,
+        add_special_tokens=False,
+        padding_side="left" if dense else "right",
+    ).to(device)
+
+    with torch.autocast("cuda"):
+        logits = reward_model(**enc).logits.squeeze(-1)  # [total]
+        
+    if dense:
+        completion_texts = []
+        for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
+            for c in completions:
+                completion_texts.append(c + reward_tokenizer.eos_token)
+
+                
+        response_mask = reward_tokenizer(
+            text=completion_texts,
+            return_tensors="pt",
+            padding="max_length",
+            add_special_tokens=False,
+            padding_side="left",
+            max_length=logits.size(1)
+        ).to(device)["attention_mask"]
+        
+        logits = logits.masked_fill(response_mask == 0.0, np.nan)
+    logits = logits.detach().float().cpu().tolist()
+
+    # split back per prompt
+    all_scores = []
+    for s, e in idx_slices:
+        all_scores.append(logits[s:e])
+    return all_scores
 
 @hydra.main(config_path="configs", config_name="config_eval", version_base="1.3")
 def main(cfg: DictConfig):
@@ -139,24 +203,32 @@ def main(cfg: DictConfig):
         # Collect reward function scores
         batch_rewards = []
         for prompt, completion, answer in zip(prompts, completions, answers):
-            rewards = {}
-            for name, fn in reward_fns:
-                rewards[name] = float(np.mean(fn(prompts=[prompt], completions=[completion], answer=[answer])))
-            batch_rewards.append(rewards)
+            batch_rewards_list = []
+            for c in completion:
+                rewards = {}
+                for name, fn in reward_fns:
+                    rewards[name] = float(np.mean(fn(prompts=[prompt], completions=[[c]], answer=[answer])))
+                batch_rewards_list.append(rewards)
+            batch_rewards.append(batch_rewards_list)
             
+        batch_scores = [[1] * n for _ in range(cfg.eval.per_device_eval_batch_size)]
         
         # Store results for this batch - modified to create separate entries
-        for prompt, generations, answer in zip(prompts, completions, answers):
-            for gen_idx, generation in enumerate(generations):
+        for prompt, generations, scores, rewards in zip(prompts, completions, batch_scores, batch_rewards):
+            for gen_idx, (generation, score, rews) in enumerate(zip(generations, scores, rewards)):
                 result = {
                     "prompt": prompt,
                     "generation": generation,
                     "generation_idx": gen_idx,
+                    "reward_model_score": score,
                 }
-                # Add individual reward function scores
-                for name, fn in reward_fns:
-                    result[f"reward_{name}"] = fn(completions=[[generation]], prompts=[prompt], answer=[answer])
+                result = result | rews
                 all_results.append(result)
+                
+                # if cfg.model.dense_rewards:
+                #     all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
+                # else:
+                all_reward_scores.append(scores)
 
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)

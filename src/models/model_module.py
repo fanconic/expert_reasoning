@@ -1,4 +1,5 @@
 from unsloth import FastLanguageModel
+import torch
 
 
 def load_model_and_tokenizer(config):
@@ -123,15 +124,26 @@ def irl_load_model_and_tokenizer(config):
     
     
     # Reward model and tokenizer
-    reward_model, reward_tokenizer = FastLanguageModel.from_pretrained(
-        model_name=reward_model_name,
-        max_seq_length=max_seq_length,
-        load_in_4bit=load_in_4bit,
-        fast_inference=False,
-        max_lora_rank=reward_lora_rank,
-        gpu_memory_utilization=reward_gpu_memory_utilization,
-        num_labels = 1,
-    )
+    if not config.model.dense_rewards:
+        reward_model, reward_tokenizer = FastLanguageModel.from_pretrained(
+            model_name=reward_model_name,
+            max_seq_length=max_seq_length,
+            load_in_4bit=load_in_4bit,
+            fast_inference=False,
+            max_lora_rank=reward_lora_rank,
+            gpu_memory_utilization=reward_gpu_memory_utilization,
+            num_labels = 1,
+        )
+    else:
+        reward_model, reward_tokenizer = FastLanguageModel.from_pretrained(
+            model_name=reward_model_name,
+            max_seq_length=max_seq_length,
+            load_in_4bit=load_in_4bit,
+            fast_inference=False,
+            max_lora_rank=reward_lora_rank,
+            gpu_memory_utilization=reward_gpu_memory_utilization
+        )
+        reward_model.lm_head = torch.nn.Linear(in_features=896, out_features=1, bias=False, device="cuda")
 
     reward_model = FastLanguageModel.get_peft_model(
         reward_model,

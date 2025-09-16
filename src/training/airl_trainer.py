@@ -623,8 +623,8 @@ class AIRLTrainer(GRPOTrainer):
         if self.add_expert_to_policy_optim:
             if self.add_expert_to_policy_balanced:
                 expert_completion = [x["target"]+self.processing_class.eos_token for x in inputs]
-                expert_prompt_ids = prompt_ids.copy()
-                expert_prompt_mask = prompt_mask.copy()
+                expert_prompt_ids = prompt_ids.clone()
+                expert_prompt_mask = prompt_mask.clone()
             else:
                 expert_completion = [inputs[i]["target"]+self.processing_class.eos_token for i in range(0,len(inputs),self.num_generations)]
                 expert_prompt_ids = prompt_ids[torch.arange(0,prompt_ids.size(0), self.num_generations)]
@@ -946,7 +946,6 @@ class AIRLTrainer(GRPOTrainer):
                 period = 2 * self.num_generations
                 idx = torch.arange(rewards_per_func.size(0))
                 mask = (idx % period) < self.num_generations
-                rewards_per_func = rewards_per_func[mask]
             else:
                 block = self.num_generations + 1
                 idx = torch.arange(rewards_per_func.size(0))

@@ -234,10 +234,13 @@ def main(cfg: DictConfig):
         # Collect reward function scores
         batch_rewards = []
         for prompt, completion, answer in zip(prompts, completions, answers):
-            rewards = {}
-            for name, fn in reward_fns:
-                rewards[name] = float(np.mean(fn(prompts=[prompt], completions=[completion], answer=[answer])))
-            batch_rewards.append(rewards)
+            batch_rewards_list = []
+            for c in completion:
+                rewards = {}
+                for name, fn in reward_fns:
+                    rewards[name] = float(np.mean(fn(prompts=[prompt], completions=[[c]], answer=[answer])))
+                batch_rewards_list.append(rewards)
+            batch_rewards.append(batch_rewards_list)
             
         # Get reward model scores
         batch_scores = score_with_reward_model(
@@ -250,17 +253,20 @@ def main(cfg: DictConfig):
         
         # Store results for this batch - modified to create separate entries
         for prompt, generations, scores, rewards in zip(prompts, decoded_per_prompt, batch_scores, batch_rewards):
-            for gen_idx, (generation, score) in enumerate(zip(generations, scores)):
+            for gen_idx, (generation, score, rews) in enumerate(zip(generations, scores, rewards)):
                 result = {
                     "prompt": prompt,
                     "generation": generation,
                     "generation_idx": gen_idx,
                     "reward_model_score": score,
                 }
-                # Add individual reward function scores
-                for name, fn in reward_fns:
-                    result[f"reward_{name}"] = rewards[name]
+                result = result | rews
                 all_results.append(result)
+            
+            if cfg.model.dense_rewards:
+                all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
+            else:
+                all_reward_scores.append(scores)
 
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)
@@ -276,7 +282,6 @@ def main(cfg: DictConfig):
                 sum_sqs[name] += batch_score**2
             count += 1
             
-
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
     
     success_at_k = compute_success_at_k_from_scores(
