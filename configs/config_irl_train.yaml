@@ -6,12 +6,12 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/qwen7b_sft/checkpoint-500"
+  policy_name: "Qwen/Qwen2.5-7B-Instruct"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
-  fast_inference: false
+  fast_inference: ${unsloth}
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
   
@@ -22,7 +22,7 @@ model:
   # Policy model specific
   policy_lora_rank: 128  # Optional: override base rank for policy
   policy_learning_rate: 1e-5
-  add_expert_to_policy_optim: false
+  add_expert_to_policy_optim: true
   add_expert_to_policy_balanced: false
   
   # Reward model specific  
@@ -71,9 +71,9 @@ training:
   logging_steps: 10
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
-  report_to: "wandb"
+  report_to: "none"
   per_device_train_batch_size: 16
-  max_micro_batch: 50  #max batch for the reward model such that I don't run out of memory
+  max_micro_batch: 7  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
   max_steps: 500
   epochs: 2
@@ -94,4 +94,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: pre_trained_unsloth_dense_09_per
+  run_name: airl_per_wgan_0_prime

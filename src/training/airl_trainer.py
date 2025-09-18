@@ -1156,28 +1156,72 @@ class AIRLTrainer(GRPOTrainer):
                 if self.dense_rewards:
                     micro_labels = micro_labels.unsqueeze(1).repeat(1,micro_batch["input_ids"].size(1))
                 
-                # Forward pass with micro-batch
-                with self.accelerator.autocast():
-                    micro_logits = self.reward_model(
-                        input_ids=micro_batch["input_ids"], 
-                        attention_mask=micro_batch["attention_mask"]).logits.squeeze(-1)
-                    micro_bce = F.binary_cross_entropy_with_logits(
-                        micro_logits, micro_labels, reduction="none"
-                    )
-                    # Compute full loss but scale it down for proper gradient accumulation
+                # # Forward pass with micro-batch
+                # with self.accelerator.autocast():
+                #     micro_logits = self.reward_model(
+                #         input_ids=micro_batch["input_ids"], 
+                #         attention_mask=micro_batch["attention_mask"]).logits.squeeze(-1)
+                #     micro_bce = F.binary_cross_entropy_with_logits(
+                #         micro_logits, micro_labels, reduction="none"
+                #     )
+                #     # Compute full loss but scale it down for proper gradient accumulation
                     
-                    if self.dense_rewards:
-                        # Make sure only the tokens within the response mask contribute to the loss
-                        masked_micro_bce = micro_bce.masked_fill(micro_batch["response_mask"] == 0, 0.0)
-                        masked_micro_bce = masked_micro_bce / micro_batch["response_mask"].sum(1).unsqueeze(1)
-                        micro_loss = (masked_micro_bce * micro_weights.unsqueeze(1)).sum() / step_weights.sum()
-                    else:
-                        micro_loss = (micro_bce * micro_weights).sum() / step_weights.sum()
-                    scaled_loss = micro_loss / (self.args.gradient_accumulation_steps * num_micro_batches)
+                #     if self.dense_rewards:
+                #         # Make sure only the tokens within the response mask contribute to the loss
+                #         masked_micro_bce = micro_bce.masked_fill(micro_batch["response_mask"] == 0, 0.0)
+                #         masked_micro_bce = masked_micro_bce / micro_batch["response_mask"].sum(1).unsqueeze(1)
+                #         micro_loss = (masked_micro_bce * micro_weights.unsqueeze(1)).sum() / step_weights.sum()
+                #     else:
+                #         micro_loss = (micro_bce * micro_weights).sum() / step_weights.sum()
+                #     scaled_loss = micro_loss / (self.args.gradient_accumulation_steps * num_micro_batches)
                 
-                # Backward pass on scaled loss for proper gradient accumulation
+                # # Backward pass on scaled loss for proper gradient accumulation
+                # scaled_loss.backward()
+                # step_loss += micro_loss.detach()  # Track full loss for return value
+                
+                with self.accelerator.autocast():
+                    # Critic scores (no sigmoid) — shape: [B, T] if dense, else [B]
+                    micro_scores = self.reward_model(
+                        input_ids=micro_batch["input_ids"],
+                        attention_mask=micro_batch["attention_mask"]
+                    ).logits.squeeze(-1)
+
+                    micro_labels = micro_labels.float()  # 1 = expert, 0 = policy
+
+                    if self.dense_rewards:
+                        # token mask for the generated response region
+                        resp_mask = micro_batch["response_mask"].float()  # [B, T]
+                        # per-token masks for real/fake
+                        real_tok_mask = resp_mask * (micro_labels if micro_labels.dim() == 2 else micro_labels.unsqueeze(1))
+                        fake_tok_mask = resp_mask * (1.0 - (micro_labels if micro_labels.dim() == 2 else micro_labels.unsqueeze(1)))
+
+                        # mean score over tokens (avoid div-by-zero)
+                        real_count = real_tok_mask.sum().clamp_min(1.0)
+                        fake_count = fake_tok_mask.sum().clamp_min(1.0)
+                        real_mean = (micro_scores * real_tok_mask).sum() / real_count
+                        fake_mean = (micro_scores * fake_tok_mask).sum() / fake_count
+
+                        # WGAN critic loss: minimise (fake - real)
+                        micro_loss = (fake_mean - real_mean)
+
+                    else:
+                        # sequence-level case
+                        is_real = (labels.view(-1) > 0.5)
+                        real_scores = micro_scores[is_real]
+                        fake_scores = micro_scores[~is_real]
+
+                        # guard against empty split in tiny micro-batches
+                        real_mean = real_scores.mean() if real_scores.numel() > 0 else micro_scores.new_zeros(())
+                        fake_mean = fake_scores.mean() if fake_scores.numel() > 0 else micro_scores.new_zeros(())
+
+                        micro_loss = (fake_mean - real_mean)
+
+                    # scale for gradient accumulation (keep your existing scaling)
+                    scaled_loss = micro_loss / (self.args.gradient_accumulation_steps * num_micro_batches)
+
+                # Backward pass for critic
                 scaled_loss.backward()
-                step_loss += micro_loss.detach()  # Track full loss for return value
+                step_loss += micro_loss.detach()
 
             total_loss += step_loss
 

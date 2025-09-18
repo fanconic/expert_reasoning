@@ -1,12 +1,11 @@
 # evaluate.py
+from src.models.model_module import load_model_and_tokenizer, irl_load_model_and_tokenizer
 import hydra
-import torch
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from src.utils.utils import set_seed
+from src.utils.utils import set_seed, save_results_to_jsonl
 from src.data.dataset import get_dataset  # same as training
-from src.models.model_module import load_model_and_tokenizer
 from src.rewards.reward_functions import (
     strict_format_reward_func,
     soft_format_reward_func,
@@ -18,21 +17,16 @@ from src.rewards.reward_functions import (
     eval_correctness_countdown,
     eval_correctness_medical_o1
 )
+import torch
 import numpy as np
 from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_scores, compute_oracle_at_1_from_N
 from vllm import SamplingParams
 import wandb
 wandb.login()
 from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
-import json
 
-def save_results_to_jsonl(filename, results):
-    """Save evaluation results to a JSONL file."""
-    with open(filename, 'w') as f:
-        for item in results:
-            f.write(json.dumps(item) + '\n')
-            
-            
+
+
 @torch.no_grad()
 def score_with_reward_model(
     reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt, dense=False
@@ -50,7 +44,7 @@ def score_with_reward_model(
     start = 0
     for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
         for c in completions:
-            msgs = p_msgs + [{"role": "assistant", "content": c}]
+            msgs = p_msgs + [{"role": "assistant"} | c]
             texts.append(apply_chat_template({"messages": msgs}, reward_tokenizer)["text"])
         end = start + len(completions)
         idx_slices.append((start, end))
@@ -67,14 +61,13 @@ def score_with_reward_model(
         padding_side="left" if dense else "right",
     ).to(device)
 
-    with torch.autocast("cuda"):
-        logits = reward_model(**enc).logits.squeeze(-1)  # [total]
+    logits = reward_model(**enc).logits.squeeze(-1)  # [total]
         
     if dense:
         completion_texts = []
         for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
             for c in completions:
-                completion_texts.append(c + reward_tokenizer.eos_token)
+                completion_texts.append(c["content"] + reward_tokenizer.eos_token)
 
                 
         response_mask = reward_tokenizer(
@@ -85,7 +78,6 @@ def score_with_reward_model(
             padding_side="left",
             max_length=logits.size(1)
         ).to(device)["attention_mask"]
-        
         logits = logits.masked_fill(response_mask == 0.0, np.nan)
     logits = logits.detach().float().cpu().tolist()
 
@@ -93,6 +85,7 @@ def score_with_reward_model(
     all_scores = []
     for s, e in idx_slices:
         all_scores.append(logits[s:e])
+        
     return all_scores
 
 @hydra.main(config_path="configs", config_name="config_eval", version_base="1.3")
@@ -153,11 +146,16 @@ def main(cfg: DictConfig):
     )
 
     # Load model and tokenizer
-    model, tokenizer = load_model_and_tokenizer(cfg)
+    if cfg.airl:
+        model, reward_model, tokenizer, reward_tokenizer = irl_load_model_and_tokenizer(cfg, pretrained=True)
+        reward_model.eval()
+    else:
+        model, tokenizer = load_model_and_tokenizer(cfg)
+        
     model.eval()
-
     lora_req = model.load_lora(cfg.model.name, load_tensors=True)
 
+        
     # Generation loop
     all_correct_flags = []  
     all_reward_scores = []
@@ -177,6 +175,7 @@ def main(cfg: DictConfig):
     # Before generation loop
     all_results = []
 
+    count = 0 
     for batch in tqdm(loader):
 
         # each batch is a dict with “prompt” and “answer”
@@ -210,8 +209,18 @@ def main(cfg: DictConfig):
                     rewards[name] = float(np.mean(fn(prompts=[prompt], completions=[[c]], answer=[answer])))
                 batch_rewards_list.append(rewards)
             batch_rewards.append(batch_rewards_list)
-            
-        batch_scores = [[1] * n for _ in range(cfg.eval.per_device_eval_batch_size)]
+        
+        if cfg.airl:
+            batch_scores = score_with_reward_model(
+                reward_model=reward_model,
+                reward_tokenizer=reward_tokenizer,
+                prompts_msgs=prompts,
+                decoded_per_prompt=completions,
+                dense=cfg.model.dense_rewards
+            )  
+        
+        else:
+            batch_scores = [[1] * n for _ in range(cfg.eval.per_device_eval_batch_size)]
         
         # Store results for this batch - modified to create separate entries
         for prompt, generations, scores, rewards in zip(prompts, completions, batch_scores, batch_rewards):
@@ -225,10 +234,10 @@ def main(cfg: DictConfig):
                 result = result | rews
                 all_results.append(result)
                 
-                # if cfg.model.dense_rewards:
-                #     all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
-                # else:
-                all_reward_scores.append(scores)
+                if cfg.model.dense_rewards:
+                    all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
+                else:
+                    all_reward_scores.append(scores)
 
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)

@@ -54,7 +54,7 @@ def load_model_and_tokenizer(config):
     )
     return model, tokenizer
 
-def irl_load_model_and_tokenizer(config):
+def irl_load_model_and_tokenizer(config, pretrained=False):
     """
     Load policy and reward models with separate LoRA adapters for adversarial IRL training.
     Both models can share the same base architecture but use different adapters for independent training.
@@ -143,7 +143,15 @@ def irl_load_model_and_tokenizer(config):
             max_lora_rank=reward_lora_rank,
             gpu_memory_utilization=reward_gpu_memory_utilization
         )
-        reward_model.lm_head = torch.nn.Linear(in_features=896, out_features=1, bias=False, device="cuda")
+        
+        if pretrained:
+            reward_model.model.lm_head = torch.nn.Linear(
+                in_features=reward_model.config.hidden_size, out_features=1, bias=False, device="cuda"
+            )
+        else:
+            reward_model.lm_head = torch.nn.Linear(
+                in_features=reward_model.config.hidden_size, out_features=1, bias=False, device="cuda"
+            )
 
     reward_model = FastLanguageModel.get_peft_model(
         reward_model,
