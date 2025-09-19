@@ -1,6 +1,6 @@
 from unsloth import FastLanguageModel
 import torch
-
+from peft import PeftModel
 
 def load_model_and_tokenizer(config):
     """
@@ -143,32 +143,40 @@ def irl_load_model_and_tokenizer(config, pretrained=False):
             max_lora_rank=reward_lora_rank,
             gpu_memory_utilization=reward_gpu_memory_utilization
         )
-        
-        if pretrained:
-            reward_model.model.lm_head = torch.nn.Linear(
-                in_features=reward_model.config.hidden_size, out_features=1, bias=False, device="cuda"
-            )
-        else:
-            reward_model.lm_head = torch.nn.Linear(
-                in_features=reward_model.config.hidden_size, out_features=1, bias=False, device="cuda"
-            )
 
-    reward_model = FastLanguageModel.get_peft_model(
-        reward_model,
-        r=reward_lora_rank,
-        target_modules=[
-            "q_proj",
-            "k_proj",
-            "v_proj",
-            "o_proj",
-            "gate_proj",
-            "up_proj",
-            "down_proj",
-        ],
-        lora_alpha=reward_lora_rank * 2,
-        use_gradient_checkpointing="unsloth",
-        random_state=random_state,
-    )
+        reward_model.lm_head = torch.nn.Linear(
+            in_features=reward_model.config.hidden_size, out_features=1, bias=False, device="cuda"
+        )
+        reward_model.config.num_labels = 1
+
+    
+    
+    if pretrained:
+        adapter_dir = policy_model_name + "/reward_model"
+        reward_model = PeftModel.from_pretrained(
+            reward_model,
+            adapter_dir,
+            is_trainable=False
+        )
+    
+    else:
+        reward_model = FastLanguageModel.get_peft_model(
+            reward_model,
+            r=reward_lora_rank,
+            target_modules=[
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            ],
+            lora_alpha=reward_lora_rank * 2,
+            use_gradient_checkpointing="unsloth",
+            random_state=random_state,
+            modules_to_save=["lm_head"]
+        )
     
     if hasattr(reward_model, "gradient_checkpointing_disable"):
         reward_model.gradient_checkpointing_disable()   # avoids version mismatches

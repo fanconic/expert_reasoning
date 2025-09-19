@@ -72,7 +72,8 @@ def run_irl_training(
         advantage_calculation=cfg.model.advantage_calculation,
         dense_gamma=cfg.model.dense_gamma,
         add_expert_to_policy_optim=cfg.model.add_expert_to_policy_optim,
-        add_expert_to_policy_balanced=cfg.model.add_expert_to_policy_balanced
+        add_expert_to_policy_balanced=cfg.model.add_expert_to_policy_balanced,
+        classifier_loss=cfg.model.classifier_loss
     )
 
     def formatting_prompt_func(examples):

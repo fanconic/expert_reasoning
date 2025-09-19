@@ -58,6 +58,8 @@ def score_with_reward_model(
         return_tensors="pt",
         padding=True,
         add_special_tokens=False,
+        truncation=True,
+        max_length=1124,
         padding_side="left" if dense else "right",
     ).to(device)
 

@@ -5,6 +5,7 @@ outputs
 *.ipynb
 *azure*
 cache-*.arrow
+_unsloth*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -30,13 +30,14 @@ model:
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
-  dense_gamma: 0.9
+  dense_gamma: 0.0
   advantage_calculation: "grpo"
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
   reward_updates_per_policy_step: 1
   disc_temperature: 1
+  classifier_loss: "wgan"
 
   # Clip the reward of the discriminator
   clip_reward_model: false
@@ -71,7 +72,7 @@ training:
   logging_steps: 10
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
-  report_to: "none"
+  report_to: "wandb"
   per_device_train_batch_size: 16
   max_micro_batch: 7  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
@@ -94,4 +95,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: airl_per_wgan_0_prime
+  run_name: airl_per_wgan_0_3

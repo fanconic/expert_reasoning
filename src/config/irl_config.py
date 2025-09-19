@@ -187,6 +187,12 @@ class IRLConfig(GRPOConfig):
             "help": "Add the expert demonstration also to the advantage calculation in a balanced or single fashion"
         }
     )
+    classifier_loss: str = field(
+        default="bce",
+        metadata={
+            "help": "Loss of the classifier `bce` or `wgan`"
+        }
+    )
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===
     max_prompt_length: Optional[int] = field(

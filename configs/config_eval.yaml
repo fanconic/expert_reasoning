@@ -6,10 +6,10 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  checkpoint: 500
+  checkpoint: 150
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
   policy_name: "${model.name}"
-  reward_name: "${model.name}/reward_model"
+  reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
   lora_rank: 128
   gpu_memory_utilization: 0.6
   policy_gpu_memory_utilization: 0.6
@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: airl_per_wgan_099
+  run_name: airl_per_wgan_09_2
