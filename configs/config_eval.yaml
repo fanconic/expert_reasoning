@@ -6,7 +6,7 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  checkpoint: 150
+  checkpoint: 500
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
   policy_name: "${model.name}"
   reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
@@ -42,10 +42,10 @@ sampling:
 eval:
   ks : [1, 3, 5, 10]
   use_vllm: true
-  per_device_eval_batch_size: 5
+  per_device_eval_batch_size: 7
   report_to: "none"
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: airl_per_wgan_09_2
+  run_name: qwen3b_airl_09_bce2.5

@@ -24,7 +24,7 @@ def run_irl_training(
 ):
 
     irl_config = IRLConfig(
-        policy_learning_rate=cfg.model.policy_learning_rate,
+        learning_rate=cfg.model.policy_learning_rate,
         reward_learning_rate=cfg.model.reward_learning_rate,
         adam_beta1=cfg.training.adam_beta1,
         adam_beta2=cfg.training.adam_beta2,

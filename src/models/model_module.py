@@ -148,7 +148,6 @@ def irl_load_model_and_tokenizer(config, pretrained=False):
             in_features=reward_model.config.hidden_size, out_features=1, bias=False, device="cuda"
         )
         reward_model.config.num_labels = 1
-
     
     
     if pretrained:

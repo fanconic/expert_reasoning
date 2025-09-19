@@ -21,7 +21,7 @@ model:
   
   # Policy model specific
   policy_lora_rank: 128  # Optional: override base rank for policy
-  policy_learning_rate: 1e-5
+  policy_learning_rate: 5e-6
   add_expert_to_policy_optim: true
   add_expert_to_policy_balanced: false
   
@@ -30,19 +30,19 @@ model:
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
-  dense_gamma: 0.0
+  dense_gamma: 0.9
   advantage_calculation: "grpo"
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
   reward_updates_per_policy_step: 1
-  disc_temperature: 1
-  classifier_loss: "wgan"
+  disc_temperature: 0.1
+  classifier_loss: "bce"
 
   # Clip the reward of the discriminator
-  clip_reward_model: false
-  reward_lb: -3.0
-  reward_ub: 3.0
+  clip_reward_model: true
+  reward_lb: -5.0
+  reward_ub: 5.0
 
   # response only
   response_only: false
@@ -74,7 +74,7 @@ training:
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
   per_device_train_batch_size: 16
-  max_micro_batch: 7  #max batch for the reward model such that I don't run out of memory
+  max_micro_batch: 5  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
   max_steps: 500
   epochs: 2
@@ -95,4 +95,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: airl_per_wgan_0_3
+  run_name: qwen7b_airl_09_bce_5e6_cut01

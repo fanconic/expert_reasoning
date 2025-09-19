@@ -646,21 +646,25 @@ class AIRLTrainer(GRPOTrainer):
             max_prompt_size =  max(prompt_mask.size(1), expert_prompt_mask.size(1))
             max_prompt_completion_size =  max(prompt_completion_expert_ids.size(1), prompt_completion_ids.size(1))
             
+            # Completion IDS
             stacked = torch.cat((
                 completion_ids.view(num_prompts, self.num_generations, max_completion_size),
                 expert_completion_ids.view(num_prompts, -1, max_completion_size)), dim=1)
             completion_ids = stacked.reshape(-1, max_completion_size)
             
+            # Prompt + Completion Ids
             stacked = torch.cat(
                 (prompt_completion_ids.view(num_prompts, self.num_generations, max_prompt_completion_size), 
                  prompt_completion_expert_ids.view(num_prompts, -1, max_prompt_completion_size)), dim=1)
             prompt_completion_ids = stacked.reshape(-1, max_prompt_completion_size)
             
+            # Prompt Masks
             stacked = torch.cat(
                 (prompt_mask.view(num_prompts, self.num_generations, max_prompt_size), 
                  expert_prompt_mask.view(num_prompts, -1, max_prompt_size)), dim=1)
             prompt_mask = stacked.reshape(-1, max_prompt_size)
             
+            # Prompt IDs
             stacked = torch.cat(
                 (prompt_ids.view(num_prompts, self.num_generations, max_prompt_size), 
                  expert_prompt_ids.view(num_prompts, -1, max_prompt_size)), dim=1)
