@@ -65,6 +65,4 @@ def run_grpo_training(
     )
 
     trainer.train()
-    metrics = trainer.evaluate()
-    print(metrics)
     return trainer

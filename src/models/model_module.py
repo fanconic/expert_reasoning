@@ -143,9 +143,12 @@ def irl_load_model_and_tokenizer(config, pretrained=False):
             max_lora_rank=reward_lora_rank,
             gpu_memory_utilization=reward_gpu_memory_utilization
         )
-
+        try:
+            hidden_size = reward_model.config.hidden_size
+        except:
+            hidden_size = reward_model.config.text_config.hidden_size
         reward_model.lm_head = torch.nn.Linear(
-            in_features=reward_model.config.hidden_size, out_features=1, bias=False, device="cuda"
+            in_features=hidden_size, out_features=1, bias=False, device="cuda"
         )
         reward_model.config.num_labels = 1
     

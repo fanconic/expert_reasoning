@@ -21,7 +21,7 @@ model:
   
   # Policy model specific
   policy_lora_rank: 128  # Optional: override base rank for policy
-  policy_learning_rate: 1e-5
+  policy_learning_rate: 1e-4
   add_expert_to_policy_optim: true
   add_expert_to_policy_balanced: false
   
@@ -95,4 +95,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: llama8_airl
+  run_name: llama8_airl_2

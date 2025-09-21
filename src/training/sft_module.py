@@ -132,5 +132,4 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
     )
 
     trainer.train()
-    trainer.evaluate()
     return trainer

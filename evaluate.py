@@ -38,13 +38,15 @@ def score_with_reward_model(
     Returns:
         all_scores: list[list[float]] aligned with decoded_per_prompt
     """
+    MICROBATCH_SIZE = 16  # tweak as needed
+
     device = next(reward_model.parameters()).device
     texts = []
     idx_slices = []  # [(start, end), ...] per prompt to split back
     start = 0
     for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
         for c in completions:
-            msgs = p_msgs + [{"role": "assistant"} | c]
+            msgs = p_msgs + [{"role": "assistant", "content": c if isinstance(c, str) else c.get("content", "")}]
             texts.append(apply_chat_template({"messages": msgs}, reward_tokenizer)["text"])
         end = start + len(completions)
         idx_slices.append((start, end))
@@ -53,42 +55,65 @@ def score_with_reward_model(
     if len(texts) == 0:
         return [[] for _ in prompts_msgs]
 
-    enc = reward_tokenizer(
-        text=texts,
-        return_tensors="pt",
-        padding=True,
-        add_special_tokens=False,
-        truncation=True,
-        max_length=1124,
-        padding_side="left" if dense else "right",
-    ).to(device)
-
-    logits = reward_model(**enc).logits.squeeze(-1)  # [total]
-        
+    # Only build completion_texts if dense
     if dense:
         completion_texts = []
         for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
             for c in completions:
-                completion_texts.append(c["content"] + reward_tokenizer.eos_token)
+                content = c if isinstance(c, str) else c.get("content", "")
+                completion_texts.append(content + (reward_tokenizer.eos_token or ""))
 
-                
-        response_mask = reward_tokenizer(
-            text=completion_texts,
+    pad_side = "left" if dense else "right"
+
+    # Collect outputs; avoid torch.cat for dense (sequence lengths differ per microbatch)
+    flat_logits = []  # if dense: list[list[float]]; else: list[float]
+
+    for i in range(0, len(texts), MICROBATCH_SIZE):
+        batch_texts = texts[i : i + MICROBATCH_SIZE]
+
+        enc = reward_tokenizer(
+            text=batch_texts,
             return_tensors="pt",
-            padding="max_length",
+            padding=True,
             add_special_tokens=False,
-            padding_side="left",
-            max_length=logits.size(1)
-        ).to(device)["attention_mask"]
-        logits = logits.masked_fill(response_mask == 0.0, np.nan)
-    logits = logits.detach().float().cpu().tolist()
+            truncation=True,
+            max_length=1124,
+            padding_side=pad_side,
+        ).to(device)
+
+        out = reward_model(**enc).logits.squeeze(-1)  # [B] or [B, T]
+
+        if dense:
+            batch_comp = completion_texts[i : i + len(batch_texts)]
+            response_mask = reward_tokenizer(
+                text=batch_comp,
+                return_tensors="pt",
+                padding="max_length",
+                add_special_tokens=False,
+                padding_side="left",
+                max_length=out.size(1),
+            ).to(device)["attention_mask"]
+            out = out.masked_fill(response_mask == 0, np.nan)  # [B, T]
+            # Append rows as Python lists (no cat across varying T)
+            out_cpu = out.detach().float().cpu()
+            for row in out_cpu:
+                flat_logits.append(row.tolist())
+        else:
+            # 1D per-sample values – safe to extend as Python floats
+            flat_logits.extend(
+                (out.detach().float().cpu().tolist())
+            )
+
+    # 'logits' are already plain Python lists in both modes
+    logits = flat_logits
 
     # split back per prompt
     all_scores = []
     for s, e in idx_slices:
         all_scores.append(logits[s:e])
-        
+
     return all_scores
+
 
 @hydra.main(config_path="configs", config_name="config_eval", version_base="1.3")
 def main(cfg: DictConfig):
@@ -139,7 +164,8 @@ def main(cfg: DictConfig):
         )
 
     # Load dataset and ceate loader
-    dataset = get_dataset(cfg.dataset.name, split=cfg.dataset.split, ratio=1, no_system="gemma" in cfg.model.policy_name)
+    no_system = getattr(cfg.dataset, "no_system", False)
+    dataset = get_dataset(cfg.dataset.name, split=cfg.dataset.split, ratio=1, no_system=no_system)
     loader = DataLoader(
         dataset,
         batch_size=cfg.eval.per_device_eval_batch_size,

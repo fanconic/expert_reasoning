@@ -6,8 +6,8 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "unsloth/Phi-3-medium-4k-instruct-bnb-4bit"
-  reward_name: "unsloth/Phi-3-mini-4k-instruct-bnb-4bit"
+  policy_name: "unsloth/gemma-2-9b-it-bnb-4bit"
+  reward_name: "unsloth/gemma-2-2b-it-bnb-4bit"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -59,6 +59,7 @@ dataset:
   split: "train"
   train_ratio: 1
   val_ratio: 0.1
+  no_system: true
 
 training:
   # Common training params
@@ -87,7 +88,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 50
+  eval_steps: 100
   per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
@@ -95,4 +96,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: phi_airl
+  run_name: gemma_airl

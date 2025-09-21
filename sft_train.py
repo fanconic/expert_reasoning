@@ -25,11 +25,12 @@ def main(cfg: DictConfig):
         )
 
     # Load training, validation, and test datasets (assuming you have these available)
+    no_system = getattr(cfg.dataset, "no_system", False)
     train_dataset = get_dataset(
-        cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio, no_system="gemma" in cfg.model.name
+        cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio, no_system=no_system
     )
     val_dataset = get_dataset(
-        cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio, no_system="gemma" in cfg.model.name
+        cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio, no_system=no_system
     )  # Make sure your dataset loader supports this split.  # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 

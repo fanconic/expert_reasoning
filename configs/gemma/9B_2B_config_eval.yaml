@@ -1,5 +1,5 @@
 seed: 42
-airl: false
+airl: true
 
 defaults:
    - override hydra/job_logging: default
@@ -8,8 +8,8 @@ defaults:
 model:
   checkpoint: 500
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
-  policy_name: null
-  reward_name: null
+  policy_name: "${model.name}"
+  reward_name: "unsloth/gemma-2-2b-it-bnb-4bit"
   lora_rank: 128
   gpu_memory_utilization: 0.6
   policy_gpu_memory_utilization: 0.6
@@ -33,6 +33,7 @@ model:
 dataset:
   name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
+  no_system: true
 
 sampling:
   n_samples: 16
@@ -48,4 +49,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: phi_grpo
+  run_name: gemma_airl

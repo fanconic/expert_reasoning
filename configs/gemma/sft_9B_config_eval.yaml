@@ -26,13 +26,14 @@ model:
 
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
-  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_rewards: false  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
 
   
 dataset:
   name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
+  no_system: true
 
 sampling:
   n_samples: 16
@@ -48,4 +49,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: phi_sft
+  run_name: gemma_sft

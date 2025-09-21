@@ -26,7 +26,7 @@ model:
 
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
-  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_rewards: false  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
 
   
