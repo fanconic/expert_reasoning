@@ -1,7 +1,7 @@
 #!/bin/bash
 
-OVERRIDE="wandb.run_name=airl_dense_per_09_help_smalldisc"
-bash runner_scripts/1_run_gpu_node.sh evaluate_irl.py $OVERRIDE
+# bash runner_scripts/1_run_gpu_node.sh irl_train.py --config-path=configs/llama --config-name=8B_1B_config_irl_train
+# bash runner_scripts/1_run_gpu_node.sh evaluate.py --config-path=configs/llama --config-name=8B_1B_config_eval
 
-OVERRIDE="wandb.run_name=airl_7b_sparse_per model.dense_rewards=false model.reward_name=Qwen/Qwen2.5-7B-Instruct"
-bash runner_scripts/1_run_gpu_node.sh evaluate_irl.py $OVERRIDE
+bash runner_scripts/1_run_gpu_node.sh irl_train.py --config-path=configs/phi --config-name=7B_2B_config_irl_train
+bash runner_scripts/1_run_gpu_node.sh irl_train.py --config-path=configs/phi --config-name=7B_2B_config_eval

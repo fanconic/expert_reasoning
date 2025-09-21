@@ -119,5 +119,4 @@ def run_irl_training(
     )
 
     trainer.train()
-    trainer.evaluate()
     return trainer

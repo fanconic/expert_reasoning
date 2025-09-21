@@ -1,10 +1,9 @@
 #!/bin/bash
+OVERRIDE="wandb.run_name=qwen7b_airl_09_bce_15math model.reward_name=Qwen/Qwen2.5-Math-1.5B-Instruct"
+bash runner_scripts/3_run_gpu_node.sh evaluate.py $OVERRIDE
 
-OVERRIDE="wandb.run_name=airl_dense_1_09_help_smalldisc_prime"
-bash runner_scripts/3_run_gpu_node.sh evaluate_irl.py $OVERRIDE
+bash runner_scripts/3_run_gpu_node.sh sft_train.py --config-path=configs/phi --config-name=sft_7B_config_train
+bash runner_scripts/3_run_gpu_node.sh evaluate.py --config-path=configs/phi --config-name=sft_7B_config_eval
 
-OVERRIDE="wandb.run_name=airl_dense_per_099_help_smalldisc_prime"
-bash runner_scripts/3_run_gpu_node.sh irl_train.py $OVERRIDE
-
-OVERRIDE="wandb.run_name=airl_dense_per_099_help_smalldisc_prime"
-bash runner_scripts/3_run_gpu_node.sh evaluate_irl.py $OVERRIDE
+bash runner_scripts/3_run_gpu_node.sh train.py --config-path=configs/phi --config-name=grpo_7B_config_train
+bash runner_scripts/3_run_gpu_node.sh evaluate.py --config-path=configs/phi --config-name=grpo_7B_config_eval

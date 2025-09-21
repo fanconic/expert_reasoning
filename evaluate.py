@@ -139,7 +139,7 @@ def main(cfg: DictConfig):
         )
 
     # Load dataset and ceate loader
-    dataset = get_dataset(cfg.dataset.name, split=cfg.dataset.split, ratio=1)
+    dataset = get_dataset(cfg.dataset.name, split=cfg.dataset.split, ratio=1, no_system="gemma" in cfg.model.policy_name)
     loader = DataLoader(
         dataset,
         batch_size=cfg.eval.per_device_eval_batch_size,

@@ -406,6 +406,8 @@ class AIRLTrainer(GRPOTrainer):
                         padding=True,
                         padding_side="right" if not self.dense_rewards else "left",
                         add_special_tokens=False,
+                        truncation=True,
+                        max_length=self.max_prompt_length + self.max_completion_length
                     )
 
                     reward_inputs = {k: v.to(self.accelerator.device) for k, v in reward_inputs.items()}

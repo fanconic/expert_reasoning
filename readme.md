@@ -71,3 +71,14 @@ python create_medical_o1_dataset.py \
   --seed 42
   --max_len 512
 ```
+
+Run training and evaluation on one single GPU:
+
+Llama-3.1-8B
+```bash
+bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama --config-name=sft_8B_config_train
+bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama --config-name=sft_8B_config_eval
+
+bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/llama --config-name=grpo_8B_config_train
+bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama --config-name=grpo_8B_config_eval
+```

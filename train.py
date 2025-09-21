@@ -1,14 +1,10 @@
-import numba
-
-numba.config.DISABLE_JIT = True
-
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
 wandb.login()
+from src.models.model_module import load_model_and_tokenizer
 from src.utils.utils import set_seed
 from src.data.dataset import get_dataset
-from src.models.model_module import load_model_and_tokenizer
 from src.rewards.reward_functions import get_reward_functions
 from src.training.grpo_module import run_grpo_training
 
@@ -30,10 +26,10 @@ def main(cfg: DictConfig):
 
     # Load training, validation, and test datasets (assuming you have these available)
     train_dataset = get_dataset(
-        cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio
+        cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio, no_system="gemma" in cfg.model.name
     )
     val_dataset = get_dataset(
-        cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio
+        cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio, no_system="gemma" in cfg.model.name
     )  # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 

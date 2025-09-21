@@ -37,7 +37,7 @@ def extract_think_content(input_string: str) -> str:
 
 # GSM8K Dataset
 
-def get_gsm8k_grpo(split="train", ratio: float = 1.0):
+def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
     """
     Load and preprocess the GSM8K dataset.
 
@@ -52,19 +52,30 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0):
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
-    data = data.map(
-        lambda x: {
-            "prompt": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": x["question"]},
-            ],
-            "answer": extract_hash_answer(x["answer"]),
-        }
-    )
+        
+    if no_system:
+        data = data.map(
+            lambda x: {
+                "prompt": [
+                    {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + x["question"]},
+                ],
+                "answer": extract_hash_answer(x["answer"]),
+            }
+        )
+    else:
+        data = data.map(
+            lambda x: {
+                "prompt": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": x["question"]},
+                ],
+                "answer": extract_hash_answer(x["answer"]),
+            }
+        )
     return data
 
 
-def get_gsm8k_distillation(split: str = "train", ratio: float = 1.0) -> Dataset:
+def get_gsm8k_distillation(split: str = "train", ratio: float = 1.0,  no_system=False) -> Dataset:
     """
     Load GSM8K questions plus CuratedThoughts reasoning for KD:
       - Uses the 'onnookk/format_vs_content_reasoning_clean_gsm8k' dataset,
@@ -83,10 +94,15 @@ def get_gsm8k_distillation(split: str = "train", ratio: float = 1.0) -> Dataset:
         reasoning = extract_think_content(example["answer"])
         answer = extract_boxed_integer(example["answer"])
         # build prompt + target
-        prompt = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": example["question"]},
-        ]
+        if no_system:
+            prompt = [
+                {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + example["question"]},
+            ]
+        else:
+            prompt = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": example["question"]},
+            ]
         target = (
             "<think>\n"
             f"{reasoning}\n"
@@ -226,7 +242,7 @@ def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Datase
 
 
 
-def get_dataset(name: str, split: str = "train", ratio: float = 1.0):
+def get_dataset(name: str, split: str = "train", ratio: float = 1.0, no_system=False):
     """
     Load a dataset by name and split.
 
@@ -242,16 +258,16 @@ def get_dataset(name: str, split: str = "train", ratio: float = 1.0):
         ValueError: If the dataset name is not supported.
     """
     if name.lower() == "gsm8k":
-        return get_gsm8k_grpo(split, ratio)
+        return get_gsm8k_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "gsm8k_kd":
-        return get_gsm8k_distillation(split, ratio)
+        return get_gsm8k_distillation(split, ratio, no_system=no_system)
     elif name.lower() == "countdown":
-        return get_countdown_grpo(split, ratio)
+        return get_countdown_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "countdown_kd":
-        return get_countdown_distillation(split, ratio)
+        return get_countdown_distillation(split, ratio, no_system=no_system)
     elif name.lower() == "medical":
-        return get_medical_grpo(split, ratio)
+        return get_medical_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "medical_kd":
-        return get_medical_distillation(split, ratio)
+        return get_medical_distillation(split, ratio, no_system=no_system)
     else:
         raise ValueError(f"Dataset {name} not supported")
