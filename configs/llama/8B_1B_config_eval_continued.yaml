@@ -7,7 +7,7 @@ defaults:
 
 model:
   checkpoint: 500
-  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
+  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}_continued/checkpoint-${model.checkpoint}" 
   policy_name: "${model.name}"
   reward_name: "meta-llama/Llama-3.2-1B-Instruct"
   lora_rank: 128

@@ -341,7 +341,6 @@ class AIRLTrainer(GRPOTrainer):
 
         # Log the metrics
         mode = "train" if self.model.training else "eval"
-
         if self.beta != 0.0:
             mean_kl = (per_token_kl * completion_mask).sum() / completion_mask.sum()
             self._metrics[mode]["kl"].append(self.accelerator.gather(mean_kl).nanmean().item())
@@ -492,6 +491,7 @@ class AIRLTrainer(GRPOTrainer):
         )
         prompt_inputs = {k: v.to(self.accelerator.device) for k, v in prompt_inputs.items()}
         prompt_ids, prompt_mask = prompt_inputs["input_ids"], prompt_inputs["attention_mask"]
+
         if self.max_prompt_length is not None:
             # If max_prompt_length is set, we trim the prompt to keep only the last `max_prompt_length` tokens.
             # Then we decode those tokens back into text. We manually remove leading pad tokens from the decoded text,
@@ -988,6 +988,7 @@ class AIRLTrainer(GRPOTrainer):
             self._metrics[mode]["frac_reward_zero_std"].append(
                 metric_non_zero_std.float().mean().item()
             )
+
 
         return {
             "prompt_ids": prompt_ids,

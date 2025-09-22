@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: llama8_airl_3
+  run_name: llama3_airl

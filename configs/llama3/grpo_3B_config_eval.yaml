@@ -1,5 +1,5 @@
 seed: 42
-airl: true
+airl: false
 
 defaults:
    - override hydra/job_logging: default
@@ -8,8 +8,8 @@ defaults:
 model:
   checkpoint: 500
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
-  policy_name: "${model.name}"
-  reward_name: "meta-llama/Llama-3.2-1B-Instruct"
+  policy_name: null
+  reward_name: null
   lora_rank: 128
   gpu_memory_utilization: 0.6
   policy_gpu_memory_utilization: 0.6
@@ -26,7 +26,7 @@ model:
 
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
-  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_rewards: false  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
 
   
@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: llama8_airl_3
+  run_name: llama3_grpo

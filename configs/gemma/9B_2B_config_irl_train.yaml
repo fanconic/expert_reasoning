@@ -1,5 +1,5 @@
 seed: 42
-unsloth: true
+unsloth: false
 
 defaults:
    - override hydra/job_logging: default
@@ -29,13 +29,13 @@ model:
   reward_lora_rank: 32  # Optional: override base rank for reward
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
-  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_rewards: false  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
   advantage_calculation: "grpo"
 
   # Reward model settings
   use_outcome_rewards: false  # Use outcome rewards in addition to reward model
-  reward_updates_per_policy_step: 1
+  reward_updates_per_policy_step: 1000
   disc_temperature: 1
   classifier_loss: "bce"
 
@@ -63,7 +63,7 @@ dataset:
 
 training:
   # Common training params
-  standard_grpo: false
+  standard_grpo: true
   warmup_ratio: 0.1
   adam_beta1: 0.9
   adam_beta2: 0.99
@@ -74,7 +74,7 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
-  per_device_train_batch_size: 16
+  per_device_train_batch_size: 6
   max_micro_batch: 5  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
   max_steps: 500
@@ -83,17 +83,17 @@ training:
 sampling:
   temperature: 1.0
   top_p: 0.95
-  num_generations: 16
+  num_generations: 6
 
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 100
-  per_device_eval_batch_size: 32
+  eval_steps: 500
+  per_device_eval_batch_size: 12
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: gemma_airl
+  run_name: debug

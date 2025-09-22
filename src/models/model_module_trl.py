@@ -118,6 +118,7 @@ def irl_load_model_and_tokenizer_trl(
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         quantization_config=quantization_config,
         use_cache=False if use_grad_ckpt else True,  # Set at config level
+        attn_implementation='eager'
     )
 
     # If we added a pad token, resize embeddings.

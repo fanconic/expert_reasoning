@@ -6,7 +6,9 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "meta-llama/Llama-3.1-8B-Instruct"
+  checkpoint: 500
+  pretrained: true
+  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
   reward_name: "meta-llama/Llama-3.2-1B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
@@ -14,6 +16,7 @@ model:
   fast_inference: ${unsloth}
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
+  
   
   # Common settings
   lora_rank: 128  # Base LoRA rank
@@ -30,7 +33,7 @@ model:
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
-  dense_gamma: 0.0
+  dense_gamma: 0.9
   advantage_calculation: "grpo"
 
   # Reward model settings
@@ -71,7 +74,7 @@ training:
   optim: "paged_adamw_8bit"
   logging_steps: 10
   max_grad_norm: 1.0
-  output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
+  output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}_continued"
   report_to: "wandb"
   per_device_train_batch_size: 16
   max_micro_batch: 5  #max batch for the reward model such that I don't run out of memory
@@ -95,4 +98,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: llama8_airl_6
+  run_name: llama3_airl

@@ -3,8 +3,8 @@ from omegaconf import DictConfig, OmegaConf
 import wandb
 wandb.login()
 import os
-os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
-os.environ["VLLM_USE_V1"] = "0"
+#os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
+#os.environ["VLLM_USE_V1"] = "0"
 
 
 @hydra.main(config_path="configs", config_name="config_irl_train", version_base="1.3")
@@ -44,8 +44,9 @@ def main(cfg: DictConfig):
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
     # Load model and tokenizer from unsloth
+    pretrained = getattr(cfg.model, "pretrained", False)
     policy_model, reward_model, policy_tokenizer, reward_tokenizer = (
-        model_tokenizer_loader(cfg)
+        model_tokenizer_loader(cfg, pretrained=pretrained)
     )
 
     # Get reward functions
