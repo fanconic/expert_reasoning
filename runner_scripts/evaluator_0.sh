@@ -1,6 +1,4 @@
 #!/bin/bash
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama3 --config-name=sft_3B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3 --config-name=sft_3B_config_eval
-
-bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/llama3 --config-name=grpo_3B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3 --config-name=grpo_3B_config_eval
+export OVERRIDE="wandb.run_name=llama8_airl_wgan"
+#bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama --config-name=8B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama --config-name=8B_1B_config_eval $OVERRIDE

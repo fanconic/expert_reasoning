@@ -6,14 +6,17 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-3B-Instruct"
-  reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
+  checkpoint: 500
+  pretrained: false
+  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/qwen7b_sft/checkpoint-${model.checkpoint}" 
+  reward_name: "Qwen/Qwen2.5-1.5B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
   fast_inference: ${unsloth}
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
+  
   
   # Common settings
   lora_rank: 128  # Base LoRA rank
@@ -87,7 +90,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 50
+  eval_steps: 100
   per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
@@ -95,4 +98,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: qwen3b_airl_09_bce2.5
+  run_name: qwen7b_airl_from_sft

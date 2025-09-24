@@ -9,7 +9,7 @@ model:
   checkpoint: 500
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
   policy_name: "${model.name}"
-  reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
+  reward_name: "meta-llama/Llama-3.2-1B-Instruct"
   lora_rank: 128
   gpu_memory_utilization: 0.6
   policy_gpu_memory_utilization: 0.6
@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: qwen3b_airl_09_bce2.5
+  run_name: llama8_airl_from_sft

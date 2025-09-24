@@ -6,8 +6,10 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "Qwen/Qwen2.5-3B-Instruct"
-  reward_name: "Qwen/Qwen2.5-0.5B-Instruct"
+  checkpoint: 500
+  pretrained: false
+  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/llama8_sft/checkpoint-${model.checkpoint}" 
+  reward_name: "meta-llama/Llama-3.2-1B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -15,13 +17,14 @@ model:
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
   
+  
   # Common settings
   lora_rank: 128  # Base LoRA rank
   use_gradient_checkpointing: true
   
   # Policy model specific
   policy_lora_rank: 128  # Optional: override base rank for policy
-  policy_learning_rate: 1e-5
+  policy_learning_rate: 1e-4
   add_expert_to_policy_optim: true
   add_expert_to_policy_balanced: false
   
@@ -30,7 +33,7 @@ model:
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
-  dense_gamma: 0.9
+  dense_gamma: 0.0
   advantage_calculation: "grpo"
 
   # Reward model settings
@@ -87,7 +90,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 50
+  eval_steps: 100
   per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
@@ -95,4 +98,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: qwen3b_airl_09_bce2.5
+  run_name: llama8_airl_from_sft

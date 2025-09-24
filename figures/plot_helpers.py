@@ -5,15 +5,16 @@ Helper utilities for reading eval_result.jsonl files, computing metrics,
 creating plots, and saving outputs. Extracted from the original notebook-style
 script and made reusable.
 """
-from __future__ import annotations
 
+from __future__ import annotations
+import scienceplots
 import os
 import math
 import re
 import unicodedata
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
-
+from matplotlib.colors import TwoSlopeNorm, Normalize, LinearSegmentedColormap
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -21,20 +22,28 @@ import seaborn as sns
 from matplotlib.font_manager import FontProperties
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.textpath import TextPath
+import matplotlib as mpl
 
-# Optional: nice SciencePlots style if available
-try:
-    import scienceplots  # noqa: F401
-    plt.style.use("science")
-    plt.rcParams["font.family"] = "sans-serif"
-except Exception:
-    # Fallback to default style
-    pass
+plt.style.use("bright")
+plt.rcParams["font.family"] = "sans-serif"
+
+import matplotlib.colors as mcolors
+
+# Grab system default colours
+c0 = plt.rcParams["axes.prop_cycle"].by_key()["color"][0]  # usually blue
+c1 = plt.rcParams["axes.prop_cycle"].by_key()["color"][1]  # usually orange/red
+
+# Create a custom diverging cmap: negative = c1, positive = c0
+CUSTOM_COLOR_MAP = mcolors.LinearSegmentedColormap.from_list(
+    "custom_div", [c1, "white", c0]
+)
 
 # -------------------------------
 # Parsing / reward helpers
 # -------------------------------
-STRICT_FMT = re.compile(r"^<think>\s*.*?\s*</think>\s*<answer>\s*.*?\s*</answer>\s*$", flags=re.DOTALL)
+STRICT_FMT = re.compile(
+    r"^<think>\s*.*?\s*</think>\s*<answer>\s*.*?\s*</answer>\s*$", flags=re.DOTALL
+)
 SOFT_FMT = re.compile(r"<think>.*?</think>.*?<answer>.*?</answer>", flags=re.DOTALL)
 
 
@@ -80,6 +89,7 @@ def count_xml(text) -> float:
         count -= (len(text.split("</answer>")[-1]) - 1) * 0.001
     return count
 
+
 # -------------------------------
 # Token visualisation utilities
 # -------------------------------
@@ -114,10 +124,10 @@ def clean_qwen_token(tok: str) -> str:
     for marker in _BYTE_BPE_SPACEISH | _BYTE_BPE_NEWLINEISH:
         tok = tok.replace(marker, " ")
     tok = (
-        tok.replace("\uFFFD", "")
-        .replace("\u200B", "")
-        .replace("\u200C", "")
-        .replace("\u200D", "")
+        tok.replace("\ufffd", "")
+        .replace("\u200b", "")
+        .replace("\u200c", "")
+        .replace("\u200d", "")
         .replace("\ufeff", "")
     )
     tok = _restore_angle_brackets(tok)
@@ -181,7 +191,7 @@ def _wrap_text_to_width(text, font_size, dpi, font_properties, max_text_width_px
     for w in words:
         test = (cur + " " + w).strip()
         w_px, _ = _safe_text_size_px(test, font_size, dpi, font_properties)
-        if w_px <= max_text_width_px or not cur:
+        if w_px <= max_text_width_px*0.95 or not cur:
             cur = test
         else:
             lines.append(cur)
@@ -206,9 +216,13 @@ def make_text_reward_image(
     max_width_px: int = 1400,
     dpi: int = 200,
     font_properties: Optional[FontProperties] = None,
+    show_colorbar: bool = True,   # <--- NEW ARG
 ):
     fp = font_properties or FontProperties(size=font_size, family="DejaVu Sans")
     assert len(tokens) == len(scores), "tokens and scores must have same length"
+
+    # Store original min/max for colourbar scaling
+    vmin, vmax = min(scores), max(scores)
     norm_scores = np.array(normalise(scores, mode="diverging"))
 
     cleaned_tokens = [clean_qwen_token(t) for t in tokens]
@@ -229,7 +243,7 @@ def make_text_reward_image(
         min_text_w = 0.6 * font_size * dpi / 72.0
         pill_w = max(w_text, min_text_w) + 2 * pad_x
         w_total = pill_w + gap_x
-        if cur_row and cur_w + w_total > max_width_px:
+        if cur_row and cur_w + w_total > max_width_px*0.95:
             rows.append(cur_row)
             cur_row, cur_w = [], 0
         cur_row.append((tok, sc, pill_w))
@@ -278,7 +292,7 @@ def make_text_reward_image(
     ax.set_ylim(0, height_px)
     ax.axis("off")
 
-    cmap = plt.colormaps.get_cmap(cmap_name)
+    cmap = CUSTOM_COLOR_MAP
     y = height_px - top_margin
 
     if title:
@@ -309,7 +323,15 @@ def make_text_reward_image(
         if question_lines:
             base_q_line_h = _line_height_px(font_size, dpi, fp) * line_spacing
             for line in question_lines:
-                ax.text(left_margin, y, line, fontsize=font_size, va="top", ha="left", fontproperties=fp)
+                ax.text(
+                    left_margin,
+                    y,
+                    line,
+                    fontsize=font_size,
+                    va="top",
+                    ha="left",
+                    fontproperties=fp,
+                )
                 y -= base_q_line_h
         y -= between_question_and_ra
 
@@ -337,7 +359,7 @@ def make_text_reward_image(
             else:
                 face = cmap(sc)
                 lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
-                txt_col = "black" if lum > 0.6 else "white"
+                txt_col = "black"
                 edge = (0.75, 0.75, 0.75, 1.0)
 
             ax.add_patch(
@@ -352,18 +374,54 @@ def make_text_reward_image(
                 )
             )
 
-            ax.text(x + pill_w / 2, y_pill + pill_h / 2, tok, fontsize=font_size, va="center", ha="center", color=txt_col, fontproperties=fp)
+            ax.text(
+                x + pill_w / 2,
+                y_pill + pill_h / 2,
+                tok,
+                fontsize=font_size,
+                va="center",
+                ha="center",
+                color=txt_col,
+                fontproperties=fp,
+            )
             x += pill_w + 8
         y_top -= row_height_px
+        
+    if show_colorbar:
+        vmin, vmax = min(scores), max(scores)
 
+        if vmin < 0 and vmax > 0:
+            # Case 1: Diverging
+            norm = TwoSlopeNorm(vcenter=0, vmin=vmin, vmax=vmax)
+            cmap_used = cmap   # diverging cmap
+
+        elif vmin >= 0:
+            # Case 2: All positive → white → positive colour
+            base_color = cmap(1.0)  # positive side
+            cmap_used = LinearSegmentedColormap.from_list("seq_pos", ["white", base_color])
+            norm = Normalize(vmin=vmin, vmax=vmax)
+
+        else:
+            # Case 3: All negative → white → negative colour (inverted)
+            base_color = cmap(0.0)  # negative side
+            cmap_used = LinearSegmentedColormap.from_list("seq_neg", [base_color, "white"])
+            norm = Normalize(vmin=vmin, vmax=vmax)
+
+        sm = mpl.cm.ScalarMappable(cmap=cmap_used, norm=norm)
+        sm.set_array([])
+
+        cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+        cbar.set_label("Reward score", rotation=270, labelpad=15)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, bbox_inches="tight", pad_inches=0.05)
     plt.close(fig)
 
+
 # -------------------------------
 # Metrics utilities
 # -------------------------------
+
 
 def _pass_at_k(num_correct: int, num_samples: int, k: int) -> float:
     if num_correct == 0 or k > num_samples:
@@ -398,7 +456,9 @@ def compute_success_at_k_from_scores(all_correct_flags, all_scores, ks):
     return {k: totals[k] / num_problems for k in ks}
 
 
-def bootstrap_ci(metric_fn, all_correct_flags, ks, all_scores=None, n_boot=1000, alpha=0.05, seed=42):
+def bootstrap_ci(
+    metric_fn, all_correct_flags, ks, all_scores=None, n_boot=1000, alpha=0.05, seed=42
+):
     rng = np.random.default_rng(seed)
     n = len(all_correct_flags)
     bootstrapped = {k: [] for k in ks}
@@ -438,19 +498,85 @@ def extract_flags(df: pd.DataFrame, num_generations: int = 16, disc: bool = True
     all_correct_flags = []
     for i in range(0, len(df), num_generations):
         sub_df = df.iloc[i : i + num_generations]
-        all_correct_flags.append(np.array(sub_df.correctness_reward_func == 2, dtype=int).tolist())
+        all_correct_flags.append(
+            np.array(sub_df.correctness_reward_func == 2, dtype=int).tolist()
+        )
     return all_correct_flags
+
 
 # -------------------------------
 # IO + plotting orchestration
 # -------------------------------
 
+
 def read_and_enhance(jsonl_path: str, gamma: float = 0.9) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
-    df["reward_model_score_np"] = df["reward_model_score"].apply(lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))])
+    df["reward_model_score_np"] = df["reward_model_score"].apply(
+        lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
+    )
     df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
-    df["reward_model_score_np_discounted"] = df["reward_model_score_np"].apply(lambda r: compute_advantages(r, gamma=gamma))
-    df["mean_rewards_discounted"] = df["reward_model_score_np_discounted"].apply(lambda x: np.nanmean(x))
+    df["reward_model_score_np_discounted"] = df["reward_model_score_np"].apply(
+        lambda r: compute_advantages(r, gamma=gamma)
+    )
+    df["mean_rewards_discounted"] = df["reward_model_score_np_discounted"].apply(
+        lambda x: np.nanmean(x)
+    )
+
+    from transformers import AutoTokenizer
+
+    if "qwen" in str(jsonl_path) and "response_token" not in df.columns:
+        tokeniser = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
+        df = df.copy()
+        df["response_token_ids"] = df.apply(
+            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)[
+                "input_ids"
+            ],
+            axis=1,
+        )
+        df["response_token"] = df.apply(
+            lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
+        )
+    elif "llama" in str(jsonl_path) and "response_token" not in df.columns:
+        tokeniser = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
+        df = df.copy()
+        # need to take away the first one, because llama tokeniser puts a `<|begin_of_text|>` there.
+        df["response_token_ids"] = df.apply(
+            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)[
+                "input_ids"
+            ][1:],
+            axis=1,
+        )
+        df["response_token"] = df.apply(
+            lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
+        )
+    else:
+        raise NotImplemented(
+            "`llama` or `qwen` not found in output dir, do not know which tokeniser to use."
+        )
+
+    df["answer_positions"] = df["response_token"].apply(
+        lambda x: (
+            (x.index("answer"), -4)
+            if "answer" in x and x.index("answer") < len(x) - 4
+            else (-10, -4)
+        )
+    )
+    # df["selector"] = df.apply(
+    #     lambda x: np.nanmean(
+    #         x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
+    #     ),
+    #     axis=1,
+    # )
+    # df["selector_discounted"] = df.apply(
+    #     lambda x: np.nanmean(
+    #         x.reward_model_score_np_discounted[
+    #             x.answer_positions[0] : x.answer_positions[1]
+    #         ]
+    #     ),
+    #     axis=1,
+    # )
+    df["selector"] = df["mean_rewards"]
+    df["selector_discounted"] = df["mean_rewards_discounted"]
     return df
 
 
@@ -460,7 +586,9 @@ def ensure_dir(p: str | Path) -> Path:
     return p
 
 
-def save_latex_table_txt(results: Dict, cis: Dict, ks: Iterable[int], out_file: str | Path):
+def save_latex_table_txt(
+    results: Dict, cis: Dict, ks: Iterable[int], out_file: str | Path
+):
     """
     Write a LaTeX table fragment (4 columns for k in {1,3,5,10}).
 
@@ -469,6 +597,7 @@ def save_latex_table_txt(results: Dict, cis: Dict, ks: Iterable[int], out_file: 
       - "Exp. Reas. (ours)"   (AIRL row content)
       - "SFT"                 (SFT row content)
     """
+
     def _fmt_row(vals_label: str) -> str:
         return (
             f"{results[vals_label][1]:.2f} [{cis[vals_label][1][0]:.2f}, {cis[vals_label][1][1]:.2f}] & "
@@ -479,18 +608,22 @@ def save_latex_table_txt(results: Dict, cis: Dict, ks: Iterable[int], out_file: 
 
     lines = []
     lines.append("& \\rowcolor{gray!20}\\textcolor{gray!90}{GRPO}")
-    lines.append("                & \\textcolor{gray!90}{" + _fmt_row("Outcome Sup.") + "}")
+    lines.append(
+        "                & \\textcolor{gray!90}{" + _fmt_row("Outcome Sup.") + "}"
+    )
     lines.append("& AIRL (ours)    & " + _fmt_row("Exp. Reas. (ours)"))
     lines.append("& SFT            & " + _fmt_row("SFT"))
 
     out_file = Path(out_file)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text("\n".join(lines))
-    
+
+
 def print_latex_table(results: Dict, cis: Dict, ks: Iterable[int]) -> None:
     """
     Print the exact LaTeX fragment to stdout, so you can copy/paste into your paper.
     """
+
     def _fmt_row(vals_label: str) -> str:
         return (
             f"{results[vals_label][1]:.2f} [{cis[vals_label][1][0]:.2f}, {cis[vals_label][1][1]:.2f}] & "
@@ -517,7 +650,13 @@ def compute_pass_results_ci(datasets: Dict[str, List[List[bool]]], ks: Iterable[
         cis[label] = ci
     return results, cis
 
-def plot_pass_at_k(datasets: Dict[str, List[List[bool]]], ks: Iterable[int], out_path: str | Path, title: str = "pass@k comparison"):
+
+def plot_pass_at_k(
+    datasets: Dict[str, List[List[bool]]],
+    ks: Iterable[int],
+    out_path: str | Path,
+    title: str = "pass@k comparison",
+):
     results = {}
     cis = {}
     for label, flags in datasets.items():
@@ -529,9 +668,21 @@ def plot_pass_at_k(datasets: Dict[str, List[List[bool]]], ks: Iterable[int], out
     prop_cycle = plt.rcParams.get("axes.prop_cycle")
     colors = prop_cycle.by_key()["color"] if prop_cycle else [None] * 3
     styles = {
-        "Outcome Sup.": {"color": colors[2] if len(colors) > 2 else None, "marker": "x", "linestyle": "--"},
-        "Exp. Reas. (ours)": {"color": colors[0] if colors else None, "marker": "x", "linestyle": "--"},
-        "SFT": {"color": colors[1] if len(colors) > 1 else None, "marker": "x", "linestyle": "--"},
+        "Outcome Sup.": {
+            "color": colors[2] if len(colors) > 2 else None,
+            "marker": "x",
+            "linestyle": "--",
+        },
+        "Exp. Reas. (ours)": {
+            "color": colors[0] if colors else None,
+            "marker": "x",
+            "linestyle": "--",
+        },
+        "SFT": {
+            "color": colors[1] if len(colors) > 1 else None,
+            "marker": "x",
+            "linestyle": "--",
+        },
     }
 
     plt.figure(figsize=(6, 3))
@@ -541,10 +692,20 @@ def plot_pass_at_k(datasets: Dict[str, List[List[bool]]], ks: Iterable[int], out
         lower = [m - c[0] for m, c in zip(means, ci)]
         upper = [c[1] - m for m, c in zip(means, ci)]
         style = styles.get(label, {"color": None, "marker": "x", "linestyle": "--"})
-        plt.errorbar(ks, means, yerr=[lower, upper], label=label, color=style["color"], marker=style["marker"], linestyle=style["linestyle"], capsize=4, markersize=6)
+        plt.errorbar(
+            ks,
+            means,
+            yerr=[lower, upper],
+            label=label,
+            color=style["color"],
+            marker=style["marker"],
+            linestyle=style["linestyle"],
+            capsize=4,
+            markersize=6,
+        )
     plt.xlabel("k")
     plt.ylabel("pass@k")
-    plt.title(title)
+    # plt.title(title)
     plt.legend()
     plt.grid()
     out_path = Path(out_path)
@@ -553,40 +714,75 @@ def plot_pass_at_k(datasets: Dict[str, List[List[bool]]], ks: Iterable[int], out
     plt.close()
 
 
-def plot_success_at_k_given(df: pd.DataFrame, ks: Iterable[int], num_generations: int, out_path: str | Path, title: str):
+def plot_success_at_k_given(
+    df: pd.DataFrame,
+    ks: Iterable[int],
+    num_generations: int,
+    out_path: str | Path,
+    title: str,
+):
     # Extract flags + scores
     all_correct_flags, all_scores = [], []
     for i in range(0, len(df), num_generations):
         sub_df = df.iloc[i : i + num_generations]
-        all_correct_flags.append(np.array(sub_df.correctness_reward_func == 2, dtype=int).tolist())
-        all_scores.append(sub_df["mean_rewards"].tolist())
+        all_correct_flags.append(
+            np.array(sub_df.correctness_reward_func == 2, dtype=int).tolist()
+        )
+        all_scores.append(sub_df["selector_discounted"].tolist())
 
     all_dummy_scores = [[0.0] * num_generations for _ in range(len(all_correct_flags))]
 
     results_given = compute_success_at_k_from_scores(all_correct_flags, all_scores, ks)
-    cis_given = bootstrap_ci(compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores)
+    cis_given = bootstrap_ci(
+        compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores
+    )
 
-    results_uniform = compute_success_at_k_from_scores(all_correct_flags, all_dummy_scores, ks)
-    cis_uniform = bootstrap_ci(compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_dummy_scores)
+    results_uniform = compute_success_at_k_from_scores(
+        all_correct_flags, all_dummy_scores, ks
+    )
+    cis_uniform = bootstrap_ci(
+        compute_success_at_k_from_scores,
+        all_correct_flags,
+        ks,
+        all_scores=all_dummy_scores,
+    )
 
     prop_cycle = plt.rcParams.get("axes.prop_cycle")
     colors = prop_cycle.by_key()["color"] if prop_cycle else [None, None]
     styles = {
-        "Reward Reranker": {"color": colors[0] if colors else None, "marker": "x", "linestyle": "--", "alpha": 0.6},
-        "Uniform Ranking": {"color": colors[1] if len(colors) > 1 else None, "marker": "x", "linestyle": "--", "alpha": 0.6},
+        "Reward Reranker": {
+            "color": colors[0] if colors else None,
+            "marker": "x",
+            "linestyle": "--",
+        },
+        "Random Ranking": {
+            "color": colors[1] if len(colors) > 1 else None,
+            "marker": "x",
+            "linestyle": "--",
+        },
     }
 
     plt.figure(figsize=(6, 3))
     for label, (results_model, cis_model) in {
         "Reward Reranker": (results_given, cis_given),
-        "Uniform Ranking": (results_uniform, cis_uniform),
+        "Random Ranking": (results_uniform, cis_uniform),
     }.items():
         means = [results_model[k] for k in ks]
         ci = [cis_model[k] for k in ks]
         lower = [m - c[0] for m, c in zip(means, ci)]
         upper = [c[1] - m for m, c in zip(means, ci)]
         style = styles[label]
-        plt.errorbar(ks, means, yerr=[lower, upper], label=label, color=style["color"], marker=style["marker"], linestyle=style["linestyle"], capsize=4, markersize=6)
+        plt.errorbar(
+            ks,
+            means,
+            yerr=[lower, upper],
+            label=label,
+            color=style["color"],
+            marker=style["marker"],
+            linestyle=style["linestyle"],
+            capsize=4,
+            markersize=6,
+        )
 
     plt.xlabel("k")
     plt.ylabel(rf"pass@k$\mid${num_generations}")
@@ -599,7 +795,9 @@ def plot_success_at_k_given(df: pd.DataFrame, ks: Iterable[int], num_generations
     plt.close()
 
 
-def plot_reward_distributions(df: pd.DataFrame, out_pdf: str | Path, out_pdf_discounted: str | Path):
+def plot_reward_distributions(
+    df: pd.DataFrame, out_pdf: str | Path, out_pdf_discounted: str | Path
+):
     import scipy.stats as stats
 
     correct = df[df.correctness_reward_func == 2].mean_rewards
@@ -608,15 +806,45 @@ def plot_reward_distributions(df: pd.DataFrame, out_pdf: str | Path, out_pdf_dis
     t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
 
     plt.figure(figsize=(6, 3))
-    sns.histplot(correct, label="Correct Answer", kde=True, stat="probability", bins=50, color="C1", alpha=0.5)
-    sns.histplot(wrong, label="Wrong Answer", kde=True, stat="probability", bins=50, color="C2", alpha=0.5)
+    sns.histplot(
+        wrong,
+        label="Wrong Answer",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C1",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
+    sns.histplot(
+        correct,
+        label="Correct Answer",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C0",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
     plt.legend()
     plt.xlabel("Mean Rewards")
     plt.ylabel("Probability")
-    plt.title("Distribution of Rewards based on Correctness")
+    # plt.title("Distribution of Rewards based on Correctness")
     p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
     text = f"t = {t_stat:.2f}, {p_text}"
-    plt.text(0.03, 0.78, text, transform=plt.gca().transAxes, fontsize=10, va="top", bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+    plt.text(
+        0.03,
+        0.78,
+        text,
+        transform=plt.gca().transAxes,
+        fontsize=10,
+        va="top",
+        bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
+    )
     ensure_dir(Path(out_pdf).parent)
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
@@ -626,36 +854,70 @@ def plot_reward_distributions(df: pd.DataFrame, out_pdf: str | Path, out_pdf_dis
     t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
 
     plt.figure(figsize=(6, 3))
-    sns.histplot(correct, label="Correct Answer", kde=True, stat="probability", bins=50, color="C1", alpha=0.5)
-    sns.histplot(wrong, label="Wrong Amswer", kde=True, stat="probability", bins=50, color="C2", alpha=0.5)
+    sns.histplot(
+        wrong,
+        label="Correct Answer",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C1",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
+    sns.histplot(
+        correct,
+        label="Wrong Amswer",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C0",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
     plt.legend()
     plt.xlabel("Mean Discounted Rewards")
     plt.ylabel("Probability")
-    plt.title("Distribution of Discounted Rewards based on Correctness")
+    # plt.title("Distribution of Discounted Rewards based on Correctness")
     p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
     text = f"t = {t_stat:.2f}, {p_text}"
-    plt.text(0.03, 0.78, text, transform=plt.gca().transAxes, fontsize=10, va="top", bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+    plt.text(
+        0.03,
+        0.78,
+        text,
+        transform=plt.gca().transAxes,
+        fontsize=10,
+        va="top",
+        bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
+    )
     plt.savefig(out_pdf_discounted, bbox_inches="tight")
     plt.close()
 
 
 def plot_rewards_vs_discounted(df: pd.DataFrame, out_pdf: str | Path):
     # Pick a reasonable example: near-zero mean but correct
-    idx = df[(abs(df["mean_rewards"]) < 0.01) & (df["correctness_reward_func"] == 2)]["mean_rewards"].idxmax()
+    idx = df[(abs(df["mean_rewards"]) < 0.01) & (df["correctness_reward_func"] == 2)][
+        "mean_rewards"
+    ].idxmax()
     rewards = df.loc[idx, "reward_model_score_np"]
     discounted_rewards = df.loc[idx, "reward_model_score_np_discounted"]
 
     plt.figure(figsize=(16, 4))
     plt.subplot(1, 2, 1)
     sns.barplot(x=list(range(len(rewards))), y=rewards, color="C0")
-    plt.title("Raw Rewards")
+    # plt.title("Raw Rewards")
     plt.xlabel("Token Timestep")
     plt.ylabel("Reward")
     plt.xticks(rotation=90)
 
     plt.subplot(1, 2, 2)
-    sns.barplot(x=list(range(len(discounted_rewards))), y=discounted_rewards, color="C1")
-    plt.title("Discounted Rewards")
+    sns.barplot(
+        x=list(range(len(discounted_rewards))), y=discounted_rewards, color="C1"
+    )
+    # plt.title("Discounted Rewards")
     plt.xlabel("Timestep")
     plt.ylabel("Discounted Reward")
     plt.xticks(rotation=90)
@@ -666,55 +928,119 @@ def plot_rewards_vs_discounted(df: pd.DataFrame, out_pdf: str | Path):
     plt.close()
 
 
-def plot_formatting_distributions(df: pd.DataFrame, out_pdf: str | Path, out_pdf_discounted: str | Path):
+def plot_formatting_distributions(
+    df: pd.DataFrame, out_pdf: str | Path, out_pdf_discounted: str | Path
+):
     import scipy.stats as stats
 
     plt.figure(figsize=(10, 5))
-    sns.histplot(df[df.strict_format_reward_func == 0.5].mean_rewards, label="Correct Format", kde=True, stat="probability", bins=50, color="C1")
-    sns.histplot(df[df.strict_format_reward_func == 0].mean_rewards, label="Wrong Format", kde=True, stat="probability", bins=50, color="C2")
-    correct = df[df.strict_format_reward_func == 0.5].mean_rewards
-    wrong = df[df.strict_format_reward_func == 0.0].mean_rewards
+
+    sns.histplot(
+        df[df.strict_format_reward_func == 0].selector,
+        label="Wrong Format",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C1",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
+    sns.histplot(
+        df[df.strict_format_reward_func == 0.5].selector,
+        label="Correct Format",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C0",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
+    correct = df[df.strict_format_reward_func == 0.5].selector
+    wrong = df[df.strict_format_reward_func == 0.0].selector
     t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
     plt.legend()
     plt.xlabel("Mean Discounted Rewards")
     plt.ylabel("Probability")
-    plt.title("Distribution of Rewards based on Formatting")
+    # plt.title("Distribution of Rewards based on Formatting")
     p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
     text = f"t = {t_stat:.2f}, {p_text}"
-    plt.text(0.02, 0.95, text, transform=plt.gca().transAxes, fontsize=10, va="top", bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+    plt.text(
+        0.02,
+        0.95,
+        text,
+        transform=plt.gca().transAxes,
+        fontsize=10,
+        va="top",
+        bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
+    )
     ensure_dir(Path(out_pdf).parent)
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
 
     plt.figure(figsize=(10, 5))
-    sns.histplot(df[df.strict_format_reward_func == 0.5].mean_rewards_discounted, label="Correct Format", kde=True, stat="probability", bins=50, color="C1")
-    sns.histplot(df[df.strict_format_reward_func == 0].mean_rewards_discounted, label="Wrong Format", kde=True, stat="probability", bins=50, color="C2")
-    correct = df[df.strict_format_reward_func == 0.5].mean_rewards_discounted
-    wrong = df[df.strict_format_reward_func == 0.0].mean_rewards_discounted
+    sns.histplot(
+        df[df.strict_format_reward_func == 0].selector_discounted,
+        label="Wrong Format",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C1",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
+    sns.histplot(
+        df[df.strict_format_reward_func == 0.5].selector_discounted,
+        label="Correct Format",
+        kde=True,
+        stat="probability",
+        bins=50,
+        color="C0",
+        alpha=0.5,
+        edgecolor=None,
+        shrink=0.85,
+        linewidth=0,
+    )
+
+    correct = df[df.strict_format_reward_func == 0.5].selector_discounted
+    wrong = df[df.strict_format_reward_func == 0.0].selector_discounted
     t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
     plt.legend()
     plt.xlabel("Mean Discounted Rewards")
     plt.ylabel("Probability")
-    plt.title("Distribution of Discounted Rewards based on Formatting")
+    # plt.title("Distribution of Discounted Rewards based on Formatting")
     p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
     text = f"t = {t_stat:.2f}, {p_text}"
-    plt.text(0.02, 0.95, text, transform=plt.gca().transAxes, fontsize=10, va="top", bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"))
+    plt.text(
+        0.02,
+        0.95,
+        text,
+        transform=plt.gca().transAxes,
+        fontsize=10,
+        va="top",
+        bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
+    )
     plt.savefig(out_pdf_discounted, bbox_inches="tight")
     plt.close()
 
 
 def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
     reward_cols = [
-        "mean_rewards",
-        "mean_rewards_discounted",
+        "selector",
+        "selector_discounted",
         "xmlcount_reward_func",
         "strict_format_reward_func",
         "int_reward_func",
         "correctness_reward_func",
     ]
     rename_map = {
-        "mean_rewards": "Mean Rewards",
-        "mean_rewards_discounted": "Mean Rewards\n(Discounted)",
+        "selector": "Rewards",
+        "selector_discounted": "Rewards\n(Discounted)",
         "xmlcount_reward_func": "XML Count",
         "strict_format_reward_func": "Strict Format",
         "int_reward_func": "Integer",
@@ -727,14 +1053,14 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
         corr_matrix,
         annot=True,
         fmt=".2f",
-        cmap="RdBu_r",
+        cmap=CUSTOM_COLOR_MAP,
         vmin=-1,
         vmax=1,
         cbar_kws={"shrink": 0.8, "label": "Correlation"},
         linewidths=0.5,
         square=True,
     )
-    plt.title("Correlation Matrix of GRPO Reward Functions with Reward Model", fontsize=14, pad=20)
+    # plt.title("Correlation Matrix of GRPO Reward Functions with Reward Model", fontsize=14, pad=20)
     plt.xticks(rotation=30, ha="right")
     plt.yticks(rotation=0)
     plt.tight_layout()
@@ -747,7 +1073,15 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
 # Orchestrator to run everything for one experiment trio
 # -------------------------------
 
-def run_all_plots(df_airl: pd.DataFrame, df_sft: pd.DataFrame, df_grpo: pd.DataFrame, out_dir: str | Path, num_generations: int = 16, make_token_figs: bool = True):
+
+def run_all_plots(
+    df_airl: pd.DataFrame,
+    df_sft: pd.DataFrame,
+    df_grpo: pd.DataFrame,
+    out_dir: str | Path,
+    num_generations: int = 16,
+    make_token_figs: bool = True,
+):
     out_dir = ensure_dir(out_dir)
 
     ks = [1, 3, 5, 10]
@@ -762,98 +1096,100 @@ def run_all_plots(df_airl: pd.DataFrame, df_sft: pd.DataFrame, df_grpo: pd.DataF
     print_latex_table(results, cis, ks)  # for direct copy/paste in your terminal
     save_latex_table_txt(results, cis, ks, Path(out_dir) / "pass_at_k_table.txt")
 
-
-    plot_pass_at_k(datasets, ks, out_dir / "pass_at_k_all.pdf", title="pass@k comparison")
+    plot_pass_at_k(
+        datasets, ks, out_dir / "pass_at_k_all.pdf", title="pass@k comparison"
+    )
 
     # success@k|N for AIRL (expert reasoning)
-    plot_success_at_k_given(df_airl, ks, num_generations, out_dir / "pass_atkN_expert.pdf", title=r"Expert Reasoning: pass@k$\mid$N comparison")
+    plot_success_at_k_given(
+        df_airl,
+        ks,
+        num_generations,
+        out_dir / "pass_atkN_expert.pdf",
+        title=r"Expert Reasoning: pass@k$\mid$N comparison",
+    )
 
     # distributions by correctness (AIRL)
-    plot_reward_distributions(df_airl, out_dir / "correctness_reward_distribution.pdf", out_dir / "correctness_reward_distribution_discounted.pdf")
+    plot_reward_distributions(
+        df_airl,
+        out_dir / "correctness_reward_distribution.pdf",
+        out_dir / "correctness_reward_distribution_discounted.pdf",
+    )
 
     # raw vs discounted
     plot_rewards_vs_discounted(df_airl, out_dir / "rewards_vs_discounted.pdf")
 
     # formatting distributions
-    plot_formatting_distributions(df_airl, out_dir / "format_rewards.pdf", out_dir / "format_rewards_discounted.pdf")
+    plot_formatting_distributions(
+        df_airl,
+        out_dir / "format_rewards.pdf",
+        out_dir / "format_rewards_discounted.pdf",
+    )
 
     # correlation heatmap
     plot_reward_correlations(df_airl, out_dir / "reward_correlation_matrix.pdf")
 
     # Token-based dense reward visualisations (best-effort; requires tokenizer + fields)
     if make_token_figs:
-        colour_map = "RdBu_r"
+        colour_map = CUSTOM_COLOR_MAP
         discs = [False, True]
-        
-        # Try to get tokens from Qwen tokenizer; skip if unavailable
-        try:
-            from transformers import AutoTokenizer
-            tokeniser = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
-            # Create token columns if missing
-            if "response_token" not in df_airl.columns:
-                df_airl = df_airl.copy()
-                df_airl["response_token_ids"] = df_airl.apply(lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)["input_ids"], axis=1)
-                df_airl["response_token"] = df_airl.apply(lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1)
-        except Exception:
-            tokeniser = None
-        
-        for disc in discs:
-            reward_score_name = "reward_model_score_np_discounted" if disc else "reward_model_score_np"
-            postfix = "discounted" if disc else "raw"
 
-            if tokeniser is not None and "response_token" in df_airl.columns:
+        for disc in discs:
+            reward_score_name = (
+                "reward_model_score_np_discounted" if disc else "reward_model_score_np"
+            )
+            postfix = "discounted" if disc else "raw"
+            mean_name = "mean_rewards_discounted" if disc else "mean_rewards"
+
+            if "response_token" in df_airl.columns:
                 plt.rcParams["text.usetex"] = False
-                # very true
+                correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
+                wrong_mean =  df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
+            
                 try:
-                    idx = df_airl[(df_airl["correctness_reward_func"] == 2) & (df_airl["int_reward_func"] == 0.5)]["mean_rewards"].idxmax()
-                    tokens = df_airl.loc[idx, "response_token"]
-                    scores = df_airl.loc[idx, reward_score_name]
-                    question = df_airl.loc[idx, "prompt"][1]["content"]
-                    make_text_reward_image(tokens, scores, out_dir / f"dense_rewards_very_true_{postfix}.pdf", cmap_name=colour_map, prompt_text=question, font_size=18, dpi=300, max_width_px=4000)
-                except Exception:
-                    pass
-                # slightly true
-                try:
-                    idx = df_airl[(abs(df_airl["mean_rewards"]) < 0.01) & (df_airl["correctness_reward_func"] == 2) & (df_airl["int_reward_func"] == 0.5)]["mean_rewards"].idxmax()
-                    tokens = df_airl.loc[idx, "response_token"]
-                    scores = df_airl.loc[idx, reward_score_name]
-                    question = df_airl.loc[idx, "prompt"][1]["content"]
-                    make_text_reward_image(tokens, scores, out_dir / f"dense_rewards_slightly_true_{postfix}.pdf", cmap_name=colour_map, prompt_text=question, font_size=18, dpi=300, max_width_px=4000)
-                except Exception:
-                    pass
-                # slightly wrong
-                try:
-                    idx = df_airl[(abs(df_airl["mean_rewards"]) < 0.01) & (df_airl["correctness_reward_func"] != 2) & (df_airl["int_reward_func"] == 0.5)]["mean_rewards"].idxmax()
-                    tokens = df_airl.loc[idx, "response_token"]
-                    scores = df_airl.loc[idx, reward_score_name]
-                    question = df_airl.loc[idx, "prompt"][1]["content"]
-                    make_text_reward_image(tokens, scores, out_dir / f"dense_rewards_slightly_wrong_{postfix}.pdf", cmap_name=colour_map, prompt_text=question, font_size=18, dpi=300, max_width_px=4000)
-                except Exception:
-                    pass
-                # very wrong
-                try:
-                    idx = df_airl[(df_airl["correctness_reward_func"] != 2) & (df_airl["int_reward_func"] == 0.5)]["mean_rewards"].idxmin()
-                    tokens = df_airl.loc[idx, "response_token"]
-                    scores = df_airl.loc[idx, reward_score_name]
-                    question = df_airl.loc[idx, "prompt"][1]["content"]
-                    make_text_reward_image(tokens, scores, out_dir / f"dense_rewards_very_wrong_{postfix}.pdf", cmap_name=colour_map, prompt_text=question, font_size=18, dpi=300, max_width_px=4000)
-                except Exception:
-                    pass
-                # small batches of true/wrong examples
-                try:
-                    for i, idx in enumerate(df_airl[(abs(df_airl["mean_rewards"]) < 0.01) & (df_airl["correctness_reward_func"] == 2) & (df_airl["int_reward_func"] == 0.5)]["mean_rewards"].index[:5]):
+                    for i, idx in enumerate(
+                        df_airl[
+                            (abs(df_airl[mean_name] - correct_mean) < 0.01)
+                            & (df_airl["correctness_reward_func"] == 2)
+                            & (df_airl["int_reward_func"] == 0.5)
+                        ][mean_name].index[:5]
+                    ):
                         tokens = df_airl.loc[idx, "response_token"]
                         scores = df_airl.loc[idx, reward_score_name]
                         question = df_airl.loc[idx, "prompt"][1]["content"]
-                        make_text_reward_image(tokens, scores, out_dir / f"dense_rewards_true_{i}_{postfix}.pdf", cmap_name=colour_map, prompt_text=question, font_size=18, dpi=300, max_width_px=4000)
+                        make_text_reward_image(
+                            tokens,
+                            scores,
+                            out_dir / f"dense_rewards_{postfix}/true_{i}.pdf",
+                            cmap_name=colour_map,
+                            prompt_text=question,
+                            font_size=18,
+                            dpi=300,
+                            max_width_px=4000,
+                        )
                 except Exception:
                     pass
                 try:
-                    for i, idx in enumerate(df_airl[(abs(df_airl["mean_rewards"]) < 0.01) & (df_airl["correctness_reward_func"] != 2) & (df_airl["int_reward_func"] == 0.5)]["mean_rewards"].index[:5]):
+                    for i, idx in enumerate(
+                        df_airl[
+                            (abs(df_airl[mean_name] - wrong_mean) < 0.01)
+                            & (df_airl["correctness_reward_func"] != 2)
+                            & (df_airl["int_reward_func"] == 0.5)
+                        ][mean_name].index[:5]
+                    ):
                         tokens = df_airl.loc[idx, "response_token"]
                         scores = df_airl.loc[idx, reward_score_name]
                         question = df_airl.loc[idx, "prompt"][1]["content"]
-                        make_text_reward_image(tokens, scores, out_dir / f"dense_rewards_wrong_{i}_{postfix}.pdf", cmap_name=colour_map, prompt_text=question, font_size=18, dpi=300, max_width_px=4000)
+                        make_text_reward_image(
+                            tokens,
+                            scores,
+                            out_dir / f"dense_rewards_{postfix}/wrong_{i}.pdf",
+                            cmap_name=colour_map,
+                            prompt_text=question,
+                            font_size=18,
+                            dpi=300,
+                            max_width_px=4000,
+                        )
                 except Exception:
                     pass
 
