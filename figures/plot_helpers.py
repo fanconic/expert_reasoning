@@ -138,7 +138,7 @@ def clean_qwen_token(tok: str) -> str:
     return tok
 
 
-def normalise(values, mode="minmax"):
+def normalise(values, mode="minmax", max_val=None, min_val=None):
     v = np.array(values, dtype=float)
     if v.size == 0:
         return v.tolist()
@@ -148,11 +148,15 @@ def normalise(values, mode="minmax"):
             return np.zeros_like(v).tolist()
         return ((v - vmin) / (vmax - vmin)).tolist()
     elif mode == "sigmoid":
-        return (1 / (1 + np.exp(-v))).tolist()
+        return ((1 / (1 + np.exp(-v))) * 2 - 1).tolist()
     elif mode == "diverging":
-        vmax = float(np.max(np.abs(v)))
+        # Map [-V, 0, +V] -> [0, 0.5, 1], so negatives are <0.5 (red), positives >0.5 (blue)
+        if max_val is None:
+            vmax = float(np.max(np.abs(v)))
+        else:
+            vmax = float(max(np.abs([max_val, min_val])))
         if np.isclose(vmax, 0.0):
-            return (0.5 * np.ones_like(v)).tolist()
+            return (0.5 * np.ones_like(v)).tolist()  # all near zero → neutral white
         return (((v / vmax) + 1.0) / 2.0).tolist()
     else:
         raise ValueError("Unknown normalisation mode")
@@ -217,13 +221,14 @@ def make_text_reward_image(
     dpi: int = 200,
     font_properties: Optional[FontProperties] = None,
     show_colorbar: bool = True,   # <--- NEW ARG
+    max_val=None,
+    min_val=None
 ):
     fp = font_properties or FontProperties(size=font_size, family="DejaVu Sans")
     assert len(tokens) == len(scores), "tokens and scores must have same length"
 
     # Store original min/max for colourbar scaling
-    vmin, vmax = min(scores), max(scores)
-    norm_scores = np.array(normalise(scores, mode="diverging"))
+    norm_scores = np.array(normalise(scores, mode="diverging", max_val=max_val, min_val=min_val))
 
     cleaned_tokens = [clean_qwen_token(t) for t in tokens]
     display_tokens = [t if t else " " for t in cleaned_tokens]
@@ -388,7 +393,8 @@ def make_text_reward_image(
         y_top -= row_height_px
         
     if show_colorbar:
-        vmin, vmax = min(scores), max(scores)
+        vmax = max(scores) if max_val is None else max_val
+        vmin = min(scores) if min_val is None else min_val
 
         if vmin < 0 and vmax > 0:
             # Case 1: Diverging
@@ -561,22 +567,22 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9) -> pd.DataFrame:
             else (-10, -4)
         )
     )
-    # df["selector"] = df.apply(
-    #     lambda x: np.nanmean(
-    #         x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
-    #     ),
-    #     axis=1,
-    # )
-    # df["selector_discounted"] = df.apply(
-    #     lambda x: np.nanmean(
-    #         x.reward_model_score_np_discounted[
-    #             x.answer_positions[0] : x.answer_positions[1]
-    #         ]
-    #     ),
-    #     axis=1,
-    # )
-    df["selector"] = df["mean_rewards"]
-    df["selector_discounted"] = df["mean_rewards_discounted"]
+    df["selector"] = df.apply(
+        lambda x: np.nanmean(
+            x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
+        ),
+        axis=1,
+    )
+    df["selector_discounted"] = df.apply(
+        lambda x: np.nanmean(
+            x.reward_model_score_np_discounted[
+                x.answer_positions[0] : x.answer_positions[1]
+            ]
+        ),
+        axis=1,
+    )
+    # df["selector"] = df["mean_rewards"]
+    # df["selector_discounted"] = df["mean_rewards_discounted"]
     return df
 
 
@@ -856,7 +862,7 @@ def plot_reward_distributions(
     plt.figure(figsize=(6, 3))
     sns.histplot(
         wrong,
-        label="Correct Answer",
+        label="Wrong Answer",
         kde=True,
         stat="probability",
         bins=50,
@@ -868,7 +874,7 @@ def plot_reward_distributions(
     )
     sns.histplot(
         correct,
-        label="Wrong Amswer",
+        label="Correct Amswer",
         kde=True,
         stat="probability",
         bins=50,
@@ -1145,53 +1151,53 @@ def run_all_plots(
                 plt.rcParams["text.usetex"] = False
                 correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
                 wrong_mean =  df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
+                overall_mean = df_airl[mean_name].mean()
+                
+                df_airl["reward_model_standard"] = df_airl[reward_score_name].apply(lambda x: x - overall_mean)
+                
+                
+                positive_indicies = df_airl[(abs(df_airl[mean_name]- correct_mean) < 0.1) & (df_airl["correctness_reward_func"] == 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
+                negative_indicies = df_airl[(abs(df_airl[mean_name]- wrong_mean) < 0.1) & (df_airl["correctness_reward_func"] != 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
+                all_indices = np.concatenate([positive_indicies, negative_indicies ])
+                df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
+                df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))
+                max_value = df_airl.loc[all_indices, "reward_model_max"].max()
+                min_value = df_airl.loc[all_indices, "reward_model_min"].min()
             
-                try:
-                    for i, idx in enumerate(
-                        df_airl[
-                            (abs(df_airl[mean_name] - correct_mean) < 0.01)
-                            & (df_airl["correctness_reward_func"] == 2)
-                            & (df_airl["int_reward_func"] == 0.5)
-                        ][mean_name].index[:5]
-                    ):
-                        tokens = df_airl.loc[idx, "response_token"]
-                        scores = df_airl.loc[idx, reward_score_name]
-                        question = df_airl.loc[idx, "prompt"][1]["content"]
-                        make_text_reward_image(
-                            tokens,
-                            scores,
-                            out_dir / f"dense_rewards_{postfix}/true_{i}.pdf",
-                            cmap_name=colour_map,
-                            prompt_text=question,
-                            font_size=18,
-                            dpi=300,
-                            max_width_px=4000,
-                        )
-                except Exception:
-                    pass
-                try:
-                    for i, idx in enumerate(
-                        df_airl[
-                            (abs(df_airl[mean_name] - wrong_mean) < 0.01)
-                            & (df_airl["correctness_reward_func"] != 2)
-                            & (df_airl["int_reward_func"] == 0.5)
-                        ][mean_name].index[:5]
-                    ):
-                        tokens = df_airl.loc[idx, "response_token"]
-                        scores = df_airl.loc[idx, reward_score_name]
-                        question = df_airl.loc[idx, "prompt"][1]["content"]
-                        make_text_reward_image(
-                            tokens,
-                            scores,
-                            out_dir / f"dense_rewards_{postfix}/wrong_{i}.pdf",
-                            cmap_name=colour_map,
-                            prompt_text=question,
-                            font_size=18,
-                            dpi=300,
-                            max_width_px=4000,
-                        )
-                except Exception:
-                    pass
+                for i, idx in enumerate(positive_indicies):
+                    tokens = df_airl.loc[idx, "response_token"]
+                    scores = df_airl.loc[idx, "reward_model_standard"]
+                    question = df_airl.loc[idx, "prompt"][1]["content"]
+                    make_text_reward_image(
+                        tokens,
+                        scores,
+                        out_dir / f"dense_rewards_{postfix}/true_{i}.pdf",
+                        cmap_name=colour_map,
+                        prompt_text=question,
+                        font_size=18,
+                        dpi=300,
+                        max_width_px=4000,
+                        max_val=max_value,
+                        min_val=min_value
+                    )
+            
+                for i, idx in enumerate(negative_indicies):
+                    tokens = df_airl.loc[idx, "response_token"]
+                    scores = df_airl.loc[idx, "reward_model_standard"]
+                    question = df_airl.loc[idx, "prompt"][1]["content"]
+                    make_text_reward_image(
+                        tokens,
+                        scores,
+                        out_dir / f"dense_rewards_{postfix}/wrong_{i}.pdf",
+                        cmap_name=colour_map,
+                        prompt_text=question,
+                        font_size=18,
+                        dpi=300,
+                        max_width_px=4000,
+                        max_val=max_value,
+                        min_val=min_value
+                    )
+                
 
     # return path for reference
     return Path(out_dir)
