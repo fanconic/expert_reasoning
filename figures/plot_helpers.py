@@ -1054,7 +1054,7 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
     }
     corr_matrix = df[reward_cols].corr()
     corr_matrix = corr_matrix.rename(index=rename_map, columns=rename_map)
-    plt.figure(figsize=(9, 7))
+    plt.figure(figsize=(6, 4))
     ax = sns.heatmap(
         corr_matrix,
         annot=True,

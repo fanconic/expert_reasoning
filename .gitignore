@@ -6,9 +6,10 @@ outputs
 *azure*
 cache-*.arrow
 _unsloth*
-figures/qwen*
-figures/llama*
-figures/*.pdf
+figures/qwen7b_*
+figures/llama8b_*
+figures/qwen3b_*
+figures/llama3b_*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

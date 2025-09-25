@@ -69,7 +69,7 @@ EXPERIMENTS: List[Dict] = [
         "ckpt": DEFAULT_CKPT,
         "label": "llama8b",
     },
-    ### WGAN
+    # ### WGAN
     {
         "airl": "qwen3_airl_wgan",
         "sft": "qwen3b_sft",
@@ -135,7 +135,20 @@ EXPERIMENTS: List[Dict] = [
         "ckpt": DEFAULT_CKPT,
         "label": "qwen7b_noper",
     },
-    
+    {
+        "airl": "llama3_airl_noper", # When running I accidendentally mislabelled it
+        "sft": "llama3_sft",
+        "grpo": "llama3_grpo",
+        "ckpt": DEFAULT_CKPT,
+        "label": "llama3b_noper",
+    },
+    {
+        "airl": "qwen3_airl_noper", # When running I accidendentally mislabelled it
+        "sft": "qwen3b_sft",
+        "grpo": "qwen3b_grpo",
+        "ckpt": DEFAULT_CKPT,
+        "label": "qwen3b_noper",
+    },
     
 ]
 
