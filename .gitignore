@@ -10,6 +10,7 @@ figures/qwen7b_*
 figures/llama8b_*
 figures/qwen3b_*
 figures/llama3b_*
+*_from_sft*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
