@@ -51,6 +51,7 @@ def run_grpo_training(
         top_p=cfg.sampling.top_p,
         log_completions=True,
         num_completions_to_print=2,
+        save_total_limit=1
     )
 
     # Instantiate the GRPOTrainer.

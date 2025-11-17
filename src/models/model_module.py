@@ -54,7 +54,7 @@ def load_model_and_tokenizer(config):
     )
     return model, tokenizer
 
-def irl_load_model_and_tokenizer(config, pretrained=False):
+def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=False, discriminator_path=None):
     """
     Load policy and reward models with separate LoRA adapters for adversarial IRL training.
     Both models can share the same base architecture but use different adapters for independent training.
@@ -160,6 +160,14 @@ def irl_load_model_and_tokenizer(config, pretrained=False):
             adapter_dir,
             is_trainable=False
         )
+        
+    elif frozen_discriminator:
+        adapter_dir = discriminator_path
+        reward_model = PeftModel.from_pretrained(
+            reward_model,
+            adapter_dir,
+            is_trainable=False
+        )
     
     else:
         reward_model = FastLanguageModel.get_peft_model(
@@ -177,7 +185,7 @@ def irl_load_model_and_tokenizer(config, pretrained=False):
             lora_alpha=reward_lora_rank * 2,
             use_gradient_checkpointing="unsloth",
             random_state=random_state,
-            modules_to_save=["lm_head"]
+            modules_to_save=["lm_head"] if config.model.dense_rewards else None
         )
     
     if hasattr(reward_model, "gradient_checkpointing_disable"):

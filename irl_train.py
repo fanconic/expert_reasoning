@@ -35,18 +35,26 @@ def main(cfg: DictConfig):
 
     # Load training, validation, and test datasets (assuming you have these available)
     no_system = getattr(cfg.dataset, "no_system", False)
+    from src.rewards.perturbations import PERTURB_FN_MAP
+    
     train_dataset = get_dataset(
-        cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio, no_system=no_system
+        cfg.dataset.name, split="train", ratio=cfg.dataset.train_ratio, no_system=no_system,
+        expert_error_rate = getattr(cfg.dataset, "expert_error_rate", 0.0),
+        neg_perturb_fns = [PERTURB_FN_MAP[name] for name in cfg.model.neg_perturb_fns],
+        num_neg_perturbations_per_expert = cfg.model.num_neg_perturbations_per_expert
     )
+    
     val_dataset = get_dataset(
         cfg.dataset.name, split="test", ratio=cfg.dataset.val_ratio, no_system=no_system
     )  # Make sure your dataset loader supports this split.  # Make sure your dataset loader supports this split.
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
     # Load model and tokenizer from unsloth
-    pretrained = getattr(cfg.model, "pretrained", False)
+    pretrained = False
+    frozen_discriminator = getattr(cfg.training, "freeze_discriminator", False)
+    discriminator_path = getattr(cfg.model, "frozen_discriminator_path", None)
     policy_model, reward_model, policy_tokenizer, reward_tokenizer = (
-        model_tokenizer_loader(cfg, pretrained=pretrained)
+        model_tokenizer_loader(cfg, pretrained=pretrained, frozen_discriminator=frozen_discriminator, discriminator_path=discriminator_path)
     )
 
     # Get reward functions

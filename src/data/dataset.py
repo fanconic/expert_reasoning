@@ -1,4 +1,5 @@
 from datasets import load_dataset, Dataset, load_from_disk
+import random
 import re
 
 SYSTEM_PROMPT = (
@@ -75,25 +76,91 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
     return data
 
 
-def get_gsm8k_distillation(split: str = "train", ratio: float = 1.0,  no_system=False) -> Dataset:
+def make_perturbed_completions(
+    neg_perturb_fns, 
+    num_neg_perturbations_per_expert, 
+    expert_completions,
+):
+    """
+    expert_completions: list of chat-format completions
+        [[{"role": "assistant", "content": "..."}], ...]
+    Returns:
+        perturbed: list in the same chat format
+        src_idx:  list[int], index of the source completion each perturbed one came from
+    """
+    if not neg_perturb_fns or num_neg_perturbations_per_expert == 0:
+        return [], []
+
+    fns = neg_perturb_fns if isinstance(neg_perturb_fns, list) else [neg_perturb_fns]
+    perturbed, src_idx = [], []
+
+    for i, comp in enumerate(expert_completions):
+        base = comp[0]["content"]
+        for _ in range(max(1, int(num_neg_perturbations_per_expert))):
+            fn = random.choice(fns)
+            try:
+                corrupted = fn(base)
+                # Fallback if fn returns something non-string or empty
+                if not isinstance(corrupted, str) or corrupted == "":
+                    corrupted = base
+            except Exception:
+                corrupted = base
+
+            perturbed.append([{"role": "assistant", "content": corrupted}])
+            src_idx.append(i)
+
+    return perturbed, src_idx
+
+
+def _extract_answer_from_target(target: str) -> str | None:
+    """
+    Given a target string of the form:
+        <think> ... </think>
+        <answer>
+        ...
+        </answer>
+    extract the inner answer text.
+    """
+    m = re.search(r"<answer>\s*(.*?)\s*</answer>", target, flags=re.DOTALL | re.IGNORECASE)
+    if not m:
+        return None
+    return m.group(1).strip()
+
+
+def get_gsm8k_distillation(
+    split: str = "train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0
+) -> Dataset:
     """
     Load GSM8K questions plus CuratedThoughts reasoning for KD:
       - Uses the 'onnookk/format_vs_content_reasoning_clean_gsm8k' dataset,
         which supplies both the question and a full chain-of-thought+boxed answer.
+
     Returns a Dataset with fields:
       - prompt: list[dict(role,content)]  (system + user)
       - target: str containing <think>…</think><answer>…</answer>
+      - answer: final answer string (possibly corrupted if expert_error_rate > 0)
+      - is_expert_error: bool indicating whether this example was perturbed
     """
-    # this curated set has both the question and the full COT+boxed answer
     ds = load_dataset("onnookk/format_vs_content_reasoning_clean_gsm8k", split=split)
+
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
-
+    
+    if expert_error_rate > 0.0:
+        print(f"Injecting expert errors at rate {expert_error_rate}")
+    
     def munge(example):
+        # Original (correct) expert reasoning and answer from the curated dataset
         reasoning = extract_think_content(example["answer"])
-        answer = extract_boxed_integer(example["answer"])
-        # build prompt + target
+        true_answer = extract_boxed_integer(example["answer"])
+
+        # build prompt
         if no_system:
             prompt = [
                 {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + example["question"]},
@@ -103,17 +170,60 @@ def get_gsm8k_distillation(split: str = "train", ratio: float = 1.0,  no_system=
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": example["question"]},
             ]
+
+        # build canonical target string
         target = (
             "<think>\n"
             f"{reasoning}\n"
             "</think>\n"
             "<answer>\n"
-            f"{answer}\n"
+            f"{true_answer}\n"
             "</answer>"
         )
-        return {"prompt": prompt, "target": target, "answer": answer}
+
+        answer = true_answer
+        is_expert_error = False
+
+        # Maybe corrupt expert target + answer
+        if (
+            expert_error_rate > 0.0
+            and neg_perturb_fns is not None
+            and random.random() < expert_error_rate
+        ):
+            is_expert_error = True
+
+            # Use make_perturbed_completions on a single completion
+            expert_completion = [[{"role": "assistant", "content": target}]]
+            perturbed, _ = make_perturbed_completions(
+                neg_perturb_fns=neg_perturb_fns,
+                num_neg_perturbations_per_expert=num_neg_perturbations_per_expert,
+                expert_completions=expert_completion,
+            )
+
+            # unpack
+            corrupted_target = perturbed[0][0]["content"]
+            target = corrupted_target
+
+            # try to re-extract the answer from the corrupted target
+            corrupted_answer = _extract_answer_from_target(corrupted_target)
+            if corrupted_answer is not None:
+                answer = corrupted_answer
+            else:
+                # if we can't parse, fall back to original; mark as not-an-error to avoid surprises
+                target = expert_completion[0][0]["content"]
+                answer = true_answer
+                is_expert_error = False
+
+        return {
+            "prompt": prompt,
+            "target": target,
+            "answer": answer,
+            "is_expert_error": is_expert_error,
+        }
 
     return ds.map(munge, remove_columns=ds.column_names)
+
+
 
 # Countdown dataset
 
@@ -242,7 +352,14 @@ def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Datase
 
 
 
-def get_dataset(name: str, split: str = "train", ratio: float = 1.0, no_system=False):
+def get_dataset(
+    name: str, 
+    split: str = "train", 
+    ratio: float = 1.0, 
+    no_system=False, 
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert: int =0):
     """
     Load a dataset by name and split.
 
@@ -260,7 +377,11 @@ def get_dataset(name: str, split: str = "train", ratio: float = 1.0, no_system=F
     if name.lower() == "gsm8k":
         return get_gsm8k_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "gsm8k_kd":
-        return get_gsm8k_distillation(split, ratio, no_system=no_system)
+        return get_gsm8k_distillation(
+            split, ratio, no_system=no_system, 
+            expert_error_rate=expert_error_rate,
+            neg_perturb_fns=neg_perturb_fns,
+            num_neg_perturbations_per_expert=num_neg_perturbations_per_expert)
     elif name.lower() == "countdown":
         return get_countdown_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "countdown_kd":

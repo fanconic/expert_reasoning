@@ -174,6 +174,8 @@ class AIRLTrainer(GRPOTrainer):
         self.add_expert_to_policy_optim = args.add_expert_to_policy_optim
         self.add_expert_to_policy_balanced = args.add_expert_to_policy_balanced
         self.classifier_loss = args.classifier_loss
+        self.normalise_rewards = args.normalise_rewards
+        self.expert_error_rate = args.expert_error_rate
         
         if self.standard_grpo:
             self.use_outcome_rewards = True
@@ -800,7 +802,10 @@ class AIRLTrainer(GRPOTrainer):
                 mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(advantage_num_generation, dim=0)
                 std_grouped_rewards = std_grouped_rewards.repeat_interleave(advantage_num_generation, dim=0)
                 is_std_zero = torch.isclose(std_grouped_rewards, torch.zeros_like(std_grouped_rewards))
-                advantages = rewards - mean_grouped_rewards
+                if self.normalise_rewards:
+                    advantages = rewards - mean_grouped_rewards
+                else:
+                    advantages = rewards
                 if self.scale_rewards:
                     advantages = advantages / (std_grouped_rewards + 1e-4)
                 
@@ -824,7 +829,10 @@ class AIRLTrainer(GRPOTrainer):
                 is_std_zero = torch.isclose(std_grouped_rewards, torch.zeros_like(std_grouped_rewards))
 
                 # 4) normalise all token rewards by the last-token stats
-                a_tilde = rewards - mean_grouped_rewards
+                if self.normalise_rewards:
+                    a_tilde = rewards - mean_grouped_rewards
+                else:
+                    a_tilde = rewards
                 if self.scale_rewards:
                     a_tilde = a_tilde / (std_grouped_rewards + 1e-4)
                 

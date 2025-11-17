@@ -73,7 +73,9 @@ def run_irl_training(
         dense_gamma=cfg.model.dense_gamma,
         add_expert_to_policy_optim=cfg.model.add_expert_to_policy_optim,
         add_expert_to_policy_balanced=cfg.model.add_expert_to_policy_balanced,
-        classifier_loss=cfg.model.classifier_loss
+        classifier_loss=cfg.model.classifier_loss,
+        normalise_rewards=getattr(cfg.model, "normalise_rewards", True),
+        expert_error_rate=getattr(cfg.dataset, "expert_error_rate", 0.0),
     )
 
     def formatting_prompt_func(examples):

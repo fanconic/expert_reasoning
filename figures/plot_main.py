@@ -37,118 +37,219 @@ from plot_helpers import (
 # Config
 # -------------------------------
 BASE = Path("/mnt/pdata/caf83/tabular_reasoning/outputs")
+BASE_REBUTTALS = Path("/mnt/pdata/caf83/tabular_reasoning/rebuttals")
 DEFAULT_CKPT = "500"
 
 # Define your experiments here
 EXPERIMENTS: List[Dict] = [
+    # {
+    #     "airl": "qwen3b_airl_09_bce2.5",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b",
+    # },
+    # {
+    #     "airl": "llama3_airl",
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b",
+    # },
+    # {
+    #     "airl": "qwen7b_airl_09_bce_15",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b",
+    # },
+    # {
+    #     "airl": "llama8_airl_6",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8b",
+    # },
+    # # ### WGAN
+    # {
+    #     "airl": "qwen3_airl_wgan",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_wgan",
+    # },
+    # {
+    #     "airl": "qwen7_airl_wgan",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_wgan",
+    # },
+    # {
+    #     "airl": "llama3_airl_wgan",
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b_wgan",
+    # },
+    # {
+    #     "airl": "llama8_airl_wgan",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8b_wgan",
+    # },
+    # ### FROM SFT
+    # {
+    #     "airl": "qwen3b_airl_from_sft",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_from_sft",
+    # },
+    # {
+    #     "airl": "llama3_airl_sft",
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b_from_sft",
+    # },
+    # {
+    #     "airl": "qwen7b_airl_from_sft",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_from_sft",
+    # },
+    # {
+    #     "airl": "llama8_airl_from_sft",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8b_from_sft",
+    # },
+    # ## NO PERTURBATION
+    # {
+    #     "airl": "llama8_airl_noper", # When running I accidendentally mislabelled it
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_noper",
+    # },
+    # {
+    #     "airl": "llama3_airl_noper", # When running I accidendentally mislabelled it
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b_noper",
+    # },
+    # {
+    #     "airl": "qwen3_airl_noper", # When running I accidendentally mislabelled it
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_noper",
+    # },
+    # {
+    #     "airl": "llama8_airl_noper_2",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8b_noper",
+    # },
+    
+    
+    # Sparse
+    # {
+    #     "airl": "qwen3b_airl_unnormalised",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_airl_unnormalised",
+    # },
+    # {
+    #     "airl": "llama3_airl_unnormalised",
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3_airl_unnormalised",
+    # },
+    # {
+    #     "airl": "qwen7b_airl_unnormalised",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_airl_unnormalised",
+    # },
+    # {
+    #     "airl": "llama8_airl_unnormalised",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8_airl_unnormalised",
+    # },
+    
+    # 10% mistake
+    # {
+    #     "airl": "qwen3b_airl_0.1",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_airl_0.1",
+    # },
+    # {
+    #     "airl": "llama3_airl_0.1",
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3_airl_0.1",
+    # },
     {
-        "airl": "qwen3b_airl_09_bce2.5",
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen3b",
-    },
-    {
-        "airl": "llama3_airl",
-        "sft": "llama3_sft",
-        "grpo": "llama3_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama3b",
-    },
-    {
-        "airl": "qwen7b_airl_09_bce_15",
+        "airl": "qwen7b_airl_error_0.1",
         "sft": "qwen7b_sft",
         "grpo": "qwen7b_grpo",
         "ckpt": DEFAULT_CKPT,
-        "label": "qwen7b",
+        "label": "qwen7b_airl_error_0.1",
     },
-    {
-        "airl": "llama8_airl_6",
-        "sft": "llama8_sft",
-        "grpo": "llama8_grpo_2",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama8b",
-    },
-    # ### WGAN
-    {
-        "airl": "qwen3_airl_wgan",
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen3b_wgan",
-    },
-    {
-        "airl": "qwen7_airl_wgan",
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen7b_wgan",
-    },
-    {
-        "airl": "llama3_airl_wgan",
-        "sft": "llama3_sft",
-        "grpo": "llama3_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama3b_wgan",
-    },
-    {
-        "airl": "llama8_airl_wgan",
-        "sft": "llama8_sft",
-        "grpo": "llama8_grpo_2",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama8b_wgan",
-    },
-    ### FROM SFT
-    {
-        "airl": "qwen3b_airl_from_sft",
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen3b_from_sft",
-    },
-    {
-        "airl": "llama3_airl_sft",
-        "sft": "llama3_sft",
-        "grpo": "llama3_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama3b_from_sft",
-    },
-    {
-        "airl": "qwen7b_airl_from_sft",
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen7b_from_sft",
-    },
-    {
-        "airl": "llama8_airl_from_sft",
-        "sft": "llama8_sft",
-        "grpo": "llama8_grpo_2",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama8b_from_sft",
-    },
-    ## NO PERTURBATION
-    {
-        "airl": "llama8_airl_noper", # When running I accidendentally mislabelled it
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen7b_noper",
-    },
-    {
-        "airl": "llama3_airl_noper", # When running I accidendentally mislabelled it
-        "sft": "llama3_sft",
-        "grpo": "llama3_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama3b_noper",
-    },
-    {
-        "airl": "qwen3_airl_noper", # When running I accidendentally mislabelled it
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen3b_noper",
-    },
+    # {
+    #     "airl": "llama8_airl_0.1",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8_airl_0.1",
+    # },
+    
+    
+    # 25% mistake
+    # {
+    #     "airl": "qwen3b_airl_0.25",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_airl_0.25",
+    # },
+    # {
+    #     "airl": "llama3_airl_0.25",
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3_airl_0.25",
+    # },
+    # {
+    #     "airl": "qwen7b_airl_error_0.25",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_airl_error_0.25",
+    # },
+    # {
+    #     "airl": "llama8_airl_0.25",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8_airl_0.25",
+    # },
+    
     
 ]
 
@@ -201,9 +302,9 @@ def main():
         )
         airl_run, sft_run, grpo_run = exp["airl"], exp["sft"], exp["grpo"]
 
-        airl_p = base_dir / airl_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
-        sft_p = base_dir / sft_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
-        grpo_p = base_dir / grpo_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
+        airl_p = BASE_REBUTTALS / airl_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
+        sft_p = BASE / sft_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
+        grpo_p = BASE / grpo_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
 
         label = label_for(exp)
         out_dir = f"./figures/{label}"

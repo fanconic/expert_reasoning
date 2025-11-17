@@ -158,8 +158,13 @@ def main(cfg: DictConfig):
     )
 
     # Load model and tokenizer
+    pretrained = True
+    discriminator_path = getattr(cfg.model, "frozen_discriminator_path", None)
+    if discriminator_path is not None:
+        frozen_discriminator = True
+        pretrained = False
     model, reward_model, tokenizer, reward_tokenizer = irl_load_model_and_tokenizer_trl(
-        cfg, pretrained=True, checkpoint=cfg.model.name
+        cfg, pretrained=pretrained, checkpoint=cfg.model.name, frozen_discriminator=frozen_discriminator, discriminator_path=discriminator_path
     )
     model.eval()
     reward_model.eval()

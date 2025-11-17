@@ -874,7 +874,7 @@ def plot_reward_distributions(
     )
     sns.histplot(
         correct,
-        label="Correct Amswer",
+        label="Correct Answer",
         kde=True,
         stat="probability",
         bins=50,
@@ -1122,81 +1122,81 @@ def run_all_plots(
         out_dir / "correctness_reward_distribution_discounted.pdf",
     )
 
-    # raw vs discounted
-    plot_rewards_vs_discounted(df_airl, out_dir / "rewards_vs_discounted.pdf")
+    # # raw vs discounted
+    # plot_rewards_vs_discounted(df_airl, out_dir / "rewards_vs_discounted.pdf")
 
-    # formatting distributions
-    plot_formatting_distributions(
-        df_airl,
-        out_dir / "format_rewards.pdf",
-        out_dir / "format_rewards_discounted.pdf",
-    )
+    # # formatting distributions
+    # plot_formatting_distributions(
+    #     df_airl,
+    #     out_dir / "format_rewards.pdf",
+    #     out_dir / "format_rewards_discounted.pdf",
+    # )
 
-    # correlation heatmap
-    plot_reward_correlations(df_airl, out_dir / "reward_correlation_matrix.pdf")
+    # # correlation heatmap
+    # plot_reward_correlations(df_airl, out_dir / "reward_correlation_matrix.pdf")
 
-    # Token-based dense reward visualisations (best-effort; requires tokenizer + fields)
-    if make_token_figs:
-        colour_map = CUSTOM_COLOR_MAP
-        discs = [False, True]
+    # # Token-based dense reward visualisations (best-effort; requires tokenizer + fields)
+    # if make_token_figs:
+    #     colour_map = CUSTOM_COLOR_MAP
+    #     discs = [False, True]
 
-        for disc in discs:
-            reward_score_name = (
-                "reward_model_score_np_discounted" if disc else "reward_model_score_np"
-            )
-            postfix = "discounted" if disc else "raw"
-            mean_name = "mean_rewards_discounted" if disc else "mean_rewards"
+    #     for disc in discs:
+    #         reward_score_name = (
+    #             "reward_model_score_np_discounted" if disc else "reward_model_score_np"
+    #         )
+    #         postfix = "discounted" if disc else "raw"
+    #         mean_name = "mean_rewards_discounted" if disc else "mean_rewards"
 
-            if "response_token" in df_airl.columns:
-                plt.rcParams["text.usetex"] = False
-                correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
-                wrong_mean =  df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
-                overall_mean = df_airl[mean_name].mean()
+    #         if "response_token" in df_airl.columns:
+    #             plt.rcParams["text.usetex"] = False
+    #             correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
+    #             wrong_mean =  df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
+    #             overall_mean = df_airl[mean_name].mean()
                 
-                df_airl["reward_model_standard"] = df_airl[reward_score_name].apply(lambda x: x - overall_mean)
+    #             df_airl["reward_model_standard"] = df_airl[reward_score_name].apply(lambda x: x - overall_mean)
                 
                 
-                positive_indicies = df_airl[(abs(df_airl[mean_name]- correct_mean) < 0.1) & (df_airl["correctness_reward_func"] == 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
-                negative_indicies = df_airl[(abs(df_airl[mean_name]- wrong_mean) < 0.1) & (df_airl["correctness_reward_func"] != 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
-                all_indices = np.concatenate([positive_indicies, negative_indicies ])
-                df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
-                df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))
-                max_value = df_airl.loc[all_indices, "reward_model_max"].max()
-                min_value = df_airl.loc[all_indices, "reward_model_min"].min()
+    #             positive_indicies = df_airl[(abs(df_airl[mean_name]- correct_mean) < 0.1) & (df_airl["correctness_reward_func"] == 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
+    #             negative_indicies = df_airl[(abs(df_airl[mean_name]- wrong_mean) < 0.1) & (df_airl["correctness_reward_func"] != 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
+    #             all_indices = np.concatenate([positive_indicies, negative_indicies ])
+    #             df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
+    #             df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))
+    #             max_value = df_airl.loc[all_indices, "reward_model_max"].max()
+    #             min_value = df_airl.loc[all_indices, "reward_model_min"].min()
             
-                for i, idx in enumerate(positive_indicies):
-                    tokens = df_airl.loc[idx, "response_token"]
-                    scores = df_airl.loc[idx, "reward_model_standard"]
-                    question = df_airl.loc[idx, "prompt"][1]["content"]
-                    make_text_reward_image(
-                        tokens,
-                        scores,
-                        out_dir / f"dense_rewards_{postfix}/true_{i}.pdf",
-                        cmap_name=colour_map,
-                        prompt_text=question,
-                        font_size=18,
-                        dpi=300,
-                        max_width_px=4000,
-                        max_val=max_value,
-                        min_val=min_value
-                    )
+    #             for i, idx in enumerate(positive_indicies):
+    #                 tokens = df_airl.loc[idx, "response_token"]
+    #                 scores = df_airl.loc[idx, "reward_model_standard"]
+    #                 question = df_airl.loc[idx, "prompt"][1]["content"]
+    #                 make_text_reward_image(
+    #                     tokens,
+    #                     scores,
+    #                     out_dir / f"dense_rewards_{postfix}/true_{i}.pdf",
+    #                     cmap_name=colour_map,
+    #                     prompt_text=question,
+    #                     font_size=18,
+    #                     dpi=300,
+    #                     max_width_px=4000,
+    #                     max_val=max_value,
+    #                     min_val=min_value
+    #                 )
             
-                for i, idx in enumerate(negative_indicies):
-                    tokens = df_airl.loc[idx, "response_token"]
-                    scores = df_airl.loc[idx, "reward_model_standard"]
-                    question = df_airl.loc[idx, "prompt"][1]["content"]
-                    make_text_reward_image(
-                        tokens,
-                        scores,
-                        out_dir / f"dense_rewards_{postfix}/wrong_{i}.pdf",
-                        cmap_name=colour_map,
-                        prompt_text=question,
-                        font_size=18,
-                        dpi=300,
-                        max_width_px=4000,
-                        max_val=max_value,
-                        min_val=min_value
-                    )
+    #             for i, idx in enumerate(negative_indicies):
+    #                 tokens = df_airl.loc[idx, "response_token"]
+    #                 scores = df_airl.loc[idx, "reward_model_standard"]
+    #                 question = df_airl.loc[idx, "prompt"][1]["content"]
+    #                 make_text_reward_image(
+    #                     tokens,
+    #                     scores,
+    #                     out_dir / f"dense_rewards_{postfix}/wrong_{i}.pdf",
+    #                     cmap_name=colour_map,
+    #                     prompt_text=question,
+    #                     font_size=18,
+    #                     dpi=300,
+    #                     max_width_px=4000,
+    #                     max_val=max_value,
+    #                     min_val=min_value
+    #                 )
                 
 
     # return path for reference

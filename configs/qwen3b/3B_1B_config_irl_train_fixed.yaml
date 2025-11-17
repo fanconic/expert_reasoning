@@ -1,0 +1,100 @@
+seed: 42
+unsloth: true
+
+defaults:
+   - override hydra/job_logging: default
+   - override hydra/hydra_logging: default
+
+model:
+  policy_name: "Qwen/Qwen2.5-3B-Instruct"
+  reward_name: "Qwen/Qwen2.5-1.5B-Instruct"
+  frozen_discriminator_path: "/mnt/pdata/caf83/tabular_reasoning/outputs/qwen7b_airl_09_bce_15/checkpoint-500/reward_model"
+  max_prompt_length: 300
+  max_completion_length: 824
+  load_in_4bit: true
+  fast_inference: ${unsloth}
+  policy_gpu_memory_utilization: 0.6
+  reward_gpu_memory_utilization: 0.15
+  
+  # Common settings
+  lora_rank: 128  # Base LoRA rank
+  use_gradient_checkpointing: true
+  
+  # Policy model specific
+  policy_lora_rank: 128  # Optional: override base rank for policy
+  policy_learning_rate: 1e-5
+  add_expert_to_policy_optim: true
+  add_expert_to_policy_balanced: false
+  
+  # Reward model specific  
+  reward_lora_rank: 32  # Optional: override base rank for reward
+  reward_learning_rate: 1e-5
+  disc_label_smoothing: 0.1
+  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_gamma: 0.9
+  advantage_calculation: "grpo"
+
+  # Reward model settings
+  use_outcome_rewards: false  # Use outcome rewards in addition to reward model
+  reward_updates_per_policy_step: 1
+  disc_temperature: 1
+  classifier_loss: "bce"
+
+  # Clip the reward of the discriminator
+  clip_reward_model: false
+  reward_lb: -5.0
+  reward_ub: 5.0
+
+  # response only
+  response_only: false
+
+  # reasoning perturbation
+  num_neg_perturbations_per_expert: 2 # set to 0 if unused
+  neg_perturb_fns: [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
+  neg_sample_weight: 1.0
+  disc_pairwise_margin: 0.0
+  
+
+dataset:
+  name: "gsm8k_kd"
+  split: "train"
+  train_ratio: 1
+  val_ratio: 0.1
+
+training:
+  # Common training params
+  standard_grpo: false
+  warmup_ratio: 0.1
+  adam_beta1: 0.9
+  adam_beta2: 0.99
+  weight_decay: 0.1
+  lr_scheduler_type: "cosine"
+  optim: "paged_adamw_8bit"
+  logging_steps: 10
+  max_grad_norm: 1.0
+  output_dir: "/mnt/pdata/caf83/tabular_reasoning/rebuttals/${wandb.run_name}"
+  report_to: "wandb"
+  per_device_train_batch_size: 16
+  max_micro_batch: 5  #max batch for the reward model such that I don't run out of memory
+  gradient_accumulation_steps: 2
+  max_steps: 500
+  epochs: 2
+  freeze_discriminator: true
+  
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  num_generations: 16
+
+eval:
+  do_eval: true
+  eval_strategy: "steps"
+  eval_steps: 50
+  per_device_eval_batch_size: 32
+  eval_accumulation_steps: 2
+  prediction_loss_only: false
+
+wandb:
+  project: "rebuttals_expert_reasoning"
+  entity: eth_dlad_team32
+  run_name: qwen3b_airl_fixed

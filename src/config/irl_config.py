@@ -163,6 +163,12 @@ class IRLConfig(GRPOConfig):
             "help": "If true, use token-level (dense) rewards instead of sequence-level (sparse) rewards."
         },
     )
+    normalise_rewards: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to normalise rewards by subtracting the mean per group."
+        },
+    )
     advantage_calculation: str = field(
         default="grpo",
         metadata={
@@ -179,6 +185,12 @@ class IRLConfig(GRPOConfig):
         default=False,
         metadata={
             "help": "Add the expert demonstration also to the advantage calculation"
+        }
+    )
+    expert_error_rate: float = field(
+        default=0.0,
+        metadata={
+            "help": "Error rate of the expert demonstrations"
         }
     )
     add_expert_to_policy_balanced: bool = field(
