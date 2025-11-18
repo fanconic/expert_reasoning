@@ -204,13 +204,13 @@ EXPERIMENTS: List[Dict] = [
     #     "ckpt": DEFAULT_CKPT,
     #     "label": "llama3_airl_0.1",
     # },
-    {
-        "airl": "qwen7b_airl_error_0.1",
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen7b_airl_error_0.1",
-    },
+    # {
+    #     "airl": "qwen7b_airl_error_0.1",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_airl_error_0.1",
+    # },
     # {
     #     "airl": "llama8_airl_0.1",
     #     "sft": "llama8_sft",
@@ -221,13 +221,13 @@ EXPERIMENTS: List[Dict] = [
     
     
     # 25% mistake
-    # {
-    #     "airl": "qwen3b_airl_0.25",
-    #     "sft": "qwen3b_sft",
-    #     "grpo": "qwen3b_grpo",
-    #     "ckpt": DEFAULT_CKPT,
-    #     "label": "qwen3b_airl_0.25",
-    # },
+    {
+        "airl": "qwen3b_airl_0.25",
+        "sft": "qwen3b_sft",
+        "grpo": "qwen3b_grpo",
+        "ckpt": DEFAULT_CKPT,
+        "label": "qwen3b_airl_0.25",
+    },
     # {
     #     "airl": "llama3_airl_0.25",
     #     "sft": "llama3_sft",
@@ -248,6 +248,36 @@ EXPERIMENTS: List[Dict] = [
     #     "grpo": "llama8_grpo_2",
     #     "ckpt": DEFAULT_CKPT,
     #     "label": "llama8_airl_0.25",
+    # },
+    
+    # Fixed Discriminator
+    # {
+    #     "airl": "qwen3b_airl_fixed",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_airl_fixed",
+    # },
+    # {
+    #     "airl": "llama3_airl_fixed",
+    #     "sft": "llama3_sft",
+    #     "grpo": "llama3_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3_airl_fixed",
+    # },
+    # {
+    #     "airl": "qwen7b_airl_fixed",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_airl_fixed",
+    # },
+    # {
+    #     "airl": "llama8_airl_fixed",
+    #     "sft": "llama8_sft",
+    #     "grpo": "llama8_grpo_2",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8_airl_fixed",
     # },
     
     

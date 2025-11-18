@@ -90,6 +90,7 @@ def score_with_reward_model(
                 return_tensors="pt",
                 padding="max_length",
                 add_special_tokens=False,
+                truncation=True, 
                 padding_side="left",
                 max_length=out.size(1),
             ).to(device)["attention_mask"]
@@ -191,7 +192,7 @@ def main(cfg: DictConfig):
     sampling_params = SamplingParams(
         n=n,
         seed=cfg.seed,
-        max_tokens=cfg.model.max_prompt_length + cfg.model.max_completion_length,
+        max_tokens=cfg.model.max_completion_length,
         temperature=cfg.sampling.temperature,
         top_p=cfg.sampling.top_p,
     )
