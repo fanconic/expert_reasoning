@@ -9,7 +9,18 @@ SYSTEM_PROMPT = (
     "<think> reasoning process here </think><answer> answer here </answer>"
 )
 
+SYSTEM_PROMPT_MEDREASON = (
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
+    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> reasoning process here </think><answer> answer here </answer>"
+    "The answer only includes the final answer, without any explanation, and is one of the options provided in the question, without the letter label, i.e."
+    "Question ... Answer Options: \nA. answer1 \nB. answer2 \nC. answer3 \nD. \n<think> reasoning process here </think><answer> answer2 </answer>" 
+)
+
+
 # UTILS
+
 
 def extract_hash_answer(text: str) -> str:
     """
@@ -36,7 +47,9 @@ def extract_think_content(input_string: str) -> str:
     match = re.search(r"<think>(.*?)</think>", input_string, re.DOTALL)
     return match.group(1).strip() if match else input_string.strip()
 
+
 # GSM8K Dataset
+
 
 def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
     """
@@ -53,7 +66,7 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
-        
+
     if no_system:
         data = data.map(
             lambda x: {
@@ -77,8 +90,8 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
 
 
 def make_perturbed_completions(
-    neg_perturb_fns, 
-    num_neg_perturbations_per_expert, 
+    neg_perturb_fns,
+    num_neg_perturbations_per_expert,
     expert_completions,
 ):
     """
@@ -121,7 +134,9 @@ def _extract_answer_from_target(target: str) -> str | None:
         </answer>
     extract the inner answer text.
     """
-    m = re.search(r"<answer>\s*(.*?)\s*</answer>", target, flags=re.DOTALL | re.IGNORECASE)
+    m = re.search(
+        r"<answer>\s*(.*?)\s*</answer>", target, flags=re.DOTALL | re.IGNORECASE
+    )
     if not m:
         return None
     return m.group(1).strip()
@@ -133,7 +148,7 @@ def get_gsm8k_distillation(
     no_system: bool = False,
     expert_error_rate: float = 0.0,
     neg_perturb_fns=None,
-    num_neg_perturbations_per_expert=0
+    num_neg_perturbations_per_expert=0,
 ) -> Dataset:
     """
     Load GSM8K questions plus CuratedThoughts reasoning for KD:
@@ -151,10 +166,10 @@ def get_gsm8k_distillation(
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
-    
+
     if expert_error_rate > 0.0:
         print(f"Injecting expert errors at rate {expert_error_rate}")
-    
+
     def munge(example):
         # Original (correct) expert reasoning and answer from the curated dataset
         reasoning = extract_think_content(example["answer"])
@@ -163,7 +178,10 @@ def get_gsm8k_distillation(
         # build prompt
         if no_system:
             prompt = [
-                {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + example["question"]},
+                {
+                    "role": "user",
+                    "content": SYSTEM_PROMPT + "\n\n" + example["question"],
+                },
             ]
         else:
             prompt = [
@@ -224,8 +242,8 @@ def get_gsm8k_distillation(
     return ds.map(munge, remove_columns=ds.column_names)
 
 
-
 # Countdown dataset
+
 
 def get_countdown_grpo(split="train", ratio: float = 1.0):
     """
@@ -290,7 +308,14 @@ def get_countdown_distillation(split: str = "train", ratio: float = 1.0) -> Data
 
 
 # Medical Dataset
-def get_medical_grpo(split="train", ratio: float = 1.0):
+def get_medical_grpo(
+    split="train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0,
+):
     """
     Load and preprocess the medical o1 dataset.
 
@@ -301,14 +326,14 @@ def get_medical_grpo(split="train", ratio: float = 1.0):
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_from_disk("/data/medical_o1")[split]
+    data = load_from_disk("./data/medreason")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
     data = data.map(
         lambda x: {
             "prompt": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": SYSTEM_PROMPT_MEDREASON},
                 {"role": "user", "content": x["question"]},
             ],
             "answer": x["answer"],
@@ -317,7 +342,14 @@ def get_medical_grpo(split="train", ratio: float = 1.0):
     return data
 
 
-def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Dataset:
+def get_medical_distillation(
+    split: str = "train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0,
+) -> Dataset:
     """
     Load o1 medical questions for KD:
     Returns a Dataset with fields:
@@ -325,7 +357,7 @@ def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Datase
       - target: str containing <think>…</think><answer>…</answer>
     """
     # this curated set has both the question and the full COT+boxed answer
-    ds = load_from_disk("/data/medical_o1")[split]
+    ds = load_from_disk("./data/medreason")[split]
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
@@ -335,7 +367,7 @@ def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Datase
         answer = example["answer"]
         # build prompt + target
         prompt = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPT_MEDREASON},
             {"role": "user", "content": example["question"]},
         ]
         target = (
@@ -351,15 +383,15 @@ def get_medical_distillation(split: str = "train", ratio: float = 1.0) -> Datase
     return ds.map(munge, remove_columns=ds.column_names)
 
 
-
 def get_dataset(
-    name: str, 
-    split: str = "train", 
-    ratio: float = 1.0, 
-    no_system=False, 
+    name: str,
+    split: str = "train",
+    ratio: float = 1.0,
+    no_system=False,
     expert_error_rate: float = 0.0,
     neg_perturb_fns=None,
-    num_neg_perturbations_per_expert: int =0):
+    num_neg_perturbations_per_expert: int = 0,
+):
     """
     Load a dataset by name and split.
 
@@ -378,10 +410,13 @@ def get_dataset(
         return get_gsm8k_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "gsm8k_kd":
         return get_gsm8k_distillation(
-            split, ratio, no_system=no_system, 
+            split,
+            ratio,
+            no_system=no_system,
             expert_error_rate=expert_error_rate,
             neg_perturb_fns=neg_perturb_fns,
-            num_neg_perturbations_per_expert=num_neg_perturbations_per_expert)
+            num_neg_perturbations_per_expert=num_neg_perturbations_per_expert,
+        )
     elif name.lower() == "countdown":
         return get_countdown_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "countdown_kd":

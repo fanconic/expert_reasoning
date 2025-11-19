@@ -1,0 +1,66 @@
+{
+  "builder_name": "json",
+  "citation": "",
+  "config_name": "default",
+  "dataset_name": "med_reason",
+  "dataset_size": 111544057,
+  "description": "",
+  "download_checksums": {
+    "hf://datasets/UCSC-VLAA/MedReason@7fc0ddb80653c839be359ac4496ec6ee00bdd52f/ours_quality_33000.jsonl": {
+      "num_bytes": 115474386,
+      "checksum": null
+    }
+  },
+  "download_size": 115474386,
+  "features": {
+    "question": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "answer": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "reasoning": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "response": {
+      "dtype": "string",
+      "_type": "Value"
+    },
+    "len_question": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "len_reasoning": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "len_response": {
+      "dtype": "int64",
+      "_type": "Value"
+    },
+    "sum_words": {
+      "dtype": "int64",
+      "_type": "Value"
+    }
+  },
+  "homepage": "",
+  "license": "",
+  "size_in_bytes": 227018443,
+  "splits": {
+    "train": {
+      "name": "train",
+      "num_bytes": 111544057,
+      "num_examples": 32682,
+      "dataset_name": "med_reason"
+    }
+  },
+  "version": {
+    "version_str": "0.0.0",
+    "major": 0,
+    "minor": 0,
+    "patch": 0
+  }
+}

@@ -1,8 +1,40 @@
 import re
 from typing import List, Optional
 from difflib import SequenceMatcher
+from math_verify import verify
 
-### GSM8K REWARD FUNCTIONS
+def get_reward_functions(dataset_name: str) -> List:
+    """
+    Return a list of all reward functions to be used during training.
+
+    Returns:
+        list: A list of reward functions in the order they should be applied.
+    """
+    if dataset_name == "gsm8k" or dataset_name == "gsm8k_kd":
+        return [
+            xmlcount_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func,
+            int_reward_func,
+            gsm8k_correctness_reward_func,
+        ], None
+    elif dataset_name == "countdown" or dataset_name == "countdown_kd":
+        return [
+            xmlcount_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func,
+            countdown_correctness_function,
+        ], None
+    elif dataset_name == "medical" or dataset_name == "medical_kd":
+        return [
+            xmlcount_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func,
+            medical_correctness_reward_func
+        ], None
+    else:
+        raise ValueError(f"Dataset {dataset_name} not supported")
+
 
 
 # compile once, with DOTALL so '.' matches newlines
@@ -67,7 +99,7 @@ def extract_xml_answer(text: str) -> str:
     return answer.strip()
 
 
-def correctness_reward_func(prompts, completions, answer, **kwargs):
+def gsm8k_correctness_reward_func(prompts, completions, answer, **kwargs):
     """
     Calculate reward based on whether the extracted answer matches the ground truth.
 
@@ -145,87 +177,11 @@ def xmlcount_reward_func(completions, **kwargs):
     return [count_xml(c) for c in contents]
 
 
-def get_reward_functions(dataset_name: str) -> List:
-    """
-    Return a list of all reward functions to be used during training.
 
-    Returns:
-        list: A list of reward functions in the order they should be applied.
-    """
-    if dataset_name == "gsm8k" or dataset_name == "gsm8k_kd":
-        return [
-            xmlcount_reward_func,
-            soft_format_reward_func,
-            strict_format_reward_func,
-            int_reward_func,
-            correctness_reward_func,
-        ], None
-    elif dataset_name == "countdown" or dataset_name == "countdown_kd":
-        return [
-            xmlcount_reward_func,
-            soft_format_reward_func,
-            strict_format_reward_func,
-            answer_reward_function,
-        ], None
-    elif dataset_name == "medical" or dataset_name == "medical_kd":
-        return [
-            xmlcount_reward_func,
-            soft_format_reward_func,
-            strict_format_reward_func
-        ], None
-    else:
-        raise ValueError(f"Dataset {dataset_name} not supported")
-
-
-def eval_correctness_gsm8k(completions, answer):
-    """
-    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
-
-    Args:
-        completions: List of model completions, each containing response content.
-        answer: The ground truth answer to compare against.
-
-    Returns:
-        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
-    """
-    responses = [completion["content"] for completion in completions]
-    extracted_responses = [extract_xml_answer(r) for r in responses]
-    return [r == answer for r in extracted_responses]
-
-
-def eval_correctness_countdown(completions, answer):
-    """
-    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
-
-    Args:
-        completions: List of model completions, each containing response content.
-        answer: The ground truth answer to compare against.
-
-    Returns:
-        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
-    """
-    responses = [completion["content"] for completion in completions]
-    numbers = [answer["nums"]] * len(responses)
-    targets = [answer["target"]] * len(responses)
-    rewards = [answer_reward_function_single(r,a,t) for r, a, t in zip(responses, numbers, targets)]
-    return [r == 2.0 for r in rewards]
-
-def eval_correctness_medical_o1(completions, answer):
-    """
-    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
-
-    Args:
-        completions: List of model completions, each containing response content.
-        answer: The ground truth answer to compare against.
-
-    Returns:
-        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
-    """
-    pass
 
 
 ### COUNTDOWN REWARD FUNCTIONS
-def answer_reward_function_single(
+def _correctness_reward_countdown(
     response: str, numbers: List[int] = None, target: int = None
 ) -> float:
     """
@@ -260,163 +216,83 @@ def answer_reward_function_single(
 
     return 0.0
 
-def answer_reward_function(
+def countdown_correctness_function(
     prompts, completions, answer, **kwargs
 ) -> float:
     responses = [completion[0]["content"] for completion in completions]
     numbers = [a["nums"] for a in answer]
     targets = [a["target"] for a in answer]
-    return [answer_reward_function_single(r,a,t) for r, a, t in zip(responses, numbers, targets)]
+    return [_correctness_reward_countdown(r,a,t) for r, a, t in zip(responses, numbers, targets)]
 
 
-#### MEDICAL_O1 REWARD FUNCTION
-import torch
-import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+def medical_correctness_reward_func(prompts, completions, answer, **kwargs):
+    """Reward function that checks if the completion is the same as the ground truth."""
+    responses = [completion[0]["content"] for completion in completions]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    rewards = []
+    for content, solution in zip(extracted_responses, answer):
+        answer_parsed = extract_xml_answer(content).lower()
+        gold_parsed = solution.lower()
+        #print("answer_parsed : ", answer_parsed)
+        #print("gold_parsed : ", gold_parsed)
+        try:
+            rewards.append(2.0 * float(gold_parsed in answer_parsed))   
+            #print("reward : ", rewards[-1])
+        except Exception:
+            rewards.append(0.0)
+     
+    return rewards
 
-# --- Global, lazily-initialised verifier state ---
-_VERIFIER_TOKENIZER = "FreedomIntelligence/medical_o1_verifier_3B_Qwen2.5"
-_VERIFIER_MODEL = "FreedomIntelligence/medical_o1_verifier_3B_Qwen2.5"
-_VERIFIER_TEMPLATE = """<Model Response>
-{}
-</Model Response>
 
-<Reference Answer>
-{}
-</Reference Answer>
-
-Your task is to evaluate the model response by comparing it to the reference answer. If the model response is correct and aligns with the reference answer, output "True" . If it is incorrect or fails to select the correct option (if options are provided), output "False" . {}"""
-
-def _load_verifier(model_path: str = "FreedomIntelligence/medical_o1_verifier_3B_Qwen2.5"):
+##### Only for Evals
+def eval_correctness_gsm8k(completions, answer):
     """
-    Lazily load the verifier model/tokenizer once.
-    """
-    global _VERIFIER_TOKENIZER, _VERIFIER_MODEL
-    if _VERIFIER_TOKENIZER is not None and _VERIFIER_MODEL is not None:
-        return _VERIFIER_TOKENIZER, _VERIFIER_MODEL
-
-    _VERIFIER_TOKENIZER = AutoTokenizer.from_pretrained(model_path)
-    # Try flash_attention_2 if available, fall back gracefully
-    try:
-        _VERIFIER_MODEL = AutoModelForSequenceClassification.from_pretrained(
-            model_path,
-            torch_dtype="auto",
-            device_map="auto",
-            attn_implementation="flash_attention_2",
-            num_labels=2,
-        )
-    except Exception:
-        _VERIFIER_MODEL = AutoModelForSequenceClassification.from_pretrained(
-            model_path,
-            torch_dtype="auto",
-            device_map="auto",
-            num_labels=2,
-        )
-    _VERIFIER_MODEL.eval()
-    return _VERIFIER_TOKENIZER, _VERIFIER_MODEL
-
-
-def _extract_model_response_text(raw_response: str, prefer_answer_tag: bool = True) -> str:
-    """
-    Optionally pull just the <answer>...</answer> span from the model response.
-    Falls back to the full response if no tag is present.
-    """
-    if prefer_answer_tag:
-        m = re.search(r"<answer>(.*?)</answer>", raw_response, flags=re.DOTALL | re.IGNORECASE)
-        if m:
-            return m.group(1).strip()
-    return raw_response.strip()
-
-
-@torch.inference_mode()
-def _verifier_batch_scores(
-    responses: list[str],
-    reference_texts: list[str],
-    model_path: str = "FreedomIntelligence/medical_o1_verifier_3B_Qwen2.5",
-    threshold: float = 0.5,
-    return_probs: bool = False,
-) -> list[float]:
-    """
-    Use the verifier in a single batched pass.
-    Returns a list of 1.0 (True) / 0.0 (False) unless return_probs=True (then probabilities for 'True' class).
-    """
-    tokenizer, model = _load_verifier(model_path)
-    eos = tokenizer.eos_token or ""
-
-    # Build batched inputs
-    prompts = [
-        _VERIFIER_TEMPLATE.format(
-            _extract_model_response_text(r),
-            ref,
-            eos
-        )
-        for r, ref in zip(responses, reference_texts)
-    ]
-
-    # Tokenize with padding/truncation
-    enc = tokenizer(
-        prompts,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=min(getattr(tokenizer, "model_max_length", 1024), 1024),  # be safe
-    ).to(model.device)
-
-    logits = model(**enc, return_dict=True).logits
-    probs = F.softmax(logits, dim=-1)  # class 0 = "False", class 1 = "True" (by convention here)
-    p_true = probs[:, 1].detach().float().cpu()
-
-    if return_probs:
-        return p_true.tolist()
-
-    return (p_true > threshold).float().tolist()
-
-
-def answer_reward_function_llm_verifier(
-    prompts,
-    completions,
-    answer,
-    *,
-    model_path: str = "FreedomIntelligence/medical_o1_verifier_3B",
-    threshold: float = 0.5,
-    reward_true: float = 2.0,
-    reward_false: float = 0.0,
-    scale_by_probability: bool = False,
-    prefer_answer_tag: bool = True,
-    **kwargs,
-) -> list[float]:
-    """
-    GRPO-compatible reward function using an LLM verifier.
+    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
 
     Args:
-        prompts: (unused, present for API parity)
-        completions: list of completion message lists; we take completions[i][0]["content"] as the model's text.
-        answer: list of dicts or strings; see _coerce_reference_text for accepted formats.
-        model_path: HF path to the verifier classifier.
-        threshold: decision threshold on P(True).
-        reward_true / reward_false: rewards to emit for pass/fail.
-        scale_by_probability: if True, reward = reward_true * P(True) + reward_false * (1 - P(True)).
-        prefer_answer_tag: if True, try to extract <answer>...</answer> from the model response before sending to verifier.
+        completions: List of model completions, each containing response content.
+        answer: The ground truth answer to compare against.
 
     Returns:
-        List[float] of rewards.
+        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
     """
-    # Extract raw response strings
-    responses_raw = [c[0]["content"] if isinstance(c, list) and len(c) and "content" in c[0] else str(c) for c in completions]
-    # Pre-trim to avoid massive prompts
-    responses = [_extract_model_response_text(r, prefer_answer_tag=prefer_answer_tag) for r in responses_raw]
+    responses = [completion["content"] for completion in completions]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    return [r == answer for r in extracted_responses]
 
-    # Coerce reference answers
-    reference_texts = [_coerce_reference_text(a) for a in answer]
 
-    # Get verifier judgements/probs
-    if scale_by_probability:
-        p_true = _verifier_batch_scores(
-            responses, reference_texts, model_path=model_path, threshold=threshold, return_probs=True
-        )
-        return [reward_true * p + reward_false * (1.0 - p) for p in p_true]
-    else:
-        binary = _verifier_batch_scores(
-            responses, reference_texts, model_path=model_path, threshold=threshold, return_probs=False
-        )
-        return [reward_true if b == 1.0 else reward_false for b in binary]
+def eval_correctness_countdown(completions, answer):
+    """
+    Calculate reward based on whether the extracted answer matches the ground truth for the EVALUATION of pass@n
+
+    Args:
+        completions: List of model completions, each containing response content.
+        answer: The ground truth answer to compare against.
+
+    Returns:
+        list: A list of rewards (1.0 for correct answers, 0.0 for incorrect ones).
+    """
+    responses = [completion["content"] for completion in completions]
+    numbers = [answer["nums"]] * len(responses)
+    targets = [answer["target"]] * len(responses)
+    rewards = [_correctness_reward_countdown(r,a,t) for r, a, t in zip(responses, numbers, targets)]
+    return [r == 2.0 for r in rewards]
+
+
+def eval_correctness_medical(completions, answer):
+    """Reward function that checks if the completion is the same as the ground truth."""
+    responses = [completion["content"] for completion in completions]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    rewards = []
+    for content, solution in zip(extracted_responses, answer):
+        answer_parsed = extract_xml_answer(content)
+        gold_parsed = solution
+        # print("answer_parsed : ", answer_parsed)
+        # print("gold_parsed : ", gold_parsed)
+        try:
+            rewards.append(2.0 * float(gold_parsed in answer_parsed))   
+            # print("reward : ", rewards[-1])
+        except Exception:
+            rewards.append(0.0)
+     
+    return rewards

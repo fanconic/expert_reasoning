@@ -68,7 +68,7 @@ We recommend using 1 A100 for each experiment. With the `runner_script` you can 
 
 ```bash
 #AIRL
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=3B_1B_config_eval
 
 # SFT
@@ -84,7 +84,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b 
 
 ```bash
 #AIRL
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=3B_1B_config_eval
 
 # SFT
@@ -100,7 +100,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b 
 
 ```bash
 #AIRL
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=3B_1B_config_eval
 
 # SFT
@@ -116,7 +116,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b -
 
 ```bash
 #AIRL
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=7B_1B_config_eval
 
 # SFT
@@ -128,6 +128,22 @@ bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/qwen7b --co
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=grpo_7B_config_eval
 ```
 
+#### Medical Qwen2.5-7B-> Qwen2.5-1.5B
+
+```bash
+# SFT
+bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/medreason/qwen7b --config-name=sft_7B_config_train
+bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/medreason/qwen7b --config-name=sft_7B_config_eval
+
+# GRPO
+bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/medreason/qwen7b --config-name=grpo_7B_config_train
+bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/medreason/qwen7b --config-name=grpo_7B_config_eval
+
+#AIRL
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/medreason/qwen7b --config-name=8B_1B_config_irl_train
+bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/medreason/qwen7b --config-name=7B_1B_config_eval
+
+
 ### No Perturbation
 
 #### Llama-3.2-3B -> Llama-3.2-1B
@@ -135,7 +151,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b -
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=llama3b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=llama3b_airl_noper"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=3B_1B_config_eval $OVERRIDE
 ```
@@ -145,7 +161,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b 
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=llama8b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=llama8b_airl_noper"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=3B_1B_config_eval $OVERRIDE
 ```
@@ -155,7 +171,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b 
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=qwen3b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=qwen3b_airl_noper"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=3B_1B_config_eval $OVERRIDE
 
@@ -166,7 +182,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b -
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=qwen7b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=qwen7b_airl_noper"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=7B_1B_config_eval $OVERRIDE
 ```
@@ -179,7 +195,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b -
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=llama3b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=llama3b_airl_wgan"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=3B_1B_config_eval $OVERRIDE
 ```
@@ -189,7 +205,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b 
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=llama8b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=llama8b_airl_wgan"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=3B_1B_config_eval $OVERRIDE
 ```
@@ -199,7 +215,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b 
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=qwen3b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=qwen3b_airl_wgan"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=3B_1B_config_eval $OVERRIDE
 
@@ -210,7 +226,7 @@ bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b -
 ```bash
 #AIRL
 export OVERRIDE="wandb.run_name=qwen7b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train $OVERRIDE
+bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train $OVERRIDE
 export OVERRIDE="wandb.run_name=qwen7b_airl_wgan"
 bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=7B_1B_config_eval $OVERRIDE
 ```

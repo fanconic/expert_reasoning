@@ -265,13 +265,13 @@ EXPERIMENTS: List[Dict] = [
     #     "ckpt": DEFAULT_CKPT,
     #     "label": "llama3_airl_fixed",
     # },
-    # {
-    #     "airl": "qwen7b_airl_fixed",
-    #     "sft": "qwen7b_sft",
-    #     "grpo": "qwen7b_grpo",
-    #     "ckpt": DEFAULT_CKPT,
-    #     "label": "qwen7b_airl_fixed",
-    # },
+    {
+        "airl": "qwen7b_airl_fixed",
+        "sft": "qwen7b_sft",
+        "grpo": "qwen7b_grpo",
+        "ckpt": DEFAULT_CKPT,
+        "label": "qwen7b_airl_fixed",
+    },
     # {
     #     "airl": "llama8_airl_fixed",
     #     "sft": "llama8_sft",
