@@ -6,12 +6,16 @@ from src.training.callbacks import GenerationEvalCallback
 
 
 from src.rewards.reward_functions import (
-    xmlcount_reward_func,
-    soft_format_reward_func,
     strict_format_reward_func,
+    soft_format_reward_func,
     int_reward_func,
-    correctness_reward_func,
-    answer_reward_function
+    xmlcount_reward_func,
+    gsm8k_correctness_reward_func,
+    countdown_correctness_function,
+    medical_correctness_reward_func,
+    eval_correctness_gsm8k,
+    eval_correctness_countdown,
+    eval_correctness_medical
 )
 
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
@@ -22,20 +26,21 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
             ("soft_format_reward_func", soft_format_reward_func),
             ("strict_format_reward_func", strict_format_reward_func),
             ("int_reward_func", int_reward_func),
-            ("correctness_reward_func", correctness_reward_func),
+            ("correctness_reward_func", gsm8k_correctness_reward_func),
         ]
     elif cfg.dataset.name == "countdown" or cfg.dataset.name == "countdown_kd":
         reward_fns = [
             ("xmlcount_reward_func", xmlcount_reward_func),
             ("soft_format_reward_func", soft_format_reward_func),
             ("strict_format_reward_func", strict_format_reward_func),
-            ("answer_reward_function", answer_reward_function),
+            ("correctness_reward_func", countdown_correctness_function),
         ]
     elif cfg.dataset.name == "medical" or cfg.dataset.name == "medical_kd":
         reward_fns = [
             ("xmlcount_reward_func", xmlcount_reward_func),
             ("soft_format_reward_func", soft_format_reward_func),
             ("strict_format_reward_func", strict_format_reward_func),
+            ("correctness_reward_func", medical_correctness_reward_func),
         ]
     else:
         raise ValueError(f"Unknown dataset name: {cfg.dataset.name}")
