@@ -35,7 +35,7 @@ training:
   max_steps: 500
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/medical_reasoning/outputs/${wandb.run_name}"
-  report_to: "wamdb"
+  report_to: "wandb"
   
 
 sampling:

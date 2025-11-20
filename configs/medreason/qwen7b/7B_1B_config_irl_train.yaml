@@ -48,8 +48,8 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert: 2 # set to 0 if unused
-  neg_perturb_fns: [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
+  num_neg_perturbations_per_expert: 0 # set to 0 if unused
+  neg_perturb_fns: []
   neg_sample_weight: 1.0
   disc_pairwise_margin: 0.0
   

@@ -48,8 +48,8 @@ model:
   response_only: false
 
   # reasoning perturbation
-  num_neg_perturbations_per_expert: 2 # set to 0 if unused
-  neg_perturb_fns: [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
+  num_neg_perturbations_per_expert: 0 # set to 0 if unused
+  neg_perturb_fns: []
   neg_sample_weight: 1.0
   disc_pairwise_margin: 0.0
   
@@ -73,7 +73,7 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/medical_reasoning/outputs/${wandb.run_name}"
   report_to: "wandb"
-  per_device_train_batch_size: 32
+  per_device_train_batch_size: 16
   max_micro_batch: 5  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
   max_steps: 500

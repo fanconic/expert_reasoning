@@ -236,7 +236,7 @@ def medical_correctness_reward_func(prompts, completions, answer, **kwargs):
         #print("answer_parsed : ", answer_parsed)
         #print("gold_parsed : ", gold_parsed)
         try:
-            rewards.append(2.0 * float(gold_parsed in answer_parsed))   
+            rewards.append(2.0 * float(gold_parsed == answer_parsed))   
             #print("reward : ", rewards[-1])
         except Exception:
             rewards.append(0.0)
@@ -290,7 +290,7 @@ def eval_correctness_medical(completions, answer):
         # print("answer_parsed : ", answer_parsed)
         # print("gold_parsed : ", gold_parsed)
         try:
-            rewards.append(2.0 * float(gold_parsed in answer_parsed))   
+            rewards.append(2.0 * float(gold_parsed == answer_parsed))   
             # print("reward : ", rewards[-1])
         except Exception:
             rewards.append(0.0)
