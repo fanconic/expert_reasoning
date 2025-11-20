@@ -230,17 +230,10 @@ def medical_correctness_reward_func(prompts, completions, answer, **kwargs):
     responses = [completion[0]["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
     rewards = []
-    for content, solution in zip(extracted_responses, answer):
-        answer_parsed = extract_xml_answer(content).lower()
-        gold_parsed = solution.lower()
-        #print("answer_parsed : ", answer_parsed)
-        #print("gold_parsed : ", gold_parsed)
-        try:
-            rewards.append(2.0 * float(gold_parsed == answer_parsed))   
-            #print("reward : ", rewards[-1])
-        except Exception:
-            rewards.append(0.0)
-     
+    for predicted, solution in zip(extracted_responses, answer):
+            # Use robust MC comparison (returns True/False)
+            match = mc_answer_equal(predicted, solution)
+            rewards.append(2.0 if match else 0.0)
     return rewards
 
 
@@ -283,16 +276,97 @@ def eval_correctness_medical(completions, answer):
     """Reward function that checks if the completion is the same as the ground truth."""
     responses = [completion["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
-    rewards = []
-    for content, solution in zip(extracted_responses, answer):
-        answer_parsed = extract_xml_answer(content)
-        gold_parsed = solution
-        # print("answer_parsed : ", answer_parsed)
-        # print("gold_parsed : ", gold_parsed)
-        try:
-            rewards.append(2.0 * float(gold_parsed == answer_parsed))   
-            # print("reward : ", rewards[-1])
-        except Exception:
-            rewards.append(0.0)
-     
-    return rewards
+    return [mc_answer_equal(r, answer) for r in extracted_responses]
+
+
+def _extract_label_and_text(s: str):
+    """
+    Return (label, text) where:
+      - label is a single capital letter among A-D if present as a leading label
+        (e.g. "A.", "A)" or "A "), otherwise None.
+      - text is the remainder of the string after a leading label if present,
+        otherwise the full string (stripped).
+    """
+    if s is None:
+        return None, ""
+    s = s.strip()
+    # only accept labels A-D (case-insensitive)
+    m = re.match(r'^\s*([A-Da-d])\s*[\.\)\-\:]\s*(.*)$', s)
+    if m:
+        label = m.group(1).upper()
+        text = m.group(2).strip()
+        return label, text if text != "" else None
+    # match single-letter answer like "A" (only A-D)
+    if re.fullmatch(r'[A-Da-d]', s):
+        return s.upper(), None
+    return None, s
+
+
+def _detect_multiple_labels(s: str) -> bool:
+    """
+    Return True if the string appears to contain more than one labeled choice (A-D),
+    which we treat as a hack and therefore reject.
+
+    Specifically flags:
+      - occurrences of more than one distinct label among A,B,C,D
+      - presence of all four labels (explicit listing of all options)
+    """
+    if not s:
+        return False
+    # find labeled occurrences like "A." or "\nB)"
+    labels = re.findall(r'(?i)(?:^|\n)\s*([A-D])\s*(?:[.\)\-\:])', s)
+    inline_labels = re.findall(r'(?i)([A-D])\s*[.\)\-:]', s)
+    unique_labels = set(l.upper() for l in (labels + inline_labels))
+    # If more than one distinct label is present, or all four labels are present -> hack
+    return len(unique_labels) > 1 or unique_labels == {"A", "B", "C", "D"}
+
+
+def mc_answer_equal(predicted: str, gold: str, options: list | None = None) -> bool:
+    """
+    Compare a predicted multiple-choice answer to the gold answer assuming four options (A-D).
+
+    Notes:
+      - If predicted contains multiple labeled options (A-D), it is treated as a hack and returns False.
+      - When mapping labels to options, A->0, B->1, C->2, D->3.
+      - Comparison is case-insensitive and whitespace-normalized.
+    """
+    if not isinstance(predicted, str) or not isinstance(gold, str):
+        return False
+
+    # reject obvious hacks where multiple A-D labels are present
+    if _detect_multiple_labels(predicted):
+        return False
+
+    pred_label, pred_text = _extract_label_and_text(predicted)
+    gold_label, gold_text = _extract_label_and_text(gold)
+
+    def norm(t):
+        return "" if t is None else re.sub(r'\s+', ' ', t).strip().lower()
+
+    # If both provided labels -> compare labels directly
+    if pred_label and gold_label:
+        return pred_label == gold_label
+
+    # If predicted has label -> map to option text if available, otherwise compare label to gold
+    if pred_label:
+        idx = ord(pred_label) - ord("A")
+        if options and len(options) >= 4 and 0 <= idx < 4:
+            return norm(options[idx]) == norm(gold_text or gold)
+        # fallback: if predicted carries its own text
+        if pred_text:
+            return norm(pred_text) == norm(gold_text or gold)
+        # fallback: compare label to gold raw (if gold is a letter)
+        return pred_label == gold.strip().upper()
+
+    # If predicted has text (no label)
+    pred_norm = norm(pred_text or predicted)
+    # If gold is a label and options provided, map it
+    if gold_label:
+        idx = ord(gold_label) - ord("A")
+        if options and len(options) >= 4 and 0 <= idx < 4:
+            return pred_norm == norm(options[idx])
+        # otherwise cannot reliably map text to a lone label
+        return False
+
+    # gold is text -> compare directly
+    return pred_norm == norm(gold_text or gold)

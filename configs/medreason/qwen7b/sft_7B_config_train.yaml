@@ -54,4 +54,4 @@ eval:
 wandb:
   project: "medical_expert_reasoning"
   entity: eth_dlad_team32
-  run_name: qwen7B_medical_sft
+  run_name: qwen7b_medical_sft

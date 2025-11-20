@@ -42,10 +42,10 @@ sampling:
 eval:
   ks : [1, 3, 5, 10]
   use_vllm: true
-  per_device_eval_batch_size: 16
+  per_device_eval_batch_size: 32
   report_to: "none"
 
 wandb:
   project: "medical_expert_reasoning"
   entity: eth_dlad_team32
-  run_name: qwen7_medical_grpo
+  run_name: qwen7b_medical_grpo
