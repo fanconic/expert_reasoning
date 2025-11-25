@@ -36,8 +36,11 @@ from plot_helpers import (
 # -------------------------------
 # Config
 # -------------------------------
-BASE = Path("/mnt/pdata/caf83/tabular_reasoning/outputs")
-BASE_REBUTTALS = Path("/mnt/pdata/caf83/tabular_reasoning/rebuttals")
+# BASE = Path("/mnt/pdata/caf83/tabular_reasoning/outputs")
+# BASE_REBUTTALS = Path("/mnt/pdata/caf83/tabular_reasoning/outputs")
+
+BASE = Path("/mnt/pdata/caf83/medical_reasoning/outputs")
+BASE_REBUTTALS = Path("/mnt/pdata/caf83/medical_reasoning/outputs")
 DEFAULT_CKPT = "500"
 
 # Define your experiments here
@@ -221,13 +224,13 @@ EXPERIMENTS: List[Dict] = [
     
     
     # 25% mistake
-    {
-        "airl": "qwen3b_airl_0.25",
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen3b_airl_0.25",
-    },
+    # {
+    #     "airl": "qwen3b_airl_0.25",
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_airl_0.25",
+    # },
     # {
     #     "airl": "llama3_airl_0.25",
     #     "sft": "llama3_sft",
@@ -265,13 +268,13 @@ EXPERIMENTS: List[Dict] = [
     #     "ckpt": DEFAULT_CKPT,
     #     "label": "llama3_airl_fixed",
     # },
-    {
-        "airl": "qwen7b_airl_fixed",
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen7b_airl_fixed",
-    },
+    # {
+    #     "airl": "qwen7b_airl_fixed",
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_airl_fixed",
+    # },
     # {
     #     "airl": "llama8_airl_fixed",
     #     "sft": "llama8_sft",
@@ -280,6 +283,65 @@ EXPERIMENTS: List[Dict] = [
     #     "label": "llama8_airl_fixed",
     # },
     
+    # # Medical
+    # {
+    #     "airl": "qwen3b_medical_airl_sft",
+    #     "sft": "qwen3b_medical_sft",
+    #     "grpo": "qwen3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_medical_airl_sft",
+    # },
+    # {
+    #     "airl": "llama3b_medical_airl_sft",
+    #     "sft": "llama3b_medical_sft",
+    #     "grpo": "llama3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b_medical_airl_sft",
+    # },
+    # {
+    #     "airl": "qwen7b_medical_airl_sft",
+    #     "sft": "qwen7b_medical_sft",
+    #     "grpo": "qwen7b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_medical_airl_sft",
+    # },
+    # {
+    #     "airl": "llama8b_medical_airl_sft",
+    #     "sft": "llama8b_medical_sft",
+    #     "grpo": "llama8b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8b_medical_airl_sft",
+    # },
+    
+    # Medical Perturbed SFT
+    # {
+    #     "airl": "qwen3b_medical_airl_perturb_sft",
+    #     "sft": "qwen3b_medical_sft",
+    #     "grpo": "qwen3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_medical_airl_perturb_sft",
+    # },
+    # {
+    #     "airl": "llama3b_medical_airl_perturb_sft",
+    #     "sft": "llama3b_medical_sft",
+    #     "grpo": "llama3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b_medical_airl_perturb_sft",
+    # },
+    # {
+    #     "airl": "qwen7b_medical_airl_perturb_sft",
+    #     "sft": "qwen7b_medical_sft",
+    #     "grpo": "qwen7b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_medical_airl_perturb_sft",
+    # },
+    {
+        "airl": "llama8b_medical_airl_perturb_sft",
+        "sft": "llama8b_medical_sft",
+        "grpo": "llama8b_medical_grpo",
+        "ckpt": DEFAULT_CKPT,
+        "label": "llama8b_medical_airl_perturb_sft",
+    },
     
 ]
 

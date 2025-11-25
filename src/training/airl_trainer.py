@@ -76,6 +76,9 @@ from src.training.reward_model_utils import (
     interleave_with_expert_lists
 )
 
+# Add this import for threadpool parallelism
+from concurrent.futures import ThreadPoolExecutor
+
 # Local imports
 from src.config.irl_config import IRLConfig
 
@@ -268,7 +271,7 @@ class AIRLTrainer(GRPOTrainer):
     # -----------------------------------------------------------------------
     # Data utilities
     # -----------------------------------------------------------------------
-    def _make_perturbed_completions(self, expert_completions: List[List[Dict]]) -> List[List[Dict]]:
+    def _make_perturbed_completions(self, prompts, expert_completions: List[List[Dict]]) -> List[List[Dict]]:
         """
         expert_completions: list of chat-format completions
             [[{"role": "assistant", "content": "..."}], ...]
@@ -277,17 +280,42 @@ class AIRLTrainer(GRPOTrainer):
         if not self.neg_perturb_fns or self.num_neg_perturbations_per_expert == 0:
             return [], []
         fns = self.neg_perturb_fns if isinstance(self.neg_perturb_fns, list) else [self.neg_perturb_fns]
-        perturbed, src_idx = [], []
-        for i, comp in enumerate(expert_completions):
+
+        # Build ordered jobs so we preserve the original append order.
+        repeats = max(1, int(self.num_neg_perturbations_per_expert))
+        jobs = []
+        for i, (prompt, comp) in enumerate(zip(prompts, expert_completions)):
             base = comp[0]["content"]
-            for _ in range(max(1, int(self.num_neg_perturbations_per_expert))):
-                fn = random.choice(fns)
-                try:
-                    corrupted = fn(base)
-                except Exception:
-                    corrupted = base
+            # keep previous behaviour assuming question at index 1
+            question = prompt[1]["content"]
+            for _ in range(repeats):
+                jobs.append((i, question, base))
+
+        if not jobs:
+            return [], []
+
+        # worker applies a randomly chosen perturbation function, falling back to base on error
+        def _apply_job(job):
+            prompt_idx, question, base = job
+            fn = random.choice(fns)
+            try:
+                corrupted = fn(question, base)
+            except Exception:
+                corrupted = base
+            return prompt_idx, corrupted
+
+        # Choose a modest number of threads; tuned for many I/O/text-bound perturbators.
+        max_workers = min(32, max(1, (os.cpu_count() or 1) * 5))
+
+        perturbed: List[List[Dict]] = []
+        src_idx: List[int] = []
+
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            # executor.map preserves submission order, matching original behavior
+            for prompt_idx, corrupted in ex.map(_apply_job, jobs):
                 perturbed.append([{"role": "assistant", "content": corrupted}])
-                src_idx.append(i)
+                src_idx.append(prompt_idx)
+
         return perturbed, src_idx
 
     
@@ -1028,7 +1056,7 @@ class AIRLTrainer(GRPOTrainer):
         ]
 
         # Build perturbed negatives from experts
-        _per_out = self._make_perturbed_completions(expert_completions)
+        _per_out = self._make_perturbed_completions(prompts, expert_completions)
         perturbed_completions = _per_out[0] if isinstance(_per_out, tuple) else _per_out
 
         # Tokenise and prepare all inputs
