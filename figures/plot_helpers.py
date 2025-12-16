@@ -1065,7 +1065,7 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
         "selector_discounted",
         "xmlcount_reward_func",
         "strict_format_reward_func",
-        "int_reward_func",
+        #"int_reward_func",
         "correctness_reward_func",
     ]
     rename_map = {
@@ -1073,7 +1073,7 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
         "selector_discounted": "Rewards\n(Discounted)",
         "xmlcount_reward_func": "XML Count",
         "strict_format_reward_func": "Strict Format",
-        "int_reward_func": "Integer",
+        #"int_reward_func": "Integer",
         "correctness_reward_func": "Correctness",
     }
     corr_matrix = df[reward_cols].corr()
@@ -1180,8 +1180,9 @@ def run_all_plots(
                 df_airl["reward_model_standard"] = df_airl[reward_score_name].apply(lambda x: x - overall_mean)
                 
                 
-                positive_indicies = df_airl[(abs(df_airl[mean_name]- correct_mean) < 1) & (df_airl["correctness_reward_func"] == 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
-                negative_indicies = df_airl[(abs(df_airl[mean_name]- wrong_mean) < 1) & (df_airl["correctness_reward_func"] != 2) & (df_airl["int_reward_func"] == 0.5)][mean_name].index[:5]
+                positive_indicies = df_airl[(abs(df_airl[mean_name]- correct_mean) < 0.5) & (df_airl["correctness_reward_func"] == 2) & (df_airl["strict_format_reward_func"] == 0.5)][mean_name].index[:5]
+                negative_indicies = df_airl[(abs(df_airl[mean_name]- wrong_mean) < 0.5) & (df_airl["correctness_reward_func"] != 2) & (df_airl["strict_format_reward_func"] == 0.5)][mean_name].index[:5]
+                exit()
                 all_indices = np.concatenate([positive_indicies, negative_indicies ])
                 df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
                 df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))

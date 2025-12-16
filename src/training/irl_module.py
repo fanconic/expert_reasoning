@@ -67,6 +67,7 @@ def run_irl_training(
         classifier_loss=cfg.model.classifier_loss,
         normalise_rewards=getattr(cfg.model, "normalise_rewards", True),
         expert_error_rate=getattr(cfg.dataset, "expert_error_rate", 0.0),
+        beta=getattr(cfg.training, "beta", 0.0)
     )
     
     def formatting_prompt_func(examples):

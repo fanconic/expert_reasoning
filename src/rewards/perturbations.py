@@ -13,7 +13,7 @@ for _lg in ("azure.core.pipeline.policies.http_logging_policy", "azure", "httpx"
 def flip_operator_in_one_step(promtp:str, text: str) -> str:
     """
     Corrupt exactly ONE arithmetic line inside <think> by flipping an operator
-    (x -> +, + -> -, - -> +) while leaving numbers and RHS unchanged.
+    (x -> +, + -> -, - -> +) while leaving numbers and dRHS unchanged.
     This makes the step false but preserves formatting and tags.
     """
     m = re.search(r"<think>\s*(.*?)\s*</think>", text, flags=re.DOTALL)
@@ -408,10 +408,22 @@ def corrupt_with_chatgpt_wrong_reasoning(question: str, text: str) -> str:
         new_reasoning = new_reasoning_match.group(1).strip() if new_reasoning_match else reasoning
         new_answer = new_answer_match.group(1).strip() if new_answer_match else (answer if answer else None)
 
-        # Replace reasoning and answer in original text
-        new_text = text[:reasoning_match.start(1)] + new_reasoning + text[reasoning_match.end(1):]
+        # Replace reasoning and answer in original text (use original spans to avoid index corruption)
+        replacements = []
+        replacements.append((reasoning_match.start(1), reasoning_match.end(1), new_reasoning))
         if answer_match and new_answer is not None:
-            new_text = new_text[:answer_match.start(1)] + new_answer + new_text[answer_match.end(1):]
+            replacements.append((answer_match.start(1), answer_match.end(1), new_answer))
+
+        # Perform replacements in a single pass from the original text
+        replacements.sort(key=lambda x: x[0])  # sort by start index (should already be ordered)
+        last = 0
+        parts = []
+        for s, e, rep in replacements:
+            parts.append(text[last:s])
+            parts.append(rep)
+            last = e
+        parts.append(text[last:])
+        new_text = "".join(parts)
         return new_text
 
     except Exception as e:

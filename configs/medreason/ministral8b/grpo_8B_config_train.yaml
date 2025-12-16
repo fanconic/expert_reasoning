@@ -14,7 +14,7 @@ model:
   gpu_memory_utilization: 0.6
   
 dataset:
-  name: "medical_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "medical"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "train"
   train_ratio: 1.0
   val_ratio: 0.1
@@ -54,4 +54,4 @@ eval:
 wandb:
   project: "medical_expert_reasoning"
   entity: eth_dlad_team32
-  run_name: ministral8b_medical_sft
+  run_name: ministral8b_medical_grpo

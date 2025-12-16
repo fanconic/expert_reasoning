@@ -9,8 +9,8 @@ model:
   checkpoint: 1500
   name: "/mnt/pdata/caf83/medical_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
   policy_name: "${model.name}"
-  reward_name: "Qwen/Qwen2.5-1.5B-Instruct"
-  lora_rank: 256
+  reward_name: "unsloth/Ministral-3-3B-Instruct-2512-GGUF"
+  lora_rank: 128
   gpu_memory_utilization: 0.6
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "medical_expert_reasoning"
   entity: eth_dlad_team32
-  run_name: qwen7b_medical_airl
+  run_name: ministral8b_medical_airl

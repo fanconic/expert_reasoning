@@ -16,17 +16,17 @@ model:
   reward_gpu_memory_utilization: 0.15
   
   # Common settings
-  lora_rank: 128  # Base LoRA rank
+  lora_rank: 256  # Base LoRA rank
   use_gradient_checkpointing: true
   
   # Policy model specific
-  policy_lora_rank: 128  # Optional: override base rank for policy
+  policy_lora_rank: 256  # Optional: override base rank for policy
   policy_learning_rate: 1e-5
   add_expert_to_policy_optim: true
   add_expert_to_policy_balanced: false
   
   # Reward model specific  
-  reward_lora_rank: 32  # Optional: override base rank for reward
+  reward_lora_rank: 256  # Optional: override base rank for reward
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
@@ -76,7 +76,7 @@ training:
   per_device_train_batch_size: 32
   max_micro_batch: 5  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
-  max_steps: 500
+  max_steps: 1500
   epochs: 2
   
 sampling:
@@ -87,7 +87,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 100
+  eval_steps: 500
   per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false

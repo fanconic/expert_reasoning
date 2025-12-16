@@ -50,7 +50,7 @@ def main(cfg: DictConfig):
     test_dataset = None  # get_dataset(cfg.dataset.name, split="test")       # Likewise for the test set.
 
     # Load model and tokenizer from unsloth
-    pretrained = False
+    pretrained = getattr(cfg.model, "pretrained", False)
     frozen_discriminator = getattr(cfg.training, "freeze_discriminator", False)
     discriminator_path = getattr(cfg.model, "frozen_discriminator_path", None)
     policy_model, reward_model, policy_tokenizer, reward_tokenizer = (

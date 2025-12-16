@@ -285,11 +285,12 @@ class AIRLTrainer(GRPOTrainer):
         repeats = max(1, int(self.num_neg_perturbations_per_expert))
         jobs = []
         for i, (prompt, comp) in enumerate(zip(prompts, expert_completions)):
-            base = comp[0]["content"]
-            # keep previous behaviour assuming question at index 1
-            question = prompt[1]["content"]
-            for _ in range(repeats):
-                jobs.append((i, question, base))
+            if i % (self.num_generations//2) == 0:
+                base = comp[0]["content"]
+                # keep previous behaviour assuming question at index 1
+                question = prompt[1]["content"]
+                for _ in range(repeats):
+                    jobs.append((i, question, base))
 
         if not jobs:
             return [], []
@@ -305,7 +306,7 @@ class AIRLTrainer(GRPOTrainer):
             return prompt_idx, corrupted
 
         # Choose a modest number of threads; tuned for many I/O/text-bound perturbators.
-        max_workers = min(32, max(1, (os.cpu_count() or 1) * 5))
+        max_workers = 8
 
         perturbed: List[List[Dict]] = []
         src_idx: List[int] = []
@@ -315,7 +316,9 @@ class AIRLTrainer(GRPOTrainer):
             for prompt_idx, corrupted in ex.map(_apply_job, jobs):
                 perturbed.append([{"role": "assistant", "content": corrupted}])
                 src_idx.append(prompt_idx)
-
+        
+        perturbed = [x for x in perturbed for _ in range(self.num_generations//2)]
+        src_idx = list(range(len(perturbed)))
         return perturbed, src_idx
 
     
@@ -842,14 +845,22 @@ class AIRLTrainer(GRPOTrainer):
                 rewards = (
                     rewards_per_func * self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
                 ).nansum(dim=1)  # [N, T]
+                
+                reward_mask = torch.flip(completion_mask, dims=[-1])
+                rewards = rewards[:, -completion_mask.size(1):]
+                rewards = rewards.masked_fill(reward_mask == 0, torch.nan)
+                
+                # rewards: [N, T] token-level process rewards (NaN-padded)
+                N, T = rewards.shape
+                K = advantage_num_generation
+                B = N // K
 
-                # 1) take reward at the *last non-padding token* per completion (scalar per completion)
-                last_tok_rewards = rewards[:, -1]  # [N]
+                # r_φ(y^i): mean process reward per trajectory i (ignore NaNs)
+                traj_mean = torch.nanmean(rewards, dim=1)      # [N]
+                traj_mean = traj_mean.view(B, K)
 
-                # 2) compute group-wise mean/std *across generations* using those last-token rewards only
-                last_tok_rewards_group = last_tok_rewards.view(-1, advantage_num_generation)  # [B, G]
-                mean_last = torch.mean(last_tok_rewards_group, dim=1)                  # [B]
-                std_last = torch.std(last_tok_rewards_group, dim=1)                    # [B] (population std)
+                mean_last = torch.mean(traj_mean, dim=1)                  # [B]
+                std_last = torch.std(traj_mean, dim=1)                    # [B] (population std)
 
                 # 3) expand mean/std back to the flattened [N, 1] and broadcast over tokens
                 mean_grouped_rewards = mean_last.repeat_interleave(advantage_num_generation, dim=0).unsqueeze(-1)  # [N, 1]
@@ -873,21 +884,30 @@ class AIRLTrainer(GRPOTrainer):
                 rewards = (
                     rewards_per_func * self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
                 ).nansum(dim=1)  # [N, T]
+                
+                reward_mask = torch.flip(completion_mask, dims=[-1])
+                rewards = rewards[:, -completion_mask.size(1):]
+                rewards = rewards.masked_fill(reward_mask == 0, torch.nan)
+                
+                # rewards: [N, T] token-level process rewards (NaN-padded)
+                N, T = rewards.shape
+                K = advantage_num_generation
+                B = N // K
 
-                # 1) r_i := reward at the last non-padding token
-                r_last = rewards[:, -1]               # [N]
-                r = r_last.view(-1, advantage_num_generation)              # [B, G]
+                # r_φ(y^i): mean process reward per trajectory i (ignore NaNs)
+                traj_mean = torch.nanmean(rewards, dim=1)      # [N]
+                traj_mean = traj_mean.view(B, K)               # [B, K]
 
-                # 2) Leave-one-out baseline on last-token rewards
-                sum_r = torch.nansum(r, dim=1, keepdim=True)           # [B, 1]
-                count = (~torch.isnan(r)).sum(dim=1, keepdim=True).clamp(min=1)
+                # Leave-one-out baseline: (1/(K-1)) * Σ_{j≠i} r_φ(y^j)
+                sum_mean = torch.nansum(traj_mean, dim=1, keepdim=True)        # [B, 1]
+                count = (~torch.isnan(traj_mean)).sum(dim=1, keepdim=True).clamp(min=1)
                 others = (count - 1).clamp(min=1)
 
-                mean_loo = (sum_r - r) / others                        # [B, G]
-                mean_loo = mean_loo.reshape(-1)                        # [N]
+                baseline_loo = (sum_mean - traj_mean) / others                 # [B, K]
+                baseline_loo = baseline_loo.reshape(N)                         # [N]
 
-                # 3) Scalar advantage per completion, broadcast across tokens
-                a_tilde = rewards - mean_loo.unsqueeze(1) # [N]
+                # r_φ(y_s^i) - 1/(K-1) * Σ_{j≠i} r_φ(y^j)
+                a_tilde = rewards - baseline_loo.unsqueeze(1)    
                 
         else:
             raise NotImplemented(f"Not Implemented this advantage calculation `{self.advantage_calculation}`")

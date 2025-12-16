@@ -41,7 +41,7 @@ from plot_helpers import (
 
 BASE = Path("/mnt/pdata/caf83/medical_reasoning/outputs")
 BASE_REBUTTALS = Path("/mnt/pdata/caf83/medical_reasoning/outputs")
-DEFAULT_CKPT = "500"
+DEFAULT_CKPT = "1500"
 
 # Define your experiments here
 EXPERIMENTS: List[Dict] = [
@@ -315,32 +315,91 @@ EXPERIMENTS: List[Dict] = [
     
     # Medical Perturbed SFT
     # {
-    #     "airl": "qwen3b_medical_airl_perturb_sft",
+    #     "airl": "qwen3b_medical_airl_perturb2_sft",
     #     "sft": "qwen3b_medical_sft",
     #     "grpo": "qwen3b_medical_grpo",
     #     "ckpt": DEFAULT_CKPT,
-    #     "label": "qwen3b_medical_airl_perturb_sft",
+    #     "label": "qwen3b_medical_airl_perturb2_sft",
     # },
     # {
-    #     "airl": "llama3b_medical_airl_perturb_sft",
+    #     "airl": "llama3b_medical_airl_perturb2_sft",
     #     "sft": "llama3b_medical_sft",
     #     "grpo": "llama3b_medical_grpo",
     #     "ckpt": DEFAULT_CKPT,
-    #     "label": "llama3b_medical_airl_perturb_sft",
+    #     "label": "llama3b_medical_airl_perturb2_sft",
     # },
     # {
-    #     "airl": "qwen7b_medical_airl_perturb_sft",
+    #     "airl": "qwen7b_medical_airl_perturb2_sft",
     #     "sft": "qwen7b_medical_sft",
     #     "grpo": "qwen7b_medical_grpo",
     #     "ckpt": DEFAULT_CKPT,
-    #     "label": "qwen7b_medical_airl_perturb_sft",
+    #     "label": "qwen7b_medical_airl_perturb2_sft",
+    # },
+    # {
+    #     "airl": "llama8b_medical_airl_perturb2_sft",
+    #     "sft": "llama8b_medical_sft",
+    #     "grpo": "llama8b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8b_medical_airl_perturb2_sft",
+    # },
+    
+    # Medical Perturbed SFT
+    # {
+    #     "airl": "qwen3b_medical_airl_perturb2",
+    #     "sft": "qwen3b_medical_sft",
+    #     "grpo": "qwen3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_medical_airl_perturb2",
+    # },
+    # {
+    #     "airl": "llama3b_medical_airl_perturb2",
+    #     "sft": "llama3b_medical_sft",
+    #     "grpo": "llama3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b_medical_airl_perturb2",
+    # },
+    # {
+    #     "airl": "qwen7b_medical_airl_perturb2",
+    #     "sft": "qwen7b_medical_sft",
+    #     "grpo": "qwen7b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_medical_airl_perturb2",
+    # },
+    # {
+    #     "airl": "llama8b_medical_airl_perturb2",
+    #     "sft": "llama8b_medical_sft",
+    #     "grpo": "llama8b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama8b_medical_airl_perturb2",
+    # },
+    # Medical Perturbed SFT
+    # {
+    #     "airl": "qwen3b_medical_airl_sft_prime",
+    #     "sft": "qwen3b_medical_sft",
+    #     "grpo": "qwen3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen3b_medical_airl_sft_prime",
+    # },
+    # {
+    #     "airl": "llama3b_medical_airl_sft_prime",
+    #     "sft": "llama3b_medical_sft",
+    #     "grpo": "llama3b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "llama3b_medical_airl_sft_prime",
+    # },
+    # {
+    #     "airl": "qwen7b_medical_airl_sft_prime",
+    #     "sft": "qwen7b_medical_sft",
+    #     "grpo": "qwen7b_medical_grpo",
+    #     "ckpt": DEFAULT_CKPT,
+    #     "label": "qwen7b_medical_airl_sft_prime",
     # },
     {
-        "airl": "llama8b_medical_airl_perturb_sft",
+        "airl": "llama8b_medical_airl_sft_prime",
         "sft": "llama8b_medical_sft",
         "grpo": "llama8b_medical_grpo",
         "ckpt": DEFAULT_CKPT,
-        "label": "llama8b_medical_airl_perturb_sft",
+        "label": "llama8b_medical_airl_sft_prime",
     },
     
 ]
@@ -395,8 +454,8 @@ def main():
         airl_run, sft_run, grpo_run = exp["airl"], exp["sft"], exp["grpo"]
 
         airl_p = BASE_REBUTTALS / airl_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
-        sft_p = BASE / sft_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
-        grpo_p = BASE / grpo_run / f"checkpoint-{ckpt}" / "eval_results.jsonl"
+        sft_p = BASE / sft_run / f"checkpoint-500" / "eval_results.jsonl"
+        grpo_p = BASE / grpo_run / f"checkpoint-500" / "eval_results.jsonl"
 
         label = label_for(exp)
         out_dir = f"./figures/{label}"
