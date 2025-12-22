@@ -15,9 +15,13 @@
             "name": "expert_reasoning",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}",
+            "program": "${workspaceFolder}/irl_train.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
+            "args": [
+                "--config-path=configs/medreason/llama8b",
+                "--config-name=debug_train"
+            ],
             "purpose": [
                 "debug-test"
             ],
@@ -26,8 +30,6 @@
                 "CUDA_VISIBLE_DEVICES": "3",
                 "USE_NUMACTL": "3",
                 "NUMA_NODE": "3",
-                "UNSLOTH_COMPILE_DISABLE": "1",
-                "CUDA_LAUNCH_BLOCKING": "1"
             }
         }
     ]

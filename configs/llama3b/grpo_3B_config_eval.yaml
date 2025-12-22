@@ -10,7 +10,7 @@ model:
   name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
   policy_name: null
   reward_name: null
-  lora_rank: 128
+  lora_rank: 256
   gpu_memory_utilization: 0.6
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
@@ -21,11 +21,11 @@ model:
   fast_inference: true
   
   # Policy model specific
-  policy_lora_rank: 128  # Optional: override base rank for policy
+  policy_lora_rank: 256  # Optional: override base rank for policy
   policy_learning_rate: 1e-5
 
   # Reward model specific  
-  reward_lora_rank: 32  # Optional: override base rank for reward
+  reward_lora_rank: 256  # Optional: override base rank for reward
   dense_rewards: false  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
 
@@ -46,6 +46,6 @@ eval:
   report_to: "none"
 
 wandb:
-  project: "expert_reasoning"
+  project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
   run_name: llama3_grpo

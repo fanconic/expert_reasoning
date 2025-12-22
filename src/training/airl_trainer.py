@@ -68,12 +68,19 @@ from trl.trainer.utils import (
 import copy
 import random
 from src.training.reward_model_utils import (
-    tokenize_examples, 
-    dedup_token_batch, 
-    prepare_reward_batch, 
+    tokenize_examples,
+    dedup_token_batch,
+    prepare_reward_batch,
     get_last_token_indices,
     left_to_right_pad,
-    interleave_with_expert_lists
+    interleave_with_expert_lists,
+)
+from src.training.reward_model_trainer import RewardModelTrainer
+from src.training.advantage_calculator import AdvantageCalculator
+from src.training.generation_utils import (
+    CompletionGenerator,
+    LogProbabilityComputer,
+    CompletionMasker,
 )
 
 # Add this import for threadpool parallelism
@@ -179,7 +186,7 @@ class AIRLTrainer(GRPOTrainer):
         self.classifier_loss = args.classifier_loss
         self.normalise_rewards = args.normalise_rewards
         self.expert_error_rate = args.expert_error_rate
-        
+
         if self.standard_grpo:
             self.use_outcome_rewards = True
             if not isinstance(reward_funcs, list):
@@ -198,12 +205,12 @@ class AIRLTrainer(GRPOTrainer):
         if self.standard_grpo:
             self.use_outcome_rewards = True
             if reward_processing_classes is None:
-                reward_processing_classes =  [None] * (len(reward_funcs))
+                reward_processing_classes = [None] * (len(reward_funcs))
             elif not isinstance(reward_processing_classes, list):
                 reward_processing_classes = [reward_processing_classes]
             else:
                 reward_processing_classes = reward_processing_classes
-                
+
                 if len(reward_processing_classes) != len(reward_funcs):
                     raise ValueError(
                         "The number of reward processing classes must match the number of reward functions."
@@ -219,8 +226,10 @@ class AIRLTrainer(GRPOTrainer):
                     reward_processing_classes,
                 ]
             else:
-                reward_processing_classes = [self.reward_tokenizer] + reward_processing_classes
-                
+                reward_processing_classes = [
+                    self.reward_tokenizer
+                ] + reward_processing_classes
+
                 if len(reward_processing_classes) != len(reward_funcs):
                     raise ValueError(
                         "The number of reward processing classes must match the number of reward functions."
@@ -244,10 +253,12 @@ class AIRLTrainer(GRPOTrainer):
         opt_cls, opt_kwargs = Trainer.get_optimizer_cls_and_kwargs(tmp_args)
         # Use reward-specific hyperparams
         opt_kwargs["lr"] = args.reward_learning_rate
-        opt_kwargs["weight_decay"] = getattr(args, "reward_weight_decay", opt_kwargs.get("weight_decay", 0.0))
+        opt_kwargs["weight_decay"] = getattr(
+            args, "reward_weight_decay", opt_kwargs.get("weight_decay", 0.0)
+        )
         self.reward_optimizer = opt_cls(self.reward_model.parameters(), **opt_kwargs)
         self.reward_optimizer.zero_grad()
-        
+
         if not self.use_outcome_rewards:
             self.reward_weights = torch.zeros_like(
                 self.reward_weights, dtype=torch.float32
@@ -260,18 +271,87 @@ class AIRLTrainer(GRPOTrainer):
         self.reward_lb = getattr(args, "reward_lb", -1.0)
         self.reward_ub = getattr(args, "reward_ub", 1.0)
         self.response_only = getattr(args, "response_only", False)
-        
+
         # Negatives from perturbed expert reasonings
-        self.neg_perturb_fns = getattr(args, "neg_perturb_fns", None)  # List[Callable[[str], str]] or None
-        self.num_neg_perturbations_per_expert = getattr(args, "num_neg_perturbations_per_expert", 1)
-        self.neg_sample_weight = getattr(args, "neg_sample_weight", 1.0)  # weight in BCE
-        self.disc_pairwise_margin = getattr(args, "disc_pairwise_margin", 0.0)  # >0 to enable pairwise hinge
-        self.neg_label_smoothing = getattr(args, "neg_label_smoothing", None)  # defaults to self.eps if None
+        self.neg_perturb_fns = getattr(
+            args, "neg_perturb_fns", None
+        )  # List[Callable[[str], str]] or None
+        self.num_neg_perturbations_per_expert = getattr(
+            args, "num_neg_perturbations_per_expert", 1
+        )
+        self.neg_sample_weight = getattr(
+            args, "neg_sample_weight", 1.0
+        )  # weight in BCE
+        self.disc_pairwise_margin = getattr(
+            args, "disc_pairwise_margin", 0.0
+        )  # >0 to enable pairwise hinge
+        self.neg_label_smoothing = getattr(
+            args, "neg_label_smoothing", None
+        )  # defaults to self.eps if None
+
+        # Initialize helper modules
+        self.reward_trainer = RewardModelTrainer(
+            reward_model=self.reward_model,
+            reward_optimizer=self.reward_optimizer,
+            reward_tokenizer=self.reward_tokenizer,
+            accelerator=self.accelerator,
+            args=args,
+            eps=self.eps,
+            disc_temperature=self.disc_temperature,
+            clip_reward_model=self.clip_reward_model,
+            reward_lb=self.reward_lb,
+            reward_ub=self.reward_ub,
+            response_only=self.response_only,
+            dense_rewards=self.dense_rewards,
+            classifier_loss=self.classifier_loss,
+            neg_label_smoothing=self.neg_label_smoothing,
+            neg_sample_weight=self.neg_sample_weight,
+            max_completion_length=self.max_completion_length,
+            max_micro_batch=self.max_micro_batch,
+            num_neg_perturbations_per_expert=self.num_neg_perturbations_per_expert,
+        )
+
+        self.advantage_calculator = AdvantageCalculator(
+            device=self.accelerator.device,
+            advantage_calculation=self.advantage_calculation,
+            normalise_rewards=self.normalise_rewards,
+            scale_rewards=self.scale_rewards,
+            dense_rewards=self.dense_rewards,
+            dense_gamma=self.dense_gamma,
+        )
+
+        self.completion_generator = CompletionGenerator(
+            model=self.model_wrapped,
+            processing_class=self.policy_tokenizer,
+            accelerator=self.accelerator,
+            args=args,
+            max_prompt_length=self.max_prompt_length,
+            max_completion_length=self.max_completion_length,
+            use_vllm=self.use_vllm,
+            vllm_mode=getattr(self, "vllm_mode", "server"),
+        )
+
+        self.logprob_computer = LogProbabilityComputer(
+            model=self.model_wrapped,
+            accelerator=self.accelerator,
+            max_completion_length=self.max_completion_length,
+        )
+
+        self.completion_masker = CompletionMasker(
+            processing_class=self.policy_tokenizer,
+            device=self.accelerator.device,
+        )
+
+        # Reward model warm-up configuration
+        self.reward_warmup_steps = getattr(args, "reward_warmup_steps", 0)
+        self.reward_warmup_completed = False
 
     # -----------------------------------------------------------------------
     # Data utilities
     # -----------------------------------------------------------------------
-    def _make_perturbed_completions(self, prompts, expert_completions: List[List[Dict]]) -> List[List[Dict]]:
+    def _make_perturbed_completions(
+        self, prompts, expert_completions: List[List[Dict]]
+    ) -> List[List[Dict]]:
         """
         expert_completions: list of chat-format completions
             [[{"role": "assistant", "content": "..."}], ...]
@@ -279,13 +359,17 @@ class AIRLTrainer(GRPOTrainer):
         """
         if not self.neg_perturb_fns or self.num_neg_perturbations_per_expert == 0:
             return [], []
-        fns = self.neg_perturb_fns if isinstance(self.neg_perturb_fns, list) else [self.neg_perturb_fns]
+        fns = (
+            self.neg_perturb_fns
+            if isinstance(self.neg_perturb_fns, list)
+            else [self.neg_perturb_fns]
+        )
 
         # Build ordered jobs so we preserve the original append order.
         repeats = max(1, int(self.num_neg_perturbations_per_expert))
         jobs = []
         for i, (prompt, comp) in enumerate(zip(prompts, expert_completions)):
-            if i % (self.num_generations//2) == 0:
+            if i % (self.num_generations // 2) == 0:
                 base = comp[0]["content"]
                 # keep previous behaviour assuming question at index 1
                 question = prompt[1]["content"]
@@ -316,27 +400,35 @@ class AIRLTrainer(GRPOTrainer):
             for prompt_idx, corrupted in ex.map(_apply_job, jobs):
                 perturbed.append([{"role": "assistant", "content": corrupted}])
                 src_idx.append(prompt_idx)
-        
-        perturbed = [x for x in perturbed for _ in range(self.num_generations//2)]
+
+        perturbed = [x for x in perturbed for _ in range(self.num_generations // 2)]
         src_idx = list(range(len(perturbed)))
         return perturbed, src_idx
 
-    
     def _compute_loss(self, model, inputs):
         # Compute the per-token log probabilities for the model
         prompt_ids, prompt_mask = inputs["prompt_ids"], inputs["prompt_mask"]
-        completion_ids, completion_mask = inputs["completion_ids"], inputs["completion_mask"]
+        completion_ids, completion_mask = (
+            inputs["completion_ids"],
+            inputs["completion_mask"],
+        )
         input_ids = torch.cat([prompt_ids, completion_ids], dim=1)
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)
-        logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
+        logits_to_keep = completion_ids.size(
+            1
+        )  # we only need to compute the logits for the completion tokens
 
-        per_token_logps = self._get_per_token_logps(model, input_ids, attention_mask, logits_to_keep)
+        per_token_logps = self._get_per_token_logps(
+            model, input_ids, attention_mask, logits_to_keep
+        )
 
         # Compute the KL divergence between the model and the reference model
         if self.beta != 0.0:
             ref_per_token_logps = inputs["ref_per_token_logps"]
             per_token_kl = (
-                torch.exp(ref_per_token_logps - per_token_logps) - (ref_per_token_logps - per_token_logps) - 1
+                torch.exp(ref_per_token_logps - per_token_logps)
+                - (ref_per_token_logps - per_token_logps)
+                - 1
             )
 
         # Compute the loss
@@ -345,7 +437,9 @@ class AIRLTrainer(GRPOTrainer):
         # old_per_token_logps == per_token_logps, so we can skip it's computation
         # (see _generate_and_score_completions) and use per_token_logps.detach() instead.
         old_per_token_logps = (
-            per_token_logps.detach() if inputs["old_per_token_logps"] is None else inputs["old_per_token_logps"]
+            per_token_logps.detach()
+            if inputs["old_per_token_logps"] is None
+            else inputs["old_per_token_logps"]
         )
         coef_1 = torch.exp(per_token_logps - old_per_token_logps)
         coef_2 = torch.clamp(coef_1, 1 - self.epsilon_low, 1 + self.epsilon_high)
@@ -356,7 +450,7 @@ class AIRLTrainer(GRPOTrainer):
 
         if not self.dense_rewards:
             advantages = advantages.unsqueeze(1)
-            
+
         per_token_loss1 = coef_1 * advantages
         per_token_loss2 = coef_2 * advantages
         per_token_loss = -torch.min(per_token_loss1, per_token_loss2)
@@ -364,11 +458,18 @@ class AIRLTrainer(GRPOTrainer):
             per_token_loss = per_token_loss + self.beta * per_token_kl
 
         if self.loss_type == "grpo":
-            loss = ((per_token_loss * completion_mask).sum(-1) / completion_mask.sum(-1).clamp(min=1.0)).mean()
+            loss = (
+                (per_token_loss * completion_mask).sum(-1)
+                / completion_mask.sum(-1).clamp(min=1.0)
+            ).mean()
         elif self.loss_type == "bnpo":
-            loss = (per_token_loss * completion_mask).sum() / completion_mask.sum().clamp(min=1.0)
+            loss = (
+                per_token_loss * completion_mask
+            ).sum() / completion_mask.sum().clamp(min=1.0)
         elif self.loss_type == "dr_grpo":
-            loss = (per_token_loss * completion_mask).sum() / (per_token_loss.size(0) * self.max_completion_length)
+            loss = (per_token_loss * completion_mask).sum() / (
+                per_token_loss.size(0) * self.max_completion_length
+            )
         else:
             raise ValueError(f"Unknown loss type: {self.loss_type}")
 
@@ -376,7 +477,9 @@ class AIRLTrainer(GRPOTrainer):
         mode = "train" if self.model.training else "eval"
         if self.beta != 0.0:
             mean_kl = (per_token_kl * completion_mask).sum() / completion_mask.sum()
-            self._metrics[mode]["kl"].append(self.accelerator.gather(mean_kl).nanmean().item())
+            self._metrics[mode]["kl"].append(
+                self.accelerator.gather(mean_kl).nanmean().item()
+            )
 
         # Compute the clipped probability ratios
         is_low_clipped = (coef_1 < 1 - self.epsilon_low) & (advantages < 0)
@@ -388,13 +491,23 @@ class AIRLTrainer(GRPOTrainer):
         clip_ratio = (is_region_clipped * completion_mask).sum() / completion_mask.sum()
 
         gathered_low_clip = self.accelerator.gather(low_clip)
-        self._metrics[mode]["clip_ratio/low_mean"].append(gathered_low_clip.nanmean().item())
-        self._metrics[mode]["clip_ratio/low_min"].append(nanmin(gathered_low_clip).item())
+        self._metrics[mode]["clip_ratio/low_mean"].append(
+            gathered_low_clip.nanmean().item()
+        )
+        self._metrics[mode]["clip_ratio/low_min"].append(
+            nanmin(gathered_low_clip).item()
+        )
         gathered_high_clip = self.accelerator.gather(high_clip)
-        self._metrics[mode]["clip_ratio/high_mean"].append(gathered_high_clip.nanmean().item())
-        self._metrics[mode]["clip_ratio/high_max"].append(nanmax(gathered_high_clip).item())
+        self._metrics[mode]["clip_ratio/high_mean"].append(
+            gathered_high_clip.nanmean().item()
+        )
+        self._metrics[mode]["clip_ratio/high_max"].append(
+            nanmax(gathered_high_clip).item()
+        )
         gathered_clip_ratio = self.accelerator.gather(clip_ratio)
-        self._metrics[mode]["clip_ratio/region_mean"].append(gathered_clip_ratio.nanmean().item())
+        self._metrics[mode]["clip_ratio/region_mean"].append(
+            gathered_clip_ratio.nanmean().item()
+        )
         return loss
 
     # -----------------------------------------------------------------------
@@ -427,8 +540,13 @@ class AIRLTrainer(GRPOTrainer):
                     reward_func, nn.Module
                 ):  # Module (no PretrainedModel) for compat with compiled models
                     if is_conversational(inputs[0]):
-                        messages = [{"messages": p + c} for p, c in zip(prompts, completions)]
-                        texts = [apply_chat_template(x, reward_processing_class)["text"] for x in messages]
+                        messages = [
+                            {"messages": p + c} for p, c in zip(prompts, completions)
+                        ]
+                        texts = [
+                            apply_chat_template(x, reward_processing_class)["text"]
+                            for x in messages
+                        ]
                     else:
                         texts = [p + c for p, c in zip(prompts, completions)]
 
@@ -439,30 +557,47 @@ class AIRLTrainer(GRPOTrainer):
                         padding_side="right" if not self.dense_rewards else "left",
                         add_special_tokens=False,
                         truncation=True,
-                        max_length=self.max_prompt_length + self.max_completion_length
+                        max_length=self.max_prompt_length + self.max_completion_length,
                     )
 
-                    reward_inputs = {k: v.to(self.accelerator.device) for k, v in reward_inputs.items()}
-                    
+                    reward_inputs = {
+                        k: v.to(self.accelerator.device)
+                        for k, v in reward_inputs.items()
+                    }
+
                     # expand the rewards_per_func if dense rewards
                     if self.dense_rewards and rewards_per_func.dim() == 2:
                         seq_len = reward_inputs["input_ids"].shape[1]
-                        rewards_per_func = rewards_per_func.unsqueeze(-1).expand(-1, -1, seq_len).contiguous()
-                        
+                        rewards_per_func = (
+                            rewards_per_func.unsqueeze(-1)
+                            .expand(-1, -1, seq_len)
+                            .contiguous()
+                        )
+
                     with torch.inference_mode():
                         # At this point we use the logits of the reward model as reward scores (IMPORTANT)
                         if not self.dense_rewards:
-                            reward_from_model =  reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
+                            reward_from_model = (
+                                reward_func(**reward_inputs).logits[:, 0]
+                                / self.disc_temperature
+                            )
                             if self.clip_reward_model:
-                                reward_from_model = torch.clamp(reward_from_model, self.reward_lb, self.reward_ub)
+                                reward_from_model = torch.clamp(
+                                    reward_from_model, self.reward_lb, self.reward_ub
+                                )
                             rewards_per_func[:, i] = reward_from_model
                         else:
-                            reward_from_model =  reward_func(
-                                input_ids = reward_inputs["input_ids"],
-                                attention_mask = reward_inputs["attention_mask"],
-                                ).logits[:, :, 0] / self.disc_temperature
+                            reward_from_model = (
+                                reward_func(
+                                    input_ids=reward_inputs["input_ids"],
+                                    attention_mask=reward_inputs["attention_mask"],
+                                ).logits[:, :, 0]
+                                / self.disc_temperature
+                            )
                             if self.clip_reward_model:
-                                reward_from_model = torch.clamp(reward_from_model, self.reward_lb, self.reward_ub)
+                                reward_from_model = torch.clamp(
+                                    reward_from_model, self.reward_lb, self.reward_ub
+                                )
                             rewards_per_func[:, i, :] = reward_from_model
                 else:
                     output_reward_func = reward_func(
@@ -484,12 +619,20 @@ class AIRLTrainer(GRPOTrainer):
                     else:
                         if self.dense_rewards and rewards_per_func.dim() == 2:
                             seq_len = max([len(l) for l in completion_ids_list])
-                            rewards_per_func = rewards_per_func.unsqueeze(-1).expand(-1, -1, seq_len).contiguous()
-                        
+                            rewards_per_func = (
+                                rewards_per_func.unsqueeze(-1)
+                                .expand(-1, -1, seq_len)
+                                .contiguous()
+                            )
+
                         seq_len = rewards_per_func.size(2)
-                        rewards_per_func[:, i, :] = torch.tensor(
-                            output_reward_func, dtype=torch.float32, device=device
-                            ).unsqueeze(1).repeat(1,seq_len)
+                        rewards_per_func[:, i, :] = (
+                            torch.tensor(
+                                output_reward_func, dtype=torch.float32, device=device
+                            )
+                            .unsqueeze(1)
+                            .repeat(1, seq_len)
+                        )
 
         # If all reward functions return None for a given row, issue a detailed warning
         if torch.isnan(rewards_per_func).all(dim=1).any():
@@ -518,12 +661,24 @@ class AIRLTrainer(GRPOTrainer):
         mode = "train" if self.model.training else "eval"
 
         prompts = [x["prompt"] for x in inputs]
-        prompts_text = [maybe_apply_chat_template(example, self.processing_class)["prompt"] for example in inputs]
+        prompts_text = [
+            maybe_apply_chat_template(example, self.processing_class)["prompt"]
+            for example in inputs
+        ]
         prompt_inputs = self.processing_class(
-            text=prompts_text, return_tensors="pt", padding=True, padding_side="left", add_special_tokens=False
+            text=prompts_text,
+            return_tensors="pt",
+            padding=True,
+            padding_side="left",
+            add_special_tokens=False,
         )
-        prompt_inputs = {k: v.to(self.accelerator.device) for k, v in prompt_inputs.items()}
-        prompt_ids, prompt_mask = prompt_inputs["input_ids"], prompt_inputs["attention_mask"]
+        prompt_inputs = {
+            k: v.to(self.accelerator.device) for k, v in prompt_inputs.items()
+        }
+        prompt_ids, prompt_mask = (
+            prompt_inputs["input_ids"],
+            prompt_inputs["attention_mask"],
+        )
 
         if self.max_prompt_length is not None:
             # If max_prompt_length is set, we trim the prompt to keep only the last `max_prompt_length` tokens.
@@ -532,18 +687,19 @@ class AIRLTrainer(GRPOTrainer):
             prompt_ids = prompt_ids[:, -self.max_prompt_length :]
             prompt_mask = prompt_mask[:, -self.max_prompt_length :]
             prompts_text = self.processing_class.batch_decode(
-                prompt_ids, skip_special_tokens=False, clean_up_tokenization_spaces=False
+                prompt_ids,
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
             )
             pad_token = self.processing_class.pad_token
+
             def strip_leading_tokens(text):
                 while text.startswith(pad_token):
                     text = text.removeprefix(pad_token)
                 return text
 
             if pad_token is not None:
-                prompts_text = [
-                    strip_leading_tokens(text) for text in prompts_text
-                ]
+                prompts_text = [strip_leading_tokens(text) for text in prompts_text]
 
         # Generate completions using either vLLM or regular generation
         if self.use_vllm:
@@ -587,7 +743,9 @@ class AIRLTrainer(GRPOTrainer):
             # Generate completions using colocated vLLM instances: each device holds vLLM copy and work on their own batch of prompts
             elif self.vllm_mode == "colocate":
                 if self.guided_decoding_regex:
-                    guided_decoding = GuidedDecodingParams(backend="outlines", regex=self.guided_decoding_regex)
+                    guided_decoding = GuidedDecodingParams(
+                        backend="outlines", regex=self.guided_decoding_regex
+                    )
                 else:
                     guided_decoding = None
 
@@ -609,37 +767,60 @@ class AIRLTrainer(GRPOTrainer):
                     # Gather prompts from all ranks in the TP group and flatten.
                     # Each rank starts with its own prompts; after gathering, all ranks see the full group set.
                     orig_size = len(prompts_text)
-                    gathered_prompts = [None for _ in range(self.vllm_tensor_parallel_size)]
-                    torch.distributed.all_gather_object(gathered_prompts, prompts_text, group=self.tp_group)
-                    all_prompts_text = [p for sublist in gathered_prompts for p in sublist]
+                    gathered_prompts = [
+                        None for _ in range(self.vllm_tensor_parallel_size)
+                    ]
+                    torch.distributed.all_gather_object(
+                        gathered_prompts, prompts_text, group=self.tp_group
+                    )
+                    all_prompts_text = [
+                        p for sublist in gathered_prompts for p in sublist
+                    ]
                 else:
                     all_prompts_text = prompts_text
 
                 with profiling_context(self, "vLLM.generate"):
                     all_outputs = self.llm.generate(
-                        all_prompts_text, 
-                        sampling_params=sampling_params, 
+                        all_prompts_text,
+                        sampling_params=sampling_params,
                         use_tqdm=False,
-                        lora_request = self.model.load_lora('grpo_trainer_lora_model', load_tensors = True)
+                        lora_request=self.model.load_lora(
+                            "grpo_trainer_lora_model", load_tensors=True
+                        ),
                     )
 
-                completion_ids = [output.token_ids for outputs in all_outputs for output in outputs.outputs]
+                completion_ids = [
+                    output.token_ids
+                    for outputs in all_outputs
+                    for output in outputs.outputs
+                ]
 
                 if self.vllm_tensor_parallel_size > 1:
                     # Slice completions for this rank within its TP group.
                     # Each rank generates all outputs — we keep only our share.
-                    local_rank_in_group = torch.distributed.get_rank(group=self.tp_group)
-                    tp_slice = slice(local_rank_in_group * orig_size, (local_rank_in_group + 1) * orig_size)
+                    local_rank_in_group = torch.distributed.get_rank(
+                        group=self.tp_group
+                    )
+                    tp_slice = slice(
+                        local_rank_in_group * orig_size,
+                        (local_rank_in_group + 1) * orig_size,
+                    )
                     completion_ids = completion_ids[tp_slice]
 
             # Pad the completions, and concatenate them with the prompts
-            completion_ids = [torch.tensor(ids, device=device) for ids in completion_ids]
-            completion_ids = pad(completion_ids, padding_value=self.processing_class.pad_token_id)
+            completion_ids = [
+                torch.tensor(ids, device=device) for ids in completion_ids
+            ]
+            completion_ids = pad(
+                completion_ids, padding_value=self.processing_class.pad_token_id
+            )
             prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)
         else:
             # Regular generation path
             with unwrap_model_for_generation(
-                self.model_wrapped, self.accelerator, gather_deepspeed3_params=self.args.ds3_gather_for_generation
+                self.model_wrapped,
+                self.accelerator,
+                gather_deepspeed3_params=self.args.ds3_gather_for_generation,
             ) as unwrapped_model:
                 with (
                     FSDP.summon_full_params(self.model_wrapped, recurse=False)
@@ -647,7 +828,9 @@ class AIRLTrainer(GRPOTrainer):
                     else nullcontext()
                 ):
                     prompt_completion_ids = unwrapped_model.generate(
-                        prompt_ids, attention_mask=prompt_mask, generation_config=self.generation_config
+                        prompt_ids,
+                        attention_mask=prompt_mask,
+                        generation_config=self.generation_config,
                     )
 
             # Compute prompt length and extract completion ids
@@ -658,64 +841,118 @@ class AIRLTrainer(GRPOTrainer):
         # Mask everything after the first EOS token
         if self.add_expert_to_policy_optim:
             if self.add_expert_to_policy_balanced:
-                expert_completion = [x["target"]+self.processing_class.eos_token for x in inputs]
+                expert_completion = [
+                    x["target"] + self.processing_class.eos_token for x in inputs
+                ]
                 expert_prompt_ids = prompt_ids.clone()
                 expert_prompt_mask = prompt_mask.clone()
             else:
-                expert_completion = [inputs[i]["target"]+self.processing_class.eos_token for i in range(0,len(inputs),self.num_generations)]
-                expert_prompt_ids = prompt_ids[torch.arange(0,prompt_ids.size(0), self.num_generations)]
-                expert_prompt_mask = prompt_mask[torch.arange(0,prompt_mask.size(0), self.num_generations)]
-                
+                expert_completion = [
+                    inputs[i]["target"] + self.processing_class.eos_token
+                    for i in range(0, len(inputs), self.num_generations)
+                ]
+                expert_prompt_ids = prompt_ids[
+                    torch.arange(0, prompt_ids.size(0), self.num_generations)
+                ]
+                expert_prompt_mask = prompt_mask[
+                    torch.arange(0, prompt_mask.size(0), self.num_generations)
+                ]
+
             expert_completion_ids = self.processing_class(
-                text=expert_completion, return_tensors="pt", padding=True, 
-                padding_side="right", add_special_tokens=False,
+                text=expert_completion,
+                return_tensors="pt",
+                padding=True,
+                padding_side="right",
+                add_special_tokens=False,
             )["input_ids"].to(completion_ids.device)
-            
+
             # Pad the completions to hav the same size
             num_prompts = completion_ids.size(0) // self.num_generations
-            max_completion_size =  max(completion_ids.size(1), expert_completion_ids.size(1))
-            expert_completion_ids = F.pad(expert_completion_ids, (0, max_completion_size - expert_completion_ids.size(1)), value=self.processing_class.pad_token_id)
-            completion_ids = F.pad(completion_ids, (0, max_completion_size - completion_ids.size(1)), value=self.processing_class.pad_token_id)
-            prompt_completion_expert_ids = torch.cat([expert_prompt_ids, expert_completion_ids], dim=1)
+            max_completion_size = max(
+                completion_ids.size(1), expert_completion_ids.size(1)
+            )
+            expert_completion_ids = F.pad(
+                expert_completion_ids,
+                (0, max_completion_size - expert_completion_ids.size(1)),
+                value=self.processing_class.pad_token_id,
+            )
+            completion_ids = F.pad(
+                completion_ids,
+                (0, max_completion_size - completion_ids.size(1)),
+                value=self.processing_class.pad_token_id,
+            )
+            prompt_completion_expert_ids = torch.cat(
+                [expert_prompt_ids, expert_completion_ids], dim=1
+            )
             prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)
-            max_prompt_size =  max(prompt_mask.size(1), expert_prompt_mask.size(1))
-            max_prompt_completion_size =  max(prompt_completion_expert_ids.size(1), prompt_completion_ids.size(1))
-            
+            max_prompt_size = max(prompt_mask.size(1), expert_prompt_mask.size(1))
+            max_prompt_completion_size = max(
+                prompt_completion_expert_ids.size(1), prompt_completion_ids.size(1)
+            )
+
             # Completion IDS
-            stacked = torch.cat((
-                completion_ids.view(num_prompts, self.num_generations, max_completion_size),
-                expert_completion_ids.view(num_prompts, -1, max_completion_size)), dim=1)
+            stacked = torch.cat(
+                (
+                    completion_ids.view(
+                        num_prompts, self.num_generations, max_completion_size
+                    ),
+                    expert_completion_ids.view(num_prompts, -1, max_completion_size),
+                ),
+                dim=1,
+            )
             completion_ids = stacked.reshape(-1, max_completion_size)
-            
+
             # Prompt + Completion Ids
             stacked = torch.cat(
-                (prompt_completion_ids.view(num_prompts, self.num_generations, max_prompt_completion_size), 
-                 prompt_completion_expert_ids.view(num_prompts, -1, max_prompt_completion_size)), dim=1)
+                (
+                    prompt_completion_ids.view(
+                        num_prompts, self.num_generations, max_prompt_completion_size
+                    ),
+                    prompt_completion_expert_ids.view(
+                        num_prompts, -1, max_prompt_completion_size
+                    ),
+                ),
+                dim=1,
+            )
             prompt_completion_ids = stacked.reshape(-1, max_prompt_completion_size)
-            
+
             # Prompt Masks
             stacked = torch.cat(
-                (prompt_mask.view(num_prompts, self.num_generations, max_prompt_size), 
-                 expert_prompt_mask.view(num_prompts, -1, max_prompt_size)), dim=1)
+                (
+                    prompt_mask.view(
+                        num_prompts, self.num_generations, max_prompt_size
+                    ),
+                    expert_prompt_mask.view(num_prompts, -1, max_prompt_size),
+                ),
+                dim=1,
+            )
             prompt_mask = stacked.reshape(-1, max_prompt_size)
-            
+
             # Prompt IDs
             stacked = torch.cat(
-                (prompt_ids.view(num_prompts, self.num_generations, max_prompt_size), 
-                 expert_prompt_ids.view(num_prompts, -1, max_prompt_size)), dim=1)
+                (
+                    prompt_ids.view(num_prompts, self.num_generations, max_prompt_size),
+                    expert_prompt_ids.view(num_prompts, -1, max_prompt_size),
+                ),
+                dim=1,
+            )
             prompt_ids = stacked.reshape(-1, max_prompt_size)
 
-            
         is_eos = completion_ids == self.processing_class.eos_token_id
-        eos_idx = torch.full((is_eos.size(0),), is_eos.size(1), dtype=torch.long, device=device)
+        eos_idx = torch.full(
+            (is_eos.size(0),), is_eos.size(1), dtype=torch.long, device=device
+        )
         eos_idx[is_eos.any(dim=1)] = is_eos.int().argmax(dim=1)[is_eos.any(dim=1)]
-        sequence_indices = torch.arange(is_eos.size(1), device=device).expand(is_eos.size(0), -1)
+        sequence_indices = torch.arange(is_eos.size(1), device=device).expand(
+            is_eos.size(0), -1
+        )
         completion_mask = (sequence_indices <= eos_idx.unsqueeze(1)).int()
 
         # Convert tensor to a list of lists of token IDs. This will be passed to the reward function, avoiding the need
         # to re-tokenize completions if the reward is computed from tokens.
         completion_ids_list = [
-            [id.item() for id, m in zip(row, mask_row) if m] for row, mask_row in zip(completion_ids, completion_mask)
+            [id.item() for id, m in zip(row, mask_row) if m]
+            for row, mask_row in zip(completion_ids, completion_mask)
         ]
 
         # Sum along sequence dimension (dim=1) to get completion length per sequence, used for logging
@@ -724,21 +961,37 @@ class AIRLTrainer(GRPOTrainer):
         # If mask_truncated_completions is enabled, zero out truncated completions in completion_mask
         if self.mask_truncated_completions:
             truncated_completions = ~is_eos.any(dim=1)
-            completion_mask = completion_mask * (~truncated_completions).unsqueeze(1).int()
+            completion_mask = (
+                completion_mask * (~truncated_completions).unsqueeze(1).int()
+            )
 
         # Concatenate prompt_mask with completion_mask for logit computation
         attention_mask = torch.cat([prompt_mask, completion_mask], dim=1)  # (B, P+C)
 
-        logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
-        batch_size = self.args.per_device_train_batch_size if mode == "train" else self.args.per_device_eval_batch_size
+        logits_to_keep = completion_ids.size(
+            1
+        )  # we only need to compute the logits for the completion tokens
+        batch_size = (
+            self.args.per_device_train_batch_size
+            if mode == "train"
+            else self.args.per_device_eval_batch_size
+        )
 
         with torch.no_grad():
             # When using num_iterations == 1 and steps_per_generation <= gradient_accumulation_steps
             # old_per_token_logps == per_token_logps, so we can skip it's computation here, and use
             # per_token_logps.detach() instead.
-            if self.num_iterations > 1 or self.args.steps_per_generation > self.args.gradient_accumulation_steps:
+            if (
+                self.num_iterations > 1
+                or self.args.steps_per_generation
+                > self.args.gradient_accumulation_steps
+            ):
                 old_per_token_logps = self._get_per_token_logps(
-                    self.model, prompt_completion_ids, attention_mask, logits_to_keep, batch_size
+                    self.model,
+                    prompt_completion_ids,
+                    attention_mask,
+                    logits_to_keep,
+                    batch_size,
                 )
             else:
                 old_per_token_logps = None
@@ -747,12 +1000,18 @@ class AIRLTrainer(GRPOTrainer):
             if self.beta != 0.0:
                 if self.ref_model is not None:
                     ref_per_token_logps = self._get_per_token_logps(
-                        self.ref_model, prompt_completion_ids, attention_mask, logits_to_keep
+                        self.ref_model,
+                        prompt_completion_ids,
+                        attention_mask,
+                        logits_to_keep,
                     )
                 else:
                     with self.accelerator.unwrap_model(self.model).disable_adapter():
                         ref_per_token_logps = self._get_per_token_logps(
-                            self.model, prompt_completion_ids, attention_mask, logits_to_keep
+                            self.model,
+                            prompt_completion_ids,
+                            attention_mask,
+                            logits_to_keep,
                         )
             else:
                 ref_per_token_logps = None
@@ -767,54 +1026,125 @@ class AIRLTrainer(GRPOTrainer):
                 block = self.num_generations + 1
                 idx = torch.arange(completion_ids.size(0))
                 mask = (idx % block) < self.num_generations
-            completion_ids_to_decode = completion_ids[mask]  
-            completions_text = self.processing_class.batch_decode(completion_ids_to_decode, skip_special_tokens=True)
+            completion_ids_to_decode = completion_ids[mask]
+            completions_text = self.processing_class.batch_decode(
+                completion_ids_to_decode, skip_special_tokens=True
+            )
         else:
-            completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
+            completions_text = self.processing_class.batch_decode(
+                completion_ids, skip_special_tokens=True
+            )
         if is_conversational(inputs[0]):
             completions = []
             for prompt, completion in zip(prompts, completions_text):
-                bootstrap = prompt.pop()["content"] if prompt[-1]["role"] == "assistant" else ""
-                completions.append([{"role": "assistant", "content": bootstrap + completion}])
+                bootstrap = (
+                    prompt.pop()["content"] if prompt[-1]["role"] == "assistant" else ""
+                )
+                completions.append(
+                    [{"role": "assistant", "content": bootstrap + completion}]
+                )
         else:
             completions = completions_text
 
         # After the generations and before assigning the reward, we need to fit the classifier
         if mode == "train":
-            classifier_loss = self._update_reward_model(inputs, prompts, completions)
-            self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
+            # Check if we're in the reward model warm-up phase
+            if self.reward_warmup_steps > 0 and not self.reward_warmup_completed:
+                # Count reward model updates (typically one per policy update during normal training)
+                reward_update_count = getattr(self, "_reward_update_count", 0)
+                if reward_update_count < self.reward_warmup_steps:
+                    # Use warm-up training: expert + policy generations + perturbations
+                    classifier_loss = self._warmup_reward_model(
+                        inputs, prompts, completions
+                    )
+                    self._reward_update_count = reward_update_count + 1
+                    self._metrics[mode]["loss/classifier"].append(
+                        classifier_loss.item()
+                    )
+                    self._metrics[mode]["reward_warmup_step"].append(
+                        self._reward_update_count
+                    )
+
+                    if self.accelerator.is_main_process:
+                        print(
+                            f"[Reward Warm-up] Step {self._reward_update_count}/{self.reward_warmup_steps} - "
+                            f"Loss: {classifier_loss.item():.4f}"
+                        )
+                else:
+                    # Warm-up completed, switch to normal training
+                    self.reward_warmup_completed = True
+
+                    # Reset the learning rate scheduler so the policy model starts with proper warmup
+                    # without consuming steps where it wasn't being trained
+                    if hasattr(self, "lr_scheduler") and self.lr_scheduler is not None:
+                        self.lr_scheduler.last_epoch = -1
+
+                    if self.accelerator.is_main_process:
+                        print(
+                            f"\n✓ Reward model warm-up completed! Resetting policy LR scheduler...\n"
+                        )
+                    classifier_loss = self._update_reward_model(
+                        inputs, prompts, completions
+                    )
+                    self._metrics[mode]["loss/classifier"].append(
+                        classifier_loss.item()
+                    )
+            else:
+                # Normal training mode: use the standard update
+                classifier_loss = self._update_reward_model(
+                    inputs, prompts, completions
+                )
+                self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
         # rewards_per_func to extract each process's subset.
-        
+
         if self.add_expert_to_policy_optim:
             if self.add_expert_to_policy_balanced:
                 expert_inputs = inputs.copy()
                 expert_prompts = prompts.copy()
-                expert_completions = [[{"role": "assistant", "content": x["target"]}] for x in inputs]
+                expert_completions = [
+                    [{"role": "assistant", "content": x["target"]}] for x in inputs
+                ]
             else:
-                expert_inputs = [inputs[i]for i in range(0, len(inputs), self.num_generations)]
-                expert_prompts = [prompts[i] for i in range(0, len(inputs), self.num_generations)]
-                expert_completions = [[{"role": "assistant", "content": inputs[i]["target"]}] for i in range(0, len(inputs), self.num_generations)]
-                
+                expert_inputs = [
+                    inputs[i] for i in range(0, len(inputs), self.num_generations)
+                ]
+                expert_prompts = [
+                    prompts[i] for i in range(0, len(inputs), self.num_generations)
+                ]
+                expert_completions = [
+                    [{"role": "assistant", "content": inputs[i]["target"]}]
+                    for i in range(0, len(inputs), self.num_generations)
+                ]
+
             inputs = interleave_with_expert_lists(
-                inputs, expert_inputs, num_generations=self.num_generations, 
-                num_experts_per_prompt=len(expert_inputs) // (len(inputs) // self.num_generations)
-                )
+                inputs,
+                expert_inputs,
+                num_generations=self.num_generations,
+                num_experts_per_prompt=len(expert_inputs)
+                // (len(inputs) // self.num_generations),
+            )
             prompts = interleave_with_expert_lists(
-                prompts, expert_prompts, num_generations=self.num_generations, 
-                num_experts_per_prompt=len(expert_prompts) // (len(prompts) // self.num_generations)
-                )
+                prompts,
+                expert_prompts,
+                num_generations=self.num_generations,
+                num_experts_per_prompt=len(expert_prompts)
+                // (len(prompts) // self.num_generations),
+            )
             completions = interleave_with_expert_lists(
-                completions, expert_completions, num_generations=self.num_generations, 
-                num_experts_per_prompt=len(expert_completions) // (len(completions) // self.num_generations)
-                )
-             
+                completions,
+                expert_completions,
+                num_generations=self.num_generations,
+                num_experts_per_prompt=len(expert_completions)
+                // (len(completions) // self.num_generations),
+            )
+
         rewards_per_func = self._calculate_rewards(
             inputs, prompts, completions, completion_ids_list
         )
-        
+
         # Apply weights to each reward function's output and sum
         if self.add_expert_to_policy_optim:
             if self.add_expert_to_policy_balanced:
@@ -827,45 +1157,70 @@ class AIRLTrainer(GRPOTrainer):
             if not self.dense_rewards:
                 rewards = (
                     rewards_per_func * self.reward_weights.to(device).unsqueeze(0)
-                ).nansum(dim=1)  # [N]
-                mean_grouped_rewards = rewards.view(-1, advantage_num_generation).mean(dim=1)
-                std_grouped_rewards = rewards.view(-1, advantage_num_generation).std(dim=1, unbiased=False)
-                mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(advantage_num_generation, dim=0)
-                std_grouped_rewards = std_grouped_rewards.repeat_interleave(advantage_num_generation, dim=0)
-                is_std_zero = torch.isclose(std_grouped_rewards, torch.zeros_like(std_grouped_rewards))
+                ).nansum(
+                    dim=1
+                )  # [N]
+                mean_grouped_rewards = rewards.view(-1, advantage_num_generation).mean(
+                    dim=1
+                )
+                std_grouped_rewards = rewards.view(-1, advantage_num_generation).std(
+                    dim=1, unbiased=False
+                )
+                mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(
+                    advantage_num_generation, dim=0
+                )
+                std_grouped_rewards = std_grouped_rewards.repeat_interleave(
+                    advantage_num_generation, dim=0
+                )
+                is_std_zero = torch.isclose(
+                    std_grouped_rewards, torch.zeros_like(std_grouped_rewards)
+                )
                 if self.normalise_rewards:
                     advantages = rewards - mean_grouped_rewards
                 else:
                     advantages = rewards
                 if self.scale_rewards:
                     advantages = advantages / (std_grouped_rewards + 1e-4)
-                
+
             else:
                 # rewards: [N, T] token-level rewards after weighting & summing over reward funcs
                 rewards = (
-                    rewards_per_func * self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
-                ).nansum(dim=1)  # [N, T]
-                
+                    rewards_per_func
+                    * self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
+                ).nansum(
+                    dim=1
+                )  # [N, T]
+
                 reward_mask = torch.flip(completion_mask, dims=[-1])
-                rewards = rewards[:, -completion_mask.size(1):]
+                rewards = rewards[:, -completion_mask.size(1) :]
                 rewards = rewards.masked_fill(reward_mask == 0, torch.nan)
-                
+
                 # rewards: [N, T] token-level process rewards (NaN-padded)
                 N, T = rewards.shape
                 K = advantage_num_generation
                 B = N // K
 
                 # r_φ(y^i): mean process reward per trajectory i (ignore NaNs)
-                traj_mean = torch.nanmean(rewards, dim=1)      # [N]
+                traj_mean = torch.nanmean(rewards, dim=1)  # [N]
                 traj_mean = traj_mean.view(B, K)
 
-                mean_last = torch.mean(traj_mean, dim=1)                  # [B]
-                std_last = torch.std(traj_mean, dim=1)                    # [B] (population std)
+                mean_last = torch.mean(traj_mean, dim=1)  # [B]
+                std_last = torch.std(traj_mean, dim=1)  # [B] (population std)
 
                 # 3) expand mean/std back to the flattened [N, 1] and broadcast over tokens
-                mean_grouped_rewards = mean_last.repeat_interleave(advantage_num_generation, dim=0).unsqueeze(-1)  # [N, 1]
-                std_grouped_rewards = std_last.repeat_interleave(advantage_num_generation, dim=0).unsqueeze(-1)    # [N, 1]
-                is_std_zero = torch.isclose(std_grouped_rewards, torch.zeros_like(std_grouped_rewards))
+                mean_grouped_rewards = mean_last.repeat_interleave(
+                    advantage_num_generation, dim=0
+                ).unsqueeze(
+                    -1
+                )  # [N, 1]
+                std_grouped_rewards = std_last.repeat_interleave(
+                    advantage_num_generation, dim=0
+                ).unsqueeze(
+                    -1
+                )  # [N, 1]
+                is_std_zero = torch.isclose(
+                    std_grouped_rewards, torch.zeros_like(std_grouped_rewards)
+                )
 
                 # 4) normalise all token rewards by the last-token stats
                 if self.normalise_rewards:
@@ -874,80 +1229,92 @@ class AIRLTrainer(GRPOTrainer):
                     a_tilde = rewards
                 if self.scale_rewards:
                     a_tilde = a_tilde / (std_grouped_rewards + 1e-4)
-                
+
         elif self.advantage_calculation == "prime":
             if not self.dense_rewards:
-                raise NotImplemented("We have not implemented a sparse PRIME advantage.")
+                raise NotImplemented(
+                    "We have not implemented a sparse PRIME advantage."
+                )
 
             else:
                 # rewards: [N, T] token-level; we'll form a *scalar* advantage per completion
                 rewards = (
-                    rewards_per_func * self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
-                ).nansum(dim=1)  # [N, T]
-                
+                    rewards_per_func
+                    * self.reward_weights.to(device).unsqueeze(0).unsqueeze(-1)
+                ).nansum(
+                    dim=1
+                )  # [N, T]
+
                 reward_mask = torch.flip(completion_mask, dims=[-1])
-                rewards = rewards[:, -completion_mask.size(1):]
+                rewards = rewards[:, -completion_mask.size(1) :]
                 rewards = rewards.masked_fill(reward_mask == 0, torch.nan)
-                
+
                 # rewards: [N, T] token-level process rewards (NaN-padded)
                 N, T = rewards.shape
                 K = advantage_num_generation
                 B = N // K
 
                 # r_φ(y^i): mean process reward per trajectory i (ignore NaNs)
-                traj_mean = torch.nanmean(rewards, dim=1)      # [N]
-                traj_mean = traj_mean.view(B, K)               # [B, K]
+                traj_mean = torch.nanmean(rewards, dim=1)  # [N]
+                traj_mean = traj_mean.view(B, K)  # [B, K]
 
                 # Leave-one-out baseline: (1/(K-1)) * Σ_{j≠i} r_φ(y^j)
-                sum_mean = torch.nansum(traj_mean, dim=1, keepdim=True)        # [B, 1]
+                sum_mean = torch.nansum(traj_mean, dim=1, keepdim=True)  # [B, 1]
                 count = (~torch.isnan(traj_mean)).sum(dim=1, keepdim=True).clamp(min=1)
                 others = (count - 1).clamp(min=1)
 
-                baseline_loo = (sum_mean - traj_mean) / others                 # [B, K]
-                baseline_loo = baseline_loo.reshape(N)                         # [N]
+                baseline_loo = (sum_mean - traj_mean) / others  # [B, K]
+                baseline_loo = baseline_loo.reshape(N)  # [N]
 
                 # r_φ(y_s^i) - 1/(K-1) * Σ_{j≠i} r_φ(y^j)
-                a_tilde = rewards - baseline_loo.unsqueeze(1)    
-                
+                a_tilde = rewards - baseline_loo.unsqueeze(1)
+
         else:
-            raise NotImplemented(f"Not Implemented this advantage calculation `{self.advantage_calculation}`")
+            raise NotImplemented(
+                f"Not Implemented this advantage calculation `{self.advantage_calculation}`"
+            )
 
         # If it's a dense reward apply discount factor
         if self.dense_rewards:
             # 4) Create a reward mask (it's all left padded)
-            rewards = rewards[:, -completion_mask.size(1):]
-            a_tilde = a_tilde[:, -completion_mask.size(1):]
+            rewards = rewards[:, -completion_mask.size(1) :]
+            a_tilde = a_tilde[:, -completion_mask.size(1) :]
             reward_mask = torch.flip(completion_mask, dims=[-1])
-            
+
             if self.dense_gamma <= 0.001:
                 # No future discount: advantages are just the per-token a_tilde
                 advantages = a_tilde
-            
+
             else:
                 # 4) Flip time, turn the suffix-sum into a prefix-sum, fix the geometric weights with a divide–then–multiply, then flip back.
                 p = torch.arange(rewards.size(1), device=device, dtype=a_tilde.dtype)
-                p_pow = (self.dense_gamma ** p).unsqueeze(0)          # [1, T]
-                x_rev = torch.flip(a_tilde, dims=[1])                 # [N, T]
-                s = torch.cumsum(x_rev / p_pow, dim=1)                # [N, T]
-                y_rev = s * p_pow                                     # [N, T]
-                advantages = torch.flip(y_rev, dims=[1])              # [N, T]
-                
+                p_pow = (self.dense_gamma**p).unsqueeze(0)  # [1, T]
+                x_rev = torch.flip(a_tilde, dims=[1])  # [N, T]
+                s = torch.cumsum(x_rev / p_pow, dim=1)  # [N, T]
+                y_rev = s * p_pow  # [N, T]
+                advantages = torch.flip(y_rev, dims=[1])  # [N, T]
+
             # Mask out non-response tokens and convert to right padding for the loss
             advantages = advantages.masked_fill(reward_mask == 0, 0.0)
             advantages = left_to_right_pad(advantages, 0.0)
-                        
+
             metric_mean_reward = (rewards * reward_mask).sum(1) / reward_mask.sum(1)
-            metric_std_reward = (((rewards**2 - metric_mean_reward.unsqueeze(1)**2) * reward_mask).sum(1) / reward_mask.sum(1))**(1/2)
-            metric_non_zero_std = torch.isclose(metric_std_reward, torch.zeros_like(metric_std_reward))
+            metric_std_reward = (
+                (
+                    (rewards**2 - metric_mean_reward.unsqueeze(1) ** 2) * reward_mask
+                ).sum(1)
+                / reward_mask.sum(1)
+            ) ** (1 / 2)
+            metric_non_zero_std = torch.isclose(
+                metric_std_reward, torch.zeros_like(metric_std_reward)
+            )
 
         # Slice to keep only the local part of the data
         process_slice = slice(
             self.accelerator.process_index * len(prompts),
             (self.accelerator.process_index + 1) * len(prompts),
         )
-        all_process_advantages = (
-            advantages.clone()
-        )
+        all_process_advantages = advantages.clone()
         if self.add_expert_to_policy_optim:
             if self.add_expert_to_policy_balanced:
                 period = 2 * self.num_generations
@@ -957,8 +1324,8 @@ class AIRLTrainer(GRPOTrainer):
                 block = self.num_generations + 1
                 idx = torch.arange(all_process_advantages.size(0))
                 mask = (idx % block) < self.num_generations
-            all_process_advantages = all_process_advantages[mask]  
-           
+            all_process_advantages = all_process_advantages[mask]
+
         advantages = advantages[process_slice]
 
         # Log the metrics
@@ -1014,7 +1381,7 @@ class AIRLTrainer(GRPOTrainer):
                 idx = torch.arange(rewards_per_func.size(0))
                 mask = (idx % block) < self.num_generations
             rewards_per_func = rewards_per_func[mask]
-        
+
         # Calculate mean reward per function, but only for samples where the function was applied (non-NaN values)
         for i, reward_func_name in enumerate(self.reward_func_names):
             mean_rewards = torch.nanmean(rewards_per_func[:, i]).item()
@@ -1027,9 +1394,13 @@ class AIRLTrainer(GRPOTrainer):
         self._textual_logs["completion"].extend(gather_object(completions_text))
         for i, name in enumerate(self.reward_func_names):
             if not self.dense_rewards:
-                self._textual_logs["rewards"][name].extend(rewards_per_func[:, i].tolist())
+                self._textual_logs["rewards"][name].extend(
+                    rewards_per_func[:, i].tolist()
+                )
             else:
-                self._textual_logs["rewards"][name].extend(rewards_per_func[:, i].mean(-1).tolist())
+                self._textual_logs["rewards"][name].extend(
+                    rewards_per_func[:, i].mean(-1).tolist()
+                )
         if not self.dense_rewards:
             self._textual_logs["advantages"].extend(all_process_advantages.tolist())
             self._metrics[mode]["reward"].append(mean_grouped_rewards.mean().item())
@@ -1038,13 +1409,14 @@ class AIRLTrainer(GRPOTrainer):
                 is_std_zero.float().mean().item()
             )
         else:
-            self._textual_logs["advantages"].extend(all_process_advantages.mean(-1).tolist())
+            self._textual_logs["advantages"].extend(
+                all_process_advantages.mean(-1).tolist()
+            )
             self._metrics[mode]["reward"].append(metric_mean_reward.mean().item())
             self._metrics[mode]["reward_std"].append(metric_std_reward.mean().item())
             self._metrics[mode]["frac_reward_zero_std"].append(
                 metric_non_zero_std.float().mean().item()
             )
-
 
         return {
             "prompt_ids": prompt_ids,
@@ -1060,14 +1432,28 @@ class AIRLTrainer(GRPOTrainer):
     # Reward model utilities
     # -----------------------------------------------------------------------
 
-    def _update_reward_model(
+    def _warmup_reward_model(
         self,
         inputs: List[Dict[str, Any]],
         prompts: List[List[Dict[str, str]]],
         policy_completions: List[List[Dict]],
     ) -> torch.Tensor:
-        """One discriminator step with expert positives, policy negatives, and (optional) perturbed expert negatives."""
-        
+        """
+        Warm up the reward model discriminator with expert demonstrations.
+
+        This phase trains the reward model before alternating training begins.
+        It uses:
+        - Positives: expert demonstrations
+        - Negatives: policy-generated samples + perturbed expert demonstrations
+
+        Args:
+            inputs: List of input examples containing target (expert) responses
+            prompts: List of prompt lists in chat format
+            policy_completions: List of policy-generated completions
+
+        Returns:
+            Loss value from the warm-up step
+        """
         device = self.accelerator.device
 
         # Positives = expert completions
@@ -1081,9 +1467,14 @@ class AIRLTrainer(GRPOTrainer):
 
         # Tokenise and prepare all inputs
         expert_tokens, policy_tokens = tokenize_examples(
-            prompts, expert_completions, policy_completions,
-            self.reward_tokenizer, self.max_completion_length,
-            device, self.response_only, self.dense_rewards
+            prompts,
+            expert_completions,
+            policy_completions,
+            self.reward_tokenizer,
+            self.max_completion_length,
+            device,
+            self.response_only,
+            self.dense_rewards,
         )
 
         # Deduplicate expert tokens and get multiplicities
@@ -1096,206 +1487,130 @@ class AIRLTrainer(GRPOTrainer):
         n_per = 0
         if perturbed_completions:
             _, perturbed_tokens = tokenize_examples(
-                prompts[:len(perturbed_completions)],
-                expert_completions[:len(perturbed_completions)],
+                prompts[: len(perturbed_completions)],
+                expert_completions[: len(perturbed_completions)],
                 perturbed_completions,
                 self.reward_tokenizer,
                 self.max_completion_length,
                 device,
                 self.response_only,
-                self.dense_rewards
+                self.dense_rewards,
             )
             n_per = perturbed_tokens["input_ids"].size(0)
 
         # Prepare batched data for training
         batch, labels, weights = prepare_reward_batch(
-            expert_tokens, policy_tokens, perturbed_tokens,
-            n_pos, n_pol, n_per, device,
-            self.eps, self.neg_label_smoothing,
+            expert_tokens,
+            policy_tokens,
+            perturbed_tokens,
+            n_pos,
+            n_pol,
+            n_per,
+            device,
+            self.eps,
+            self.neg_label_smoothing,
             self.neg_sample_weight,
             self.num_neg_perturbations_per_expert,
-            self.args.gradient_accumulation_steps
+            self.args.gradient_accumulation_steps,
         )
 
-        # Training loop over gradient accumulation steps
-        total_loss = self._train_reward_model_loop(
-            batch, labels, weights,
-            n_pos, n_pol, n_per,
-            pos_counts
+        # Training loop using the reward trainer
+        total_loss = self.reward_trainer.train_step(
+            batch, labels, weights, n_pos, n_pol, n_per, pos_counts
         )
 
-        # Optimizer step if needed
-        if self.state.global_step % self.reward_updates_per_policy_step == 0 and not self.standard_grpo:
-            torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
-            self.reward_optimizer.step()
-            self.reward_optimizer.zero_grad()
+        # Always step optimizer during warm-up
+        torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
+        self.reward_optimizer.step()
+        self.reward_optimizer.zero_grad()
 
         return total_loss / self.args.gradient_accumulation_steps
 
-    def _train_reward_model_loop(
+    def _update_reward_model(
         self,
-        batch: Dict[str, torch.Tensor],
-        labels: torch.Tensor,
-        weights: torch.Tensor,
-        n_pos: int,
-        n_pol: int,
-        n_per: int,
-        pos_counts: torch.Tensor,
+        inputs: List[Dict[str, Any]],
+        prompts: List[List[Dict[str, str]]],
+        policy_completions: List[List[Dict]],
     ) -> torch.Tensor:
+        """One discriminator step with expert positives, policy negatives, and (optional) perturbed expert negatives."""
+
+        device = self.accelerator.device
+
+        # Positives = expert completions
+        expert_completions = [
+            [{"role": "assistant", "content": element["target"]}] for element in inputs
+        ]
+
+        # Build perturbed negatives from experts
+        _per_out = self._make_perturbed_completions(prompts, expert_completions)
+        perturbed_completions = _per_out[0] if isinstance(_per_out, tuple) else _per_out
+
+        # Tokenise and prepare all inputs
+        expert_tokens, policy_tokens = tokenize_examples(
+            prompts,
+            expert_completions,
+            policy_completions,
+            self.reward_tokenizer,
+            self.max_completion_length,
+            device,
+            self.response_only,
+            self.dense_rewards,
+        )
+
+        # Deduplicate expert tokens and get multiplicities
+        expert_tokens, pos_counts, _ = dedup_token_batch(expert_tokens)
+        n_pos = expert_tokens["input_ids"].size(0)
+        n_pol = policy_tokens["input_ids"].size(0)
+
+        # Handle perturbed examples if present
+        perturbed_tokens = None
+        n_per = 0
+        if perturbed_completions:
+            _, perturbed_tokens = tokenize_examples(
+                prompts[: len(perturbed_completions)],
+                expert_completions[: len(perturbed_completions)],
+                perturbed_completions,
+                self.reward_tokenizer,
+                self.max_completion_length,
+                device,
+                self.response_only,
+                self.dense_rewards,
+            )
+            n_per = perturbed_tokens["input_ids"].size(0)
+
+        # Prepare batched data for training
+        batch, labels, weights = prepare_reward_batch(
+            expert_tokens,
+            policy_tokens,
+            perturbed_tokens,
+            n_pos,
+            n_pol,
+            n_per,
+            device,
+            self.eps,
+            self.neg_label_smoothing,
+            self.neg_sample_weight,
+            self.num_neg_perturbations_per_expert,
+            self.args.gradient_accumulation_steps,
+        )
+
+        # Training loop over gradient accumulation steps using the reward trainer
+        total_loss = self.reward_trainer.train_step(
+            batch, labels, weights, n_pos, n_pol, n_per, pos_counts
+        )
+
+        # Optimizer step if needed
+        self.reward_trainer.optimizer_step(
+            self.reward_updates_per_policy_step,
+            self.state.global_step,
+            self.standard_grpo,
+        )
+
+        return total_loss / self.args.gradient_accumulation_steps
         """Training loop for reward model with gradient accumulation and micro-batching."""
         # Compute samples per accumulation step
         pos_per_step = n_pos // self.args.gradient_accumulation_steps
         pol_per_step = n_pol // self.args.gradient_accumulation_steps
-        per_per_step = n_per // self.args.gradient_accumulation_steps if n_per > 0 else 0
-        have_perturbed = n_per > 0
-
-        
-        total_loss = 0
-        for step in range(self.args.gradient_accumulation_steps):
-            # Get slices for this step
-            pos_slice = slice(
-                step * pos_per_step,
-                (step + 1) * pos_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pos
-            )
-            pol_slice = slice(
-                step * pol_per_step,
-                (step + 1) * pol_per_step if step < self.args.gradient_accumulation_steps - 1 else n_pol
-            )
-
-            # Prepare step data
-            if have_perturbed:
-                per_slice = slice(
-                    step * per_per_step,
-                    (step + 1) * per_per_step if step < self.args.gradient_accumulation_steps - 1 else n_per
-                )
-                step_batch = {
-                    k: torch.cat([
-                        batch[k][:n_pos][pos_slice],
-                        batch[k][n_pos:n_pos+n_pol][pol_slice],
-                        batch[k][n_pos+n_pol:][per_slice]
-                    ], dim=0)
-                    for k in batch.keys()
-                }
-                step_labels = torch.cat([
-                    labels[:n_pos][pos_slice],
-                    labels[n_pos:n_pos+n_pol][pol_slice],
-                    labels[n_pos+n_pol:][per_slice]
-                ])
-                step_weights = torch.cat([
-                    weights[:n_pos][pos_slice],
-                    weights[n_pos:n_pos+n_pol][pol_slice],
-                    weights[n_pos+n_pol:][per_slice]
-                ])
-            else:
-                step_batch = {
-                    k: torch.cat([
-                        batch[k][:n_pos][pos_slice],
-                        batch[k][n_pos:][pol_slice]
-                    ], dim=0)
-                    for k in batch.keys()
-                }
-                step_labels = torch.cat([
-                    labels[:n_pos][pos_slice],
-                    labels[n_pos:][pol_slice]
-                ])
-                step_weights = torch.cat([
-                    weights[:n_pos][pos_slice],
-                    weights[n_pos:][pol_slice]
-                ])
-
-            # Process micro-batches
-            step_size = step_batch["input_ids"].size(0)
-            num_micro_batches = (step_size + self.max_micro_batch - 1) // self.max_micro_batch
-            micro_batch_size = (step_size + num_micro_batches - 1) // num_micro_batches
-
-            step_loss = 0
-            for micro_idx in range(num_micro_batches):
-                start_idx = micro_idx * micro_batch_size
-                end_idx = min((micro_idx + 1) * micro_batch_size, step_size)
-                
-                micro_batch = {k: v[start_idx:end_idx] for k, v in step_batch.items()}
-                micro_labels = step_labels[start_idx:end_idx]
-                micro_weights = step_weights[start_idx:end_idx]
-
-                if self.dense_rewards:
-                    micro_labels = micro_labels.unsqueeze(1).repeat(1,micro_batch["input_ids"].size(1))
-                
-                if self.classifier_loss == "bce":
-                    # Forward pass with micro-batch
-                    with self.accelerator.autocast():
-                        micro_logits = self.reward_model(
-                            input_ids=micro_batch["input_ids"], 
-                            attention_mask=micro_batch["attention_mask"]).logits.squeeze(-1)
-                        micro_bce = F.binary_cross_entropy_with_logits(
-                            micro_logits, micro_labels, reduction="none"
-                        )
-                        # Compute full loss but scale it down for proper gradient accumulation
-                        
-                        if self.dense_rewards:
-                            # Make sure only the tokens within the response mask contribute to the loss
-                            masked_micro_bce = micro_bce.masked_fill(micro_batch["response_mask"] == 0, 0.0)
-                            masked_micro_bce = masked_micro_bce / micro_batch["response_mask"].sum(1).unsqueeze(1)
-                            micro_loss = (masked_micro_bce * micro_weights.unsqueeze(1)).sum() / step_weights.sum()
-                        else:
-                            micro_loss = (micro_bce * micro_weights).sum() / step_weights.sum()
-                        scaled_loss = micro_loss / (self.args.gradient_accumulation_steps * num_micro_batches)
-                    
-                    # Backward pass on scaled loss for proper gradient accumulation
-                    scaled_loss.backward()
-                    step_loss += micro_loss.detach()  # Track full loss for return value
-                
-                elif self.classifier_loss == "wgan":
-                    with self.accelerator.autocast():
-                        # Critic scores (no sigmoid) — shape: [B, T] if dense, else [B]
-                        micro_scores = self.reward_model(
-                            input_ids=micro_batch["input_ids"],
-                            attention_mask=micro_batch["attention_mask"]
-                        ).logits.squeeze(-1)
-
-                        micro_labels = micro_labels.float()  # 1 = expert, 0 = policy
-
-                        if self.dense_rewards:
-                            # token mask for the generated response region
-                            resp_mask = micro_batch["response_mask"].float()  # [B, T]
-                            # per-token masks for real/fake
-                            real_tok_mask = resp_mask * (micro_labels if micro_labels.dim() == 2 else micro_labels.unsqueeze(1))
-                            fake_tok_mask = resp_mask * (1.0 - (micro_labels if micro_labels.dim() == 2 else micro_labels.unsqueeze(1)))
-
-                            # mean score over tokens (avoid div-by-zero)
-                            real_count = real_tok_mask.sum().clamp_min(1.0)
-                            fake_count = fake_tok_mask.sum().clamp_min(1.0)
-                            real_mean = (micro_scores * real_tok_mask).sum() / real_count
-                            fake_mean = (micro_scores * fake_tok_mask).sum() / fake_count
-
-                            # WGAN critic loss: minimise (fake - real)
-                            micro_loss = (fake_mean - real_mean)
-
-                        else:
-                            # sequence-level case
-                            is_real = (labels.view(-1) > 0.5)
-                            real_scores = micro_scores[is_real]
-                            fake_scores = micro_scores[~is_real]
-
-                            # guard against empty split in tiny micro-batches
-                            real_mean = real_scores.mean() if real_scores.numel() > 0 else micro_scores.new_zeros(())
-                            fake_mean = fake_scores.mean() if fake_scores.numel() > 0 else micro_scores.new_zeros(())
-
-                            micro_loss = (fake_mean - real_mean)
-
-                        # scale for gradient accumulation (keep your existing scaling)
-                        scaled_loss = micro_loss / (self.args.gradient_accumulation_steps * num_micro_batches)
-
-                    # Backward pass for critic
-                    scaled_loss.backward()
-                    step_loss += micro_loss.detach()
-                    
-                else:
-                    raise NotImplemented(f"Classifier loss function `{self.classifier_loss}` not implemented")
-
-            total_loss += step_loss
-
-        return total_loss
-    
 
     # -----------------------------------------------------------------------
     def log(
@@ -1307,8 +1622,7 @@ class AIRLTrainer(GRPOTrainer):
                 logs[k] = sum(vlist) / len(vlist)
         self._metrics["train"].clear()
         super().log(logs, start_time)
-        
-        
+
     def save_model(self, output_dir, _internal_call=True):
         """
         Save the policy (handled by super) AND the reward model (+ tokenizer).
@@ -1348,7 +1662,9 @@ class AIRLTrainer(GRPOTrainer):
 
         # Reward optimizer state dict (so we can resume properly)
         if getattr(self, "reward_optimizer", None) is not None:
-            torch.save(self.reward_optimizer.state_dict(), reward_dir / "reward_optimizer.pt")
+            torch.save(
+                self.reward_optimizer.state_dict(), reward_dir / "reward_optimizer.pt"
+            )
 
 
 # ---------------------------------------------------------------------------

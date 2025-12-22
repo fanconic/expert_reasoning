@@ -2,6 +2,7 @@ from src.rewards.perturbations import PERTURB_FN_MAP
 from src.config.irl_config import IRLConfig
 from src.training.airl_trainer import AIRLTrainer
 
+
 def run_irl_training(
     policy_model,
     reward_model,
@@ -11,7 +12,7 @@ def run_irl_training(
     reward_funcs,
     cfg,
     val_dataset=None,
-    reward_processing_classes=None
+    reward_processing_classes=None,
 ):
 
     irl_config = IRLConfig(
@@ -67,9 +68,10 @@ def run_irl_training(
         classifier_loss=cfg.model.classifier_loss,
         normalise_rewards=getattr(cfg.model, "normalise_rewards", True),
         expert_error_rate=getattr(cfg.dataset, "expert_error_rate", 0.0),
-        beta=getattr(cfg.training, "beta", 0.0)
+        beta=getattr(cfg.training, "beta", 0.0),
+        reward_warmup_steps=getattr(cfg.training, "reward_warmup_steps", 0),
     )
-    
+
     def formatting_prompt_func(examples):
         """
         For each example:

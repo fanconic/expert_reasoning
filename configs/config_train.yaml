@@ -54,4 +54,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: gsm8k_grpo_3B_sanity
+  run_name: debug

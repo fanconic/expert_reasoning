@@ -80,25 +80,19 @@ class IRLConfig(GRPOConfig):
             "help": "Number of discriminator (reward) optimisation steps per policy optimisation step."
         },
     )
-    
+
     disc_label_smoothing: float = field(
         default=0.0,
-        metadata={
-            "help": "Label smoother for the discriminator"
-        },
+        metadata={"help": "Label smoother for the discriminator"},
     )
-    
+
     disc_temperature: float = field(
         default=1.0,
-        metadata={
-            "help": "temperature of the logit rewards"
-        },
+        metadata={"help": "temperature of the logit rewards"},
     )
     clip_reward_model: bool = field(
         default=False,
-        metadata={
-            "help": "Clip the rewards to the range [reward_lb, reward_ub]"
-        },
+        metadata={"help": "Clip the rewards to the range [reward_lb, reward_ub]"},
     )
     reward_lb: float = field(
         default=-1.0,
@@ -134,7 +128,7 @@ class IRLConfig(GRPOConfig):
     )
     disc_pairwise_margin: float = field(
         default=0.0,
-        metadata={  
+        metadata={
             "help": "Margin for the pairwise loss in the discriminator (0 = no margin)."
         },
     )
@@ -173,38 +167,44 @@ class IRLConfig(GRPOConfig):
         default="grpo",
         metadata={
             "help": "Way how the advantage is calculated. either `grpo` or `prime`"
-        }
+        },
     )
     dense_gamma: float = field(
         default=1.0,
         metadata={
             "help": "Discount factor for the length of the response in dense reward"
-        }
+        },
     )
     add_expert_to_policy_optim: bool = field(
         default=False,
         metadata={
             "help": "Add the expert demonstration also to the advantage calculation"
-        }
+        },
     )
     expert_error_rate: float = field(
-        default=0.0,
-        metadata={
-            "help": "Error rate of the expert demonstrations"
-        }
+        default=0.0, metadata={"help": "Error rate of the expert demonstrations"}
     )
     add_expert_to_policy_balanced: bool = field(
         default=False,
         metadata={
             "help": "Add the expert demonstration also to the advantage calculation in a balanced or single fashion"
-        }
+        },
     )
     classifier_loss: str = field(
-        default="bce",
-        metadata={
-            "help": "Loss of the classifier `bce` or `wgan`"
-        }
+        default="bce", metadata={"help": "Loss of the classifier `bce` or `wgan`"}
     )
+
+    # ------------------------------------------------------------------
+    # === Reward Model Warm-up ===
+    reward_warmup_steps: int = field(
+        default=0,
+        metadata={
+            "help": "Number of optimization steps to warm up the reward model discriminator before alternating training. "
+            "During warm-up, only the reward model is trained with expert demonstrations as positives, "
+            "policy-generated samples as negatives, and perturbed expert demonstrations as additional negatives."
+        },
+    )
+
     # ------------------------------------------------------------------
     # === Generation / sampling (copied from GRPOConfig) ===
     max_prompt_length: Optional[int] = field(

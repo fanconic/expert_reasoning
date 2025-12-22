@@ -1,48 +1,159 @@
 import argparse
-from typing import Any
-
-from datasets import load_dataset, Dataset, DatasetDict
-from sklearn.model_selection import train_test_split
+import re
+import concurrent.futures
+from typing import Any, List, Dict
+import os
 import textwrap
 import pandas as pd
+import json
 
-def word_count(x: Any) -> int:
-    s = "" if x is None else str(x)
-    return len(s.split())
+from datasets import load_dataset, Dataset, DatasetDict
+from openai import AzureOpenAI 
+from tqdm import tqdm
+
+from openai import AzureOpenAI
 
 
-# Replace pandas-based build_dataframe with a HF Dataset-based pipeline
-def build_dataframe(max_len) -> Dataset:
-    """
-    Build a HuggingFace Dataset (not a pandas DataFrame).
-    - keep only examples from dataset_name in ['medqa','medmcqa']
-    - concatenates question + options
-    - extracts response as text before ". Explanation:" if present, otherwise uses the original answer
-    - sets answer = response (matching original script)
-    - computes len_question, len_reasoning, len_response, sum_words
-    - filters by sum_words < max_len
-    - keeps only ["question","reasoning","response","answer"]
-    """
+def corrupt_entry_all_distractors(row: Dict[str, Any]) -> Dict[str, Any]:
+    question = row.get("question", "")
+    correct_reasoning = row.get("reasoning", "")
+    correct_answer = row.get("answer", "")
+    
+    prompt = f"""
+You are a medical expert creating adversarial training examples for a multiple-choice question.
+Below is a medical question, the correct reasoning, and the correct answer.
+
+Your task:
+1. Identify the 3 incorrect options (distractors) in the question.
+2. For EACH of the 3 incorrect options, write a plausible reasoning trace that leads to that specific wrong answer.
+3. The reasoning should sound logical and medical (hallucinating facts if necessary) but must conclude with the wrong answer.
+4. The reasoning style should match the format of the correct reasoning with **Finding reasoning paths, reasoning, conclusion**
+
+Format your output exactly as 3 sequential blocks:
+
+<block>
+<think>
+[Reasoning for Distractor 1]
+</think>
+<answer>
+[Distractor 1 Text]
+</answer>
+</block>
+
+<block>
+<think>
+[Reasoning for Distractor 2]
+</think>
+<answer>
+[Distractor 2 Text]
+</answer>
+</block>
+
+<block>
+<think>
+[Reasoning for Distractor 3]
+</think>
+<answer>
+[Distractor 3 Text]
+</answer>
+</block>
+
+---
+Question: 
+{question}
+
+Correct Reasoning (do not use):
+{correct_reasoning}
+
+Correct Answer (do not use):
+{correct_answer}
+"""
+
+    messages = [
+        {"role": "system", "content": "You are a medical expert generating adversarial wrong-reasoning examples."},
+        {"role": "user", "content": prompt},
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model=DEPLOYMENT,
+            messages=messages,
+            n=1,
+            reasoning_effort="minimal",
+            temperature=1.0, 
+        )
+
+        chat_output = response.choices[0].message.content.strip()
+
+        # Parse all blocks using regex
+        pattern = re.compile(r"<think>\s*(.*?)\s*</think>.*?<answer>\s*(.*?)\s*</answer>", re.DOTALL)
+        matches = pattern.findall(chat_output)
+
+        corrupted_reasonings = []
+        corrupted_answers = []
+
+        for match in matches:
+            corrupted_reasonings.append(match[0].strip())
+            corrupted_answers.append(match[1].strip())
+
+        row['corrupted_reasonings'] = corrupted_reasonings
+        row['corrupted_answers'] = corrupted_answers
+        row['is_corrupted'] = len(corrupted_reasonings) >= 3 
+
+    except Exception as e:
+        print(f"API Error: {e}")
+        row['corrupted_reasonings'] = []
+        row['corrupted_answers'] = []
+        row['is_corrupted'] = False
+
+    return row
+
+def process_batch_with_threadpool(dataset_list: List[Dict], max_workers: int = 10) -> List[Dict]:
+    results = []
+    pbar = tqdm(total=len(dataset_list), desc="Corrupting Reasonings")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_row = {executor.submit(corrupt_entry_all_distractors, row): row for row in dataset_list}
+        
+        for future in concurrent.futures.as_completed(future_to_row):
+            try:
+                data = future.result()
+                results.append(data)
+            except Exception as exc:
+                print(f"Row generation generated an exception: {exc}")
+                orig = future_to_row[future]
+                orig['is_corrupted'] = False
+                orig['corrupted_reasonings'] = []
+                orig['corrupted_answers'] = []
+                results.append(orig)
+            
+            pbar.update(1)
+                
+    pbar.close()
+    return results
+
+def build_dataframe(max_len, max_samples=None, workers=10) -> Dataset:
     ds = load_dataset("UCSC-VLAA/MedReason")["train"]
 
-    # keep only the two desired source datasets
+    # Filter source datasets
     ds = ds.filter(lambda x: x.get("dataset_name", "") in ["medqa", "medmcqa"])
+    
+    if max_samples:
+        ds = ds.select(range(min(len(ds), max_samples)))
 
-    def munge(example):
-        # create concatenated question and extract response/answer
+    def pre_munge(example):
         q = example.get("question", "") or ""
         opts = example.get("options", "") or ""
         full_q = q + "\n" + opts if opts else q
 
         raw_answer = example.get("answer", "") or ""
-        # Use the part before ". Explanation:" if that marker exists, otherwise keep original answer
         if ". Explanation:" in raw_answer:
             resp = raw_answer.split(". Explanation:")[0]
         else:
             resp = raw_answer
 
         reasoning = example.get("reasoning", "") or ""
-
+        
         len_q = len(str(full_q).split())
         len_r = len(str(reasoning).split())
         len_resp = len(str(resp).split())
@@ -51,194 +162,121 @@ def build_dataframe(max_len) -> Dataset:
         return {
             "question": full_q,
             "reasoning": reasoning,
-            "response": resp,
+            "response": resp, 
             "answer": resp,
-            "len_question": len_q,
-            "len_reasoning": len_r,
-            "len_response": len_resp,
-            "sum_words": sum_words,
+            "sum_words": sum_words
         }
 
-    ds = ds.map(munge, remove_columns=[])  # keep all until we remove extras below
-
-    # filter by total length
+    ds = ds.map(pre_munge, remove_columns=ds.column_names)
     ds = ds.filter(lambda x: x["sum_words"] < max_len)
 
-    # keep useful columns including length fields so we can compute stats later
-    keep_cols = ["question", "reasoning", "response", "answer", "len_question", "len_reasoning", "len_response", "sum_words"]
-    cols_to_remove = [c for c in ds.column_names if c not in keep_cols]
-    if cols_to_remove:
-        ds = ds.remove_columns(cols_to_remove)
+    print(f"Dataset size before corruption: {len(ds)}")
 
-    return ds
+    data_list = [item for item in ds]
+    
+    print(f"Starting API calls with {workers} workers...")
+    processed_list = process_batch_with_threadpool(data_list, max_workers=workers)
+    
+    final_ds = Dataset.from_list(processed_list)
+    final_ds = final_ds.filter(lambda x: x['is_corrupted'] is True)
+    
+    return final_ds
 
-
-def make_splits(
-    df: Dataset, test_size: int, val_size: int, seed: int
-) -> DatasetDict:
-    """
-    Create train/eval/test splits from a HuggingFace Dataset using integer sizes.
-    """
+def make_splits(df: Dataset, test_size: int, val_size: int, seed: int) -> DatasetDict:
     total = len(df)
     if total < (test_size + val_size + 1):
-        raise ValueError(
-            f"Not enough rows ({total}) for requested splits: "
-            f"test={test_size}, val={val_size}."
-        )
+        raise ValueError(f"Not enough rows ({total}) for requested splits.")
 
-    # split off test
     first_split = df.train_test_split(test_size=test_size, seed=seed)
     ds_test = first_split["test"]
     ds_train_remaining = first_split["train"]
 
-    # split remaining into train/val (val_size is absolute)
     second_split = ds_train_remaining.train_test_split(test_size=val_size, seed=seed)
     ds_val = second_split["test"]
     ds_train = second_split["train"]
 
-    return DatasetDict(
-        {
-            "train": ds_train,
-            "eval": ds_val,
-            "test": ds_test,
-        }
-    )
+    return DatasetDict({"train": ds_train, "eval": ds_val, "test": ds_test})
 
+def word_count(text):
+    if not text: return 0
+    return len(str(text).split())
 
-def display_examples(dsd, split: str = "train", n: int = 3):
+def print_comprehensive_stats(dsd: DatasetDict):
     """
-    Print up to `n` examples from the given split of the DatasetDict `dsd`.
-    Shows full (untruncated) question, reasoning, response, and answer.
+    Calculates and prints min/max/avg word counts for all relevant fields.
     """
-    # Ensure pandas won't truncate long strings if we accidentally show a DataFrame
-    pd.set_option("display.max_colwidth", None)
+    print("\n" + "="*50)
+    print("DATASET STATISTICS (Word Counts)")
+    print("="*50)
 
-    if split not in dsd:
-        print(f"Split '{split}' not found in dataset. Available: {list(dsd.keys())}")
-        return
+    combined_df = pd.concat([dsd[split].to_pandas() for split in dsd.keys()], ignore_index=True)
+    total_rows = len(combined_df)
 
-    df = dsd[split].to_pandas().reset_index(drop=True)
-    if df.empty:
-        print(f"No examples in split '{split}'.")
-        return
+    print(f"Total Examples: {total_rows}")
+    for split in dsd.keys():
+        print(f"  - {split}: {len(dsd[split])}")
+    print("-" * 50)
 
-    n = min(n, len(df))
-    sep = "=" * 80
-    for i in range(n):
-        row = df.iloc[i]
-        print(sep)
-        print(f"Example {i+1}/{n} (split='{split}')")
-        print("-" * 80)
-        # Use get with fallback to empty string for missing columns
-        q = row.get("question", "") if isinstance(row, dict) else row.get("question", "")
-        r = row.get("reasoning", "") if isinstance(row, dict) else row.get("reasoning", "")
-        resp = row.get("response", "") if isinstance(row, dict) else row.get("response", "")
-        ans = row.get("answer", "") if isinstance(row, dict) else row.get("answer", "")
+    q_lens = combined_df['question'].apply(word_count)
+    print(f"QUESTION Lengths:")
+    print(f"  Min: {q_lens.min():<5} Max: {q_lens.max():<5} Avg: {q_lens.mean():.1f}")
 
-        # Print with labels; preserve original newlines
-        print("\nQuestion:\n")
-        print(q)
-        print("\nReasoning:\n")
-        print(r)
-        print("\nResponse:\n")
-        print(resp)
-        print("\nAnswer:\n")
-        print(ans)
-        print(sep)
-        print()
+    r_lens = combined_df['reasoning'].apply(word_count)
+    print(f"CORRECT REASONING Lengths:")
+    print(f"  Min: {r_lens.min():<5} Max: {r_lens.max():<5} Avg: {r_lens.mean():.1f}")
+    
+    # Flatten the lists of corrupted reasonings to get accurate stats
+    all_corrupted_reasonings = combined_df['corrupted_reasonings'].explode()
+    cr_lens = all_corrupted_reasonings.apply(word_count)
+    
+    print(f"CORRUPTED REASONING Lengths (n={len(cr_lens)}):")
+    print(f"  Min: {cr_lens.min():<5} Max: {cr_lens.max():<5} Avg: {cr_lens.mean():.1f}")
+    print("="*50 + "\n")
 
-
-# Add helper to print split sizes
-def print_split_sizes(dsd):
+def export_readable_files(dsd: DatasetDict, output_dir: str):
     """
-    Print sizes for train/eval/test splits in a tidy, aligned format.
+    Saves the dataset splits as CSV and JSONL for easier manual inspection.
     """
-    splits = ["train", "eval", "test"]
-    print("\nDataset split sizes:")
-    max_name_len = max(len(s) for s in splits)
-    for s in splits:
-        size = len(dsd[s]) if s in dsd else 0
-        print(f"  {s.rjust(max_name_len)} : {size}")
-    total = sum(len(dsd[s]) for s in splits if s in dsd)
-    print(f"  {'total'.rjust(max_name_len)} : {total}\n")
-
-
-def print_longest_stats(ds: Dataset):
-    """
-    Print numeric stats only: longest question, longest reasoning, longest response,
-    and the max sum_words (word counts).
-    """
-    if len(ds) == 0:
-        print("No examples to compute longest stats.")
-        return
-
-    # Ensure length columns exist
-    if "len_question" not in ds.column_names or "len_reasoning" not in ds.column_names or "len_response" not in ds.column_names or "sum_words" not in ds.column_names:
-        ds = ds.map(
-            lambda x: {
-                "len_question": len(str(x.get("question", "")).split()),
-                "len_reasoning": len(str(x.get("reasoning", "")).split()),
-                "len_response": len(str(x.get("response", "")).split()),
-                "sum_words": len(str(x.get("question", "")).split())
-                + len(str(x.get("reasoning", "")).split())
-                + len(str(x.get("response", "")).split()),
-            }
-        )
-
-    q_lens = ds["len_question"]
-    r_lens = ds["len_reasoning"]
-    resp_lens = ds["len_response"]
-    sums = ds["sum_words"]
-
-    # compute maxima (safely)
-    max_q = max(q_lens) if q_lens else 0
-    max_r = max(r_lens) if r_lens else 0
-    max_resp = max(resp_lens) if resp_lens else 0
-    max_sum = max(sums) if sums else 0
-
-    print("\nLongest-item statistics (word counts):")
-    print(f"  Longest question : {max_q}")
-    print(f"  Longest reasoning: {max_r}")
-    print(f"  Longest response : {max_resp}")
-    print(f"  Largest sum_words: {max_sum}\n")
-
+    print(f"Exporting human-readable files to {output_dir}...")
+    
+    for split, dataset in dsd.items():
+        # Define paths
+        csv_path = os.path.join(output_dir, f"{split}.csv")
+        jsonl_path = os.path.join(output_dir, f"{split}.jsonl")
+        
+        # Save CSV (Pandas handles list columns by stringifying them, e.g. "['a', 'b']")
+        dataset.to_csv(csv_path, index=False)
+        
+        # Save JSONL (Cleaner for nested structures)
+        dataset.to_json(jsonl_path, orient="records", lines=True)
+        
+        print(f"  Saved {split}.csv and {split}.jsonl")
+    print("\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="Create medical_o1 dataset splits.")
-    parser.add_argument(
-        "--outdir", type=str, default="data/medreason", help="Output directory."
-    )
-    parser.add_argument("--test_size", type=int, default=2000, help="Test set size.")
-    parser.add_argument("--val_size", type=int, default=2000, help="Validation set size.")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed.")
-    parser.add_argument("--max_len", type=int, default=512, help="Max length of the prompt+response.")
-    parser.add_argument("--show_examples", action="store_true", help="Print up to 3 example records after saving.")
-    parser.add_argument("--examples_split", type=str, default="train", help="Which split to show examples from (train/eval/test).")
-    parser.add_argument("--examples_n", type=int, default=3, help="Max number of examples to show.")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--outdir", type=str, default="data/medreason_corrupted_full")
+    parser.add_argument("--test_size", type=int, default=1500)
+    parser.add_argument("--val_size", type=int, default=1500)
+    parser.add_argument("--max_samples", type=int, default=None, help="Limit rows for testing")
+    parser.add_argument("--workers", type=int, default=10, help="Thread pool workers")
     args = parser.parse_args()
 
-    print("Loading and merging data...")
-    df = build_dataframe(args.max_len)
-    print(f"Total rows after filtering: {len(df)}")
-    # print longest-question/response/sum stats from the filtered dataset
-    print_longest_stats(df)
-
-    print("Creating splits...")
-    dsd = make_splits(df, test_size=args.test_size, val_size=args.val_size, seed=args.seed)
-
-    print(f"Saving to {args.outdir} ...")
+    # 1. Build & Corrupt
+    df = build_dataframe(max_len=1024, max_samples=args.max_samples, workers=args.workers)
+    
+    # 2. Split
+    dsd = make_splits(df, args.test_size, args.val_size, seed=42)
+    
+    # 3. Save HF Dataset
     dsd.save_to_disk(args.outdir)
-
-    print("Done.")
-    # Print sizes in a clear, formatted way and the output directory
-    print_split_sizes(dsd)
-    print(f"Saved dataset to: {args.outdir}")
-
-    # Optionally display examples in a beautiful, untruncated format
-    if args.show_examples:
-        print("\nDisplaying examples from the dataset:\n")
-        display_examples(dsd, split=args.examples_split, n=args.examples_n)
-
+    print(f"Saved HF dataset to {args.outdir}")
+    
+    # 4. Save CSV/JSONL for inspection
+    export_readable_files(dsd, args.outdir)
+    
+    # 5. Print Stats
+    print_comprehensive_stats(dsd)
 
 if __name__ == "__main__":
     main()
