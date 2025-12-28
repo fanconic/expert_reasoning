@@ -19,8 +19,8 @@
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "args": [
-                "--config-path=configs/medreason/llama8b",
-                "--config-name=debug_train"
+                "--config-path=configs/",
+                "--config-name=config_irl_train"
             ],
             "purpose": [
                 "debug-test"

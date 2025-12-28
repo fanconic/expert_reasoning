@@ -19,7 +19,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-grpo_trainer_lora_model
+grpo_trainer_lora_model*
 
 # C extensions
 *.so

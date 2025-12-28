@@ -10,7 +10,7 @@ model:
   max_completion_length: 824
   load_in_4bit: true
   fast_inference: true
-  lora_rank: 128
+  lora_rank: 256
   gpu_memory_utilization: 0.6
   
 dataset:
@@ -35,7 +35,7 @@ training:
   max_steps: 500
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
-  report_to: "wandb"
+  report_to: "none"
   
 
 sampling:
@@ -52,6 +52,6 @@ eval:
   prediction_loss_only: false
 
 wandb:
-  project: "expert_reasoning"
+  project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: debug
+  run_name: debug_train

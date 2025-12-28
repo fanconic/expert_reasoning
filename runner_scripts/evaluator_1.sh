@@ -1,7 +1,8 @@
 #!/bin/bash
 
-
-export MODEL="qwen3b"
 export GPU_NUM="1" 
 
-bash runner_scripts/${GPU_NUM}_run_gpu_node.sh irl_train.py --config-path=configs --config-name=config_irl_train
+export MODEL="llama8b"
+
+bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train.py --config-path=configs/${MODEL} --config-name=grpo_8B_config_train
+bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py --config-path=configs/${MODEL} --config-name=grpo_8B_config_eval

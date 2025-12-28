@@ -1,6 +1,6 @@
 from src.rewards.perturbations import PERTURB_FN_MAP
 from src.config.irl_config import IRLConfig
-from src.training.airl_trainer import AIRLTrainer
+from src.training.airl_trainer_new import AIRLTrainer
 
 
 def run_irl_training(
@@ -70,6 +70,7 @@ def run_irl_training(
         expert_error_rate=getattr(cfg.dataset, "expert_error_rate", 0.0),
         beta=getattr(cfg.training, "beta", 0.0),
         reward_warmup_steps=getattr(cfg.training, "reward_warmup_steps", 0),
+        vllm_importance_sampling_correction=False # set this one to false, else it leads to mismatch (https://github.com/huggingface/trl/issues/4205)
     )
 
     def formatting_prompt_func(examples):

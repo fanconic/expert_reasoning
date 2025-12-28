@@ -45,13 +45,13 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 50
+  eval_steps: 100
   use_vllm: true
-  per_device_eval_batch_size: 16
+  per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: llama8_grpo
+  run_name: llama8b_grpo

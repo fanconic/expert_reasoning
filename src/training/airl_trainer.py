@@ -75,13 +75,6 @@ from src.training.reward_model_utils import (
     left_to_right_pad,
     interleave_with_expert_lists,
 )
-from src.training.reward_model_trainer import RewardModelTrainer
-from src.training.advantage_calculator import AdvantageCalculator
-from src.training.generation_utils import (
-    CompletionGenerator,
-    LogProbabilityComputer,
-    CompletionMasker,
-)
 
 # Add this import for threadpool parallelism
 from concurrent.futures import ThreadPoolExecutor
@@ -288,63 +281,6 @@ class AIRLTrainer(GRPOTrainer):
         self.neg_label_smoothing = getattr(
             args, "neg_label_smoothing", None
         )  # defaults to self.eps if None
-
-        # Initialize helper modules
-        self.reward_trainer = RewardModelTrainer(
-            reward_model=self.reward_model,
-            reward_optimizer=self.reward_optimizer,
-            reward_tokenizer=self.reward_tokenizer,
-            accelerator=self.accelerator,
-            args=args,
-            eps=self.eps,
-            disc_temperature=self.disc_temperature,
-            clip_reward_model=self.clip_reward_model,
-            reward_lb=self.reward_lb,
-            reward_ub=self.reward_ub,
-            response_only=self.response_only,
-            dense_rewards=self.dense_rewards,
-            classifier_loss=self.classifier_loss,
-            neg_label_smoothing=self.neg_label_smoothing,
-            neg_sample_weight=self.neg_sample_weight,
-            max_completion_length=self.max_completion_length,
-            max_micro_batch=self.max_micro_batch,
-            num_neg_perturbations_per_expert=self.num_neg_perturbations_per_expert,
-        )
-
-        self.advantage_calculator = AdvantageCalculator(
-            device=self.accelerator.device,
-            advantage_calculation=self.advantage_calculation,
-            normalise_rewards=self.normalise_rewards,
-            scale_rewards=self.scale_rewards,
-            dense_rewards=self.dense_rewards,
-            dense_gamma=self.dense_gamma,
-        )
-
-        self.completion_generator = CompletionGenerator(
-            model=self.model_wrapped,
-            processing_class=self.policy_tokenizer,
-            accelerator=self.accelerator,
-            args=args,
-            max_prompt_length=self.max_prompt_length,
-            max_completion_length=self.max_completion_length,
-            use_vllm=self.use_vllm,
-            vllm_mode=getattr(self, "vllm_mode", "server"),
-        )
-
-        self.logprob_computer = LogProbabilityComputer(
-            model=self.model_wrapped,
-            accelerator=self.accelerator,
-            max_completion_length=self.max_completion_length,
-        )
-
-        self.completion_masker = CompletionMasker(
-            processing_class=self.policy_tokenizer,
-            device=self.accelerator.device,
-        )
-
-        # Reward model warm-up configuration
-        self.reward_warmup_steps = getattr(args, "reward_warmup_steps", 0)
-        self.reward_warmup_completed = False
 
     # -----------------------------------------------------------------------
     # Data utilities
@@ -1048,53 +984,8 @@ class AIRLTrainer(GRPOTrainer):
 
         # After the generations and before assigning the reward, we need to fit the classifier
         if mode == "train":
-            # Check if we're in the reward model warm-up phase
-            if self.reward_warmup_steps > 0 and not self.reward_warmup_completed:
-                # Count reward model updates (typically one per policy update during normal training)
-                reward_update_count = getattr(self, "_reward_update_count", 0)
-                if reward_update_count < self.reward_warmup_steps:
-                    # Use warm-up training: expert + policy generations + perturbations
-                    classifier_loss = self._warmup_reward_model(
-                        inputs, prompts, completions
-                    )
-                    self._reward_update_count = reward_update_count + 1
-                    self._metrics[mode]["loss/classifier"].append(
-                        classifier_loss.item()
-                    )
-                    self._metrics[mode]["reward_warmup_step"].append(
-                        self._reward_update_count
-                    )
-
-                    if self.accelerator.is_main_process:
-                        print(
-                            f"[Reward Warm-up] Step {self._reward_update_count}/{self.reward_warmup_steps} - "
-                            f"Loss: {classifier_loss.item():.4f}"
-                        )
-                else:
-                    # Warm-up completed, switch to normal training
-                    self.reward_warmup_completed = True
-
-                    # Reset the learning rate scheduler so the policy model starts with proper warmup
-                    # without consuming steps where it wasn't being trained
-                    if hasattr(self, "lr_scheduler") and self.lr_scheduler is not None:
-                        self.lr_scheduler.last_epoch = -1
-
-                    if self.accelerator.is_main_process:
-                        print(
-                            f"\n✓ Reward model warm-up completed! Resetting policy LR scheduler...\n"
-                        )
-                    classifier_loss = self._update_reward_model(
-                        inputs, prompts, completions
-                    )
-                    self._metrics[mode]["loss/classifier"].append(
-                        classifier_loss.item()
-                    )
-            else:
-                # Normal training mode: use the standard update
-                classifier_loss = self._update_reward_model(
-                    inputs, prompts, completions
-                )
-                self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
+            classifier_loss = self._update_reward_model(inputs, prompts, completions)
+            self._metrics[mode]["loss/classifier"].append(classifier_loss.item())
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
@@ -1432,100 +1323,6 @@ class AIRLTrainer(GRPOTrainer):
     # Reward model utilities
     # -----------------------------------------------------------------------
 
-    def _warmup_reward_model(
-        self,
-        inputs: List[Dict[str, Any]],
-        prompts: List[List[Dict[str, str]]],
-        policy_completions: List[List[Dict]],
-    ) -> torch.Tensor:
-        """
-        Warm up the reward model discriminator with expert demonstrations.
-
-        This phase trains the reward model before alternating training begins.
-        It uses:
-        - Positives: expert demonstrations
-        - Negatives: policy-generated samples + perturbed expert demonstrations
-
-        Args:
-            inputs: List of input examples containing target (expert) responses
-            prompts: List of prompt lists in chat format
-            policy_completions: List of policy-generated completions
-
-        Returns:
-            Loss value from the warm-up step
-        """
-        device = self.accelerator.device
-
-        # Positives = expert completions
-        expert_completions = [
-            [{"role": "assistant", "content": element["target"]}] for element in inputs
-        ]
-
-        # Build perturbed negatives from experts
-        _per_out = self._make_perturbed_completions(prompts, expert_completions)
-        perturbed_completions = _per_out[0] if isinstance(_per_out, tuple) else _per_out
-
-        # Tokenise and prepare all inputs
-        expert_tokens, policy_tokens = tokenize_examples(
-            prompts,
-            expert_completions,
-            policy_completions,
-            self.reward_tokenizer,
-            self.max_completion_length,
-            device,
-            self.response_only,
-            self.dense_rewards,
-        )
-
-        # Deduplicate expert tokens and get multiplicities
-        expert_tokens, pos_counts, _ = dedup_token_batch(expert_tokens)
-        n_pos = expert_tokens["input_ids"].size(0)
-        n_pol = policy_tokens["input_ids"].size(0)
-
-        # Handle perturbed examples if present
-        perturbed_tokens = None
-        n_per = 0
-        if perturbed_completions:
-            _, perturbed_tokens = tokenize_examples(
-                prompts[: len(perturbed_completions)],
-                expert_completions[: len(perturbed_completions)],
-                perturbed_completions,
-                self.reward_tokenizer,
-                self.max_completion_length,
-                device,
-                self.response_only,
-                self.dense_rewards,
-            )
-            n_per = perturbed_tokens["input_ids"].size(0)
-
-        # Prepare batched data for training
-        batch, labels, weights = prepare_reward_batch(
-            expert_tokens,
-            policy_tokens,
-            perturbed_tokens,
-            n_pos,
-            n_pol,
-            n_per,
-            device,
-            self.eps,
-            self.neg_label_smoothing,
-            self.neg_sample_weight,
-            self.num_neg_perturbations_per_expert,
-            self.args.gradient_accumulation_steps,
-        )
-
-        # Training loop using the reward trainer
-        total_loss = self.reward_trainer.train_step(
-            batch, labels, weights, n_pos, n_pol, n_per, pos_counts
-        )
-
-        # Always step optimizer during warm-up
-        torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
-        self.reward_optimizer.step()
-        self.reward_optimizer.zero_grad()
-
-        return total_loss / self.args.gradient_accumulation_steps
-
     def _update_reward_model(
         self,
         inputs: List[Dict[str, Any]],
@@ -1594,23 +1391,245 @@ class AIRLTrainer(GRPOTrainer):
             self.args.gradient_accumulation_steps,
         )
 
-        # Training loop over gradient accumulation steps using the reward trainer
-        total_loss = self.reward_trainer.train_step(
+        # Training loop over gradient accumulation steps
+        total_loss = self._train_reward_model_loop(
             batch, labels, weights, n_pos, n_pol, n_per, pos_counts
         )
 
         # Optimizer step if needed
-        self.reward_trainer.optimizer_step(
-            self.reward_updates_per_policy_step,
-            self.state.global_step,
-            self.standard_grpo,
-        )
+        if (
+            self.state.global_step % self.reward_updates_per_policy_step == 0
+            and not self.standard_grpo
+        ):
+            torch.nn.utils.clip_grad_norm_(self.reward_model.parameters(), 1.0)
+            self.reward_optimizer.step()
+            self.reward_optimizer.zero_grad()
 
         return total_loss / self.args.gradient_accumulation_steps
+
+    def _train_reward_model_loop(
+        self,
+        batch: Dict[str, torch.Tensor],
+        labels: torch.Tensor,
+        weights: torch.Tensor,
+        n_pos: int,
+        n_pol: int,
+        n_per: int,
+        pos_counts: torch.Tensor,
+    ) -> torch.Tensor:
         """Training loop for reward model with gradient accumulation and micro-batching."""
         # Compute samples per accumulation step
         pos_per_step = n_pos // self.args.gradient_accumulation_steps
         pol_per_step = n_pol // self.args.gradient_accumulation_steps
+        per_per_step = (
+            n_per // self.args.gradient_accumulation_steps if n_per > 0 else 0
+        )
+        have_perturbed = n_per > 0
+
+        total_loss = 0
+        for step in range(self.args.gradient_accumulation_steps):
+            # Get slices for this step
+            pos_slice = slice(
+                step * pos_per_step,
+                (
+                    (step + 1) * pos_per_step
+                    if step < self.args.gradient_accumulation_steps - 1
+                    else n_pos
+                ),
+            )
+            pol_slice = slice(
+                step * pol_per_step,
+                (
+                    (step + 1) * pol_per_step
+                    if step < self.args.gradient_accumulation_steps - 1
+                    else n_pol
+                ),
+            )
+
+            # Prepare step data
+            if have_perturbed:
+                per_slice = slice(
+                    step * per_per_step,
+                    (
+                        (step + 1) * per_per_step
+                        if step < self.args.gradient_accumulation_steps - 1
+                        else n_per
+                    ),
+                )
+                step_batch = {
+                    k: torch.cat(
+                        [
+                            batch[k][:n_pos][pos_slice],
+                            batch[k][n_pos : n_pos + n_pol][pol_slice],
+                            batch[k][n_pos + n_pol :][per_slice],
+                        ],
+                        dim=0,
+                    )
+                    for k in batch.keys()
+                }
+                step_labels = torch.cat(
+                    [
+                        labels[:n_pos][pos_slice],
+                        labels[n_pos : n_pos + n_pol][pol_slice],
+                        labels[n_pos + n_pol :][per_slice],
+                    ]
+                )
+                step_weights = torch.cat(
+                    [
+                        weights[:n_pos][pos_slice],
+                        weights[n_pos : n_pos + n_pol][pol_slice],
+                        weights[n_pos + n_pol :][per_slice],
+                    ]
+                )
+            else:
+                step_batch = {
+                    k: torch.cat(
+                        [batch[k][:n_pos][pos_slice], batch[k][n_pos:][pol_slice]],
+                        dim=0,
+                    )
+                    for k in batch.keys()
+                }
+                step_labels = torch.cat(
+                    [labels[:n_pos][pos_slice], labels[n_pos:][pol_slice]]
+                )
+                step_weights = torch.cat(
+                    [weights[:n_pos][pos_slice], weights[n_pos:][pol_slice]]
+                )
+
+            # Process micro-batches
+            step_size = step_batch["input_ids"].size(0)
+            num_micro_batches = (
+                step_size + self.max_micro_batch - 1
+            ) // self.max_micro_batch
+            micro_batch_size = (step_size + num_micro_batches - 1) // num_micro_batches
+
+            step_loss = 0
+            for micro_idx in range(num_micro_batches):
+                start_idx = micro_idx * micro_batch_size
+                end_idx = min((micro_idx + 1) * micro_batch_size, step_size)
+
+                micro_batch = {k: v[start_idx:end_idx] for k, v in step_batch.items()}
+                micro_labels = step_labels[start_idx:end_idx]
+                micro_weights = step_weights[start_idx:end_idx]
+
+                if self.dense_rewards:
+                    micro_labels = micro_labels.unsqueeze(1).repeat(
+                        1, micro_batch["input_ids"].size(1)
+                    )
+
+                if self.classifier_loss == "bce":
+                    # Forward pass with micro-batch
+                    with self.accelerator.autocast():
+                        micro_logits = self.reward_model(
+                            input_ids=micro_batch["input_ids"],
+                            attention_mask=micro_batch["attention_mask"],
+                        ).logits.squeeze(-1)
+                        micro_bce = F.binary_cross_entropy_with_logits(
+                            micro_logits, micro_labels, reduction="none"
+                        )
+                        # Compute full loss but scale it down for proper gradient accumulation
+
+                        if self.dense_rewards:
+                            # Make sure only the tokens within the response mask contribute to the loss
+                            masked_micro_bce = micro_bce.masked_fill(
+                                micro_batch["response_mask"] == 0, 0.0
+                            )
+                            masked_micro_bce = masked_micro_bce / micro_batch[
+                                "response_mask"
+                            ].sum(1).unsqueeze(1)
+                            micro_loss = (
+                                masked_micro_bce * micro_weights.unsqueeze(1)
+                            ).sum() / step_weights.sum()
+                        else:
+                            micro_loss = (
+                                micro_bce * micro_weights
+                            ).sum() / step_weights.sum()
+                        scaled_loss = micro_loss / (
+                            self.args.gradient_accumulation_steps * num_micro_batches
+                        )
+
+                    # Backward pass on scaled loss for proper gradient accumulation
+                    scaled_loss.backward()
+                    step_loss += micro_loss.detach()  # Track full loss for return value
+
+                elif self.classifier_loss == "wgan":
+                    with self.accelerator.autocast():
+                        # Critic scores (no sigmoid) — shape: [B, T] if dense, else [B]
+                        micro_scores = self.reward_model(
+                            input_ids=micro_batch["input_ids"],
+                            attention_mask=micro_batch["attention_mask"],
+                        ).logits.squeeze(-1)
+
+                        micro_labels = micro_labels.float()  # 1 = expert, 0 = policy
+
+                        if self.dense_rewards:
+                            # token mask for the generated response region
+                            resp_mask = micro_batch["response_mask"].float()  # [B, T]
+                            # per-token masks for real/fake
+                            real_tok_mask = resp_mask * (
+                                micro_labels
+                                if micro_labels.dim() == 2
+                                else micro_labels.unsqueeze(1)
+                            )
+                            fake_tok_mask = resp_mask * (
+                                1.0
+                                - (
+                                    micro_labels
+                                    if micro_labels.dim() == 2
+                                    else micro_labels.unsqueeze(1)
+                                )
+                            )
+
+                            # mean score over tokens (avoid div-by-zero)
+                            real_count = real_tok_mask.sum().clamp_min(1.0)
+                            fake_count = fake_tok_mask.sum().clamp_min(1.0)
+                            real_mean = (
+                                micro_scores * real_tok_mask
+                            ).sum() / real_count
+                            fake_mean = (
+                                micro_scores * fake_tok_mask
+                            ).sum() / fake_count
+
+                            # WGAN critic loss: minimise (fake - real)
+                            micro_loss = fake_mean - real_mean
+
+                        else:
+                            # sequence-level case
+                            is_real = labels.view(-1) > 0.5
+                            real_scores = micro_scores[is_real]
+                            fake_scores = micro_scores[~is_real]
+
+                            # guard against empty split in tiny micro-batches
+                            real_mean = (
+                                real_scores.mean()
+                                if real_scores.numel() > 0
+                                else micro_scores.new_zeros(())
+                            )
+                            fake_mean = (
+                                fake_scores.mean()
+                                if fake_scores.numel() > 0
+                                else micro_scores.new_zeros(())
+                            )
+
+                            micro_loss = fake_mean - real_mean
+
+                        # scale for gradient accumulation (keep your existing scaling)
+                        scaled_loss = micro_loss / (
+                            self.args.gradient_accumulation_steps * num_micro_batches
+                        )
+
+                    # Backward pass for critic
+                    scaled_loss.backward()
+                    step_loss += micro_loss.detach()
+
+                else:
+                    raise NotImplemented(
+                        f"Classifier loss function `{self.classifier_loss}` not implemented"
+                    )
+
+            total_loss += step_loss
+
+        return total_loss
 
     # -----------------------------------------------------------------------
     def log(

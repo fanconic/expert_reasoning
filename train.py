@@ -1,3 +1,7 @@
+import os
+os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
+
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
@@ -7,6 +11,7 @@ from src.utils.utils import set_seed
 from src.data.dataset import get_dataset
 from src.rewards.reward_functions import get_reward_functions
 from src.training.grpo_module import run_grpo_training
+
 
 
 @hydra.main(config_path="configs", config_name="config_train", version_base="1.3")

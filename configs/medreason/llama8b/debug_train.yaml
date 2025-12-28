@@ -16,11 +16,11 @@ model:
   reward_gpu_memory_utilization: 0.15
   
   # Common settings
-  lora_rank: 128  # Base LoRA rank
+  lora_rank: 256  # Base LoRA rank
   use_gradient_checkpointing: true
   
   # Policy model specific
-  policy_lora_rank: 128  # Optional: override base rank for policy
+  policy_lora_rank: 256  # Optional: override base rank for policy
   policy_learning_rate: 1e-5
   add_expert_to_policy_optim: true
   add_expert_to_policy_balanced: false

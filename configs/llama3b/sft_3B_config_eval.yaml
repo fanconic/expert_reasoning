@@ -22,7 +22,7 @@ model:
   
   # Policy model specific
   policy_lora_rank: 256  # Optional: override base rank for policy
-  policy_learning_rate: 1e-5
+  policy_learning_rate: 1e-4
 
   # Reward model specific  
   reward_lora_rank: 32  # Optional: override base rank for reward
@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: llama3_sft
+  run_name: llama3b_sft
