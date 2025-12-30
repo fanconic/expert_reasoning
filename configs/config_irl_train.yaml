@@ -31,7 +31,7 @@ model:
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
-  advantage_calculation: "grpo"
+  advantage_calculation: "discounted_dense" # discounted_dense or avaverage_dense
 
   # Reward model settings
   use_outcome_rewards: true  # Use outcome rewards in addition to reward model
