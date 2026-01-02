@@ -92,6 +92,67 @@ if is_wandb_available():
 
 logger = logging.get_logger(__name__)
 
+def calculate_pad_tokens_in_prompt(
+    input_ids: torch.Tensor,
+    logits_to_keep: int,
+    pad_token_id: int
+) -> torch.Tensor:
+    """
+    Given prompt tensor, it returns all the left padded tokens in that sequence. so [pad, pad, pad, cat] = 3 tokens
+    """
+    if logits_to_keep >= input_ids.shape[1]:
+        raise ValueError("logits_to_keep must be smaller than the sequence length.")
+
+    prompt_section = input_ids[:, :-logits_to_keep]
+    padding_mask = (prompt_section == pad_token_id)
+    pad_token_counts = padding_mask.sum(dim=1)
+    return pad_token_counts
+
+def create_completion_attention_mask(
+    completion_input_ids: torch.Tensor,
+    left_pad_tokens_per_prompt: torch.Tensor,
+    max_left_pad: int,
+    pad_token_id: int
+) -> torch.Tensor:
+    """
+    Given that we have a sequence, [p,p,p,c,c,c,pad,pad,pad]
+
+    Where p are extra prompt tokens we got from slicing the torch tensor, c is completion tokens
+    and pad are pad tokens, this function would make a completion mask that would 0 out the pad
+    and p tokens. so in this example [0,0,0,1,1,1,0,0,0]
+    """
+    batch_size, completion_len = completion_input_ids.shape
+    device = completion_input_ids.device
+    num_tokens_to_mask = max_left_pad - left_pad_tokens_per_prompt
+    indices = torch.arange(completion_len, device=device).unsqueeze(0)
+    shift_mask = indices >= num_tokens_to_mask.unsqueeze(1)
+    non_padding_mask = (completion_input_ids != pad_token_id)
+    final_mask = shift_mask & non_padding_mask
+    return final_mask
+
+
+def pad_to_attention_layout(x: torch.Tensor, new_mask: torch.Tensor, pad_id: int) -> torch.Tensor:
+    """
+    x:       [B, L] right padded with pad_id
+    new_mask:[B, M] (0/1) with possible left and right padding; 1s are contiguous tokens
+    returns: [B, M] where token values from x are shifted into the 1-block of new_mask
+    """
+    B, L = x.shape
+    _, M = new_mask.shape
+    y = x.new_full((B, M), pad_id)
+    # first token position in the new layout (index of first 1)
+    # if a row is all zeros, argmax returns 0; handle that if needed
+    left_pad = new_mask.to(torch.int64).argmax(dim=1)  # [B]
+    # how many real tokens are in x (since it's right padded)
+    n_tokens = (x != pad_id).sum(dim=1)  # [B]
+    cols = torch.arange(L, device=x.device).unsqueeze(0).expand(B, L)  # [B, L]
+    valid = cols < n_tokens.unsqueeze(1)  # only real tokens from x
+    dest = left_pad.unsqueeze(1) + cols  # where those tokens should go in [B, M]
+    valid = valid & (dest < M)
+    rows = torch.arange(B, device=x.device).unsqueeze(1).expand_as(dest)
+    y[rows[valid], dest[valid]] = x[valid]
+    return y
+
 def left_pack_padding(tensor: torch.Tensor, pad_id: int) -> torch.Tensor:
     """
     Moves all padding tokens in each sequence of a batch to the right.
@@ -101,7 +162,6 @@ def left_pack_padding(tensor: torch.Tensor, pad_id: int) -> torch.Tensor:
     sorted_indices = torch.argsort(mask, dim=1, descending=True, stable=True)
     packed_tensor = torch.gather(tensor, 1, sorted_indices)
     return packed_tensor
-
 
 # ---------------------------------------------------------------------------
 class AIRLTrainer(GRPOTrainer):
@@ -333,13 +393,13 @@ class AIRLTrainer(GRPOTrainer):
             if weights[1:].any():
                 outcome_rewards = (rewards_per_func[:, 1:, :] * weights[1:].view(1, -1, 1)).sum(dim=1)  # Shape: (B, L)
                 outcome_rewards = outcome_rewards.nanmean(dim=1) # (B)
-                mean_grouped_rewards = outcome_rewards.view(-1, self.num_generations_with_expert).mean(dim=1)
-                mean_grouped_rewards = mean_grouped_rewards.repeat_interleave(self.num_generations_with_expert, dim=0)
-                outcome_advantages = outcome_rewards - mean_grouped_rewards
-                std_rewards = outcome_rewards.view(-1, self.num_generations_with_expert).std(dim=1)
-                std_rewards = std_rewards.repeat_interleave(self.num_generations_with_expert, dim=0)
-                is_std_zero = torch.isclose(std_rewards, torch.zeros_like(std_rewards))
-                outcome_advantages = outcome_advantages / (std_rewards + 1e-4)
+                mean_grouped_sparse_rewards = outcome_rewards.view(-1, self.num_generations_with_expert).mean(dim=1)
+                mean_grouped_sparse_rewards = mean_grouped_sparse_rewards.repeat_interleave(self.num_generations_with_expert, dim=0)
+                outcome_advantages = outcome_rewards - mean_grouped_sparse_rewards
+                std_rewards_sparse = outcome_rewards.view(-1, self.num_generations_with_expert).std(dim=1)
+                std_rewards_sparse = std_rewards_sparse.repeat_interleave(self.num_generations_with_expert, dim=0)
+                is_std_zero_sparse = torch.isclose(std_rewards_sparse, torch.zeros_like(std_rewards_sparse))
+                outcome_advantages = outcome_advantages / (std_rewards_sparse + 1e-4)
             else:
                 outcome_advantages = torch.zeros(B, device=device)
 
@@ -347,13 +407,13 @@ class AIRLTrainer(GRPOTrainer):
             # Construct a matrix M where M[k, t] = gamma^(k-t) for k >= t
             dense_rewards = rewards_per_func[:, 0, :] * weights[0]  # Shape: (B, L)
             mean_rewards_dense = dense_rewards.nanmean(1)
-            mean_grouped_rewards_dense = mean_rewards_dense.view(-1, self.num_generations_with_expert).mean(dim=1) 
-            mean_grouped_rewards_dense = mean_grouped_rewards_dense.repeat_interleave(self.num_generations_with_expert, dim=0)
+            mean_grouped_dense_rewards = mean_rewards_dense.view(-1, self.num_generations_with_expert).mean(dim=1) 
+            mean_grouped_dense_rewards = mean_grouped_dense_rewards.repeat_interleave(self.num_generations_with_expert, dim=0)
             std_rewards_dense = mean_rewards_dense.view(-1, self.num_generations_with_expert).std(dim=1)
             std_rewards_dense = std_rewards_dense.repeat_interleave(self.num_generations_with_expert, dim=0)
             is_std_zero_dense = torch.isclose(std_rewards_dense, torch.zeros_like(std_rewards_dense))
-
-            dense_advantages = (dense_rewards - mean_grouped_rewards_dense.unsqueeze(1)) / (std_rewards_dense.unsqueeze(1) + 1e-4)
+            # Normalise dense rewards
+            dense_advantages = (dense_rewards - mean_grouped_dense_rewards.unsqueeze(1)) / (std_rewards_dense.unsqueeze(1) + 1e-4)
             
             indices = torch.arange(L, device=device)
             diff = indices.view(-1, 1) - indices.view(1, -1)  # (L, 1) - (1, L) -> Matrix of (k - t)
@@ -370,11 +430,17 @@ class AIRLTrainer(GRPOTrainer):
             discounted_dense_advantages = discounted_dense_advantages.masked_fill(nan_mask, float('nan'))
             # 3. Combine
             advantages = outcome_advantages.unsqueeze(1) + discounted_dense_advantages  # Shape: (B, L)
-            all_process_advantages = advantages.clone()
+            #advantages = advantages.nan_to_num(0.0)[:, :-1]
+            all_process_advantages = advantages.nanmean(dim=1)  #(B)
+            if weights[1:].any():
+                mean_grouped_rewards = (mean_grouped_sparse_rewards + mean_grouped_dense_rewards) / 2
+                std_rewards =  (std_rewards_sparse + std_rewards_dense) / 2
+                is_std_zero = is_std_zero_sparse | is_std_zero_dense
+            else:
+                mean_grouped_rewards = mean_grouped_dense_rewards
+                std_rewards = std_rewards_dense
+                is_std_zero = is_std_zero_dense
             
-            import IPython; IPython.embed()
-            mean_grouped_rewards
-            is_std_zero
         else:
             if self.dense_rewards and self.advantage_calculation == "average_dense":
                 rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0).unsqueeze(2)).sum(dim=1) #(B, L)
@@ -410,7 +476,6 @@ class AIRLTrainer(GRPOTrainer):
         advantages = advantages[process_slice]
 
         return advantages, all_process_advantages, mean_grouped_rewards, std_rewards, is_std_zero
-
 
 
     def _generate_and_score_completions(
@@ -514,7 +579,12 @@ class AIRLTrainer(GRPOTrainer):
             # TRL 0.24.0 and below path
             if images is None:
                 # Left pad prompt before calculation old and ref hidden states
+                # ATTENTION doing this, because of the unsloth implementation (version: 2025.12.9)
+                left_pad_tokens_per_prompt = calculate_pad_tokens_in_prompt(prompt_completion_ids, logits_to_keep, self.processing_class.pad_token_id)
+                max_left_pad = max(left_pad_tokens_per_prompt).item()
                 prompt_completion_ids = left_pack_padding(prompt_completion_ids, self.processing_class.pad_token_id)
+                pseudo_completion_input_ids = prompt_completion_ids[:, -(logits_to_keep +max_left_pad):]
+                pseudo_completion_mask = create_completion_attention_mask(pseudo_completion_input_ids, left_pad_tokens_per_prompt, max_left_pad, self.processing_class.pad_token_id).to(attention_mask.dtype)      
         self.model.for_training()
 
         num_images = [len(img_list) for img_list in images] if images is not None else None
@@ -591,12 +661,16 @@ class AIRLTrainer(GRPOTrainer):
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
         # rewards_per_func to extract each process's subset.
-        import IPython; IPython.embed()
         rewards_per_func = self._calculate_rewards(inputs, prompts, completions, completion_ids_list)
 
         advantages, all_process_advantages, mean_grouped_rewards, std_rewards, is_std_zero = self._advantage_calculation(
             rewards_per_func, device, prompts
         )
+        
+        # ATTENTION doing this, because of the unsloth implementation (version: 2025.12.9)
+        if advantages.ndim == 2:
+            advantages = pad_to_attention_layout(advantages, pseudo_completion_mask, float("nan"))
+            advantages = advantages.nan_to_num(0.0)
 
         # Calculate mean reward per function, but only for samples where the function was applied (non-NaN values)
         for i, reward_func_name in enumerate(self.reward_func_names):

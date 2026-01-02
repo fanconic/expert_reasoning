@@ -26,7 +26,8 @@ except ImportError:
 def irl_load_model_and_tokenizer_trl(
     config,
     pretrained=False,
-    checkpoint=None
+    frozen_discriminator=False,
+    discriminator_path=None,
 ) -> Tuple[torch.nn.Module, torch.nn.Module, AutoTokenizer, AutoTokenizer]:
     """
     Load policy and reward models with separate LoRA adapters for adversarial IRL training.

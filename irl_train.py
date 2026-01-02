@@ -1,10 +1,12 @@
+import os
+os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
+#os.environ["TORCHDYNAMO_DISABLE"] = "1"
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb
 wandb.login()
 import os
-#os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
-#os.environ["VLLM_USE_V1"] = "0"
 
 
 @hydra.main(config_path="configs", config_name="config_irl_train", version_base="1.3")
