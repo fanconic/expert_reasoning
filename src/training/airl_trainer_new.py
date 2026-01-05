@@ -26,6 +26,7 @@ from __future__ import annotations
 
 # Standard library imports
 from collections import defaultdict
+import math
 from typing import Any, Dict, List, Optional, Union, Callable
 import os
 
@@ -60,6 +61,7 @@ from src.training.reward_model_utils import (
     dedup_token_batch,
     prepare_reward_batch,
 )
+from tqdm import tqdm
 
 # Add this import for threadpool parallelism
 
@@ -131,27 +133,24 @@ def create_completion_attention_mask(
     return final_mask
 
 
-def pad_to_attention_layout(x: torch.Tensor, new_mask: torch.Tensor, pad_id: int) -> torch.Tensor:
+def pad_to_attention_layout(x: torch.Tensor, new_mask: torch.Tensor, pad_value: float) -> torch.Tensor:
     """
-    x:       [B, L] right padded with pad_id
-    new_mask:[B, M] (0/1) with possible left and right padding; 1s are contiguous tokens
-    returns: [B, M] where token values from x are shifted into the 1-block of new_mask
+    Args:
+        x: [B, L] tensor (right-padded)
+        new_mask: [B, L + C] tensor (mixed left/right padding)
+        pad_value: Value to fill padding with (default 0)
+    Returns:
+        new_x: [B, L + C] tensor aligned with attention_mask
     """
     B, L = x.shape
-    _, M = new_mask.shape
-    y = x.new_full((B, M), pad_id)
-    # first token position in the new layout (index of first 1)
-    # if a row is all zeros, argmax returns 0; handle that if needed
-    left_pad = new_mask.to(torch.int64).argmax(dim=1)  # [B]
-    # how many real tokens are in x (since it's right padded)
-    n_tokens = (x != pad_id).sum(dim=1)  # [B]
-    cols = torch.arange(L, device=x.device).unsqueeze(0).expand(B, L)  # [B, L]
-    valid = cols < n_tokens.unsqueeze(1)  # only real tokens from x
-    dest = left_pad.unsqueeze(1) + cols  # where those tokens should go in [B, M]
-    valid = valid & (dest < M)
-    rows = torch.arange(B, device=x.device).unsqueeze(1).expand_as(dest)
-    y[rows[valid], dest[valid]] = x[valid]
-    return y
+    total_len = new_mask.shape[1]
+    C = total_len - L
+    new_x = torch.full( (B, total_len), fill_value=pad_value, dtype=x.dtype, device=x.device)
+    is_left_padded = new_mask[:, 0] == 0
+    new_x[~is_left_padded, :L] = x[~is_left_padded]
+    new_x[is_left_padded, C:] = x[is_left_padded]
+    return new_x
+
 
 def left_pack_padding(tensor: torch.Tensor, pad_id: int) -> torch.Tensor:
     """
@@ -162,6 +161,26 @@ def left_pack_padding(tensor: torch.Tensor, pad_id: int) -> torch.Tensor:
     sorted_indices = torch.argsort(mask, dim=1, descending=True, stable=True)
     packed_tensor = torch.gather(tensor, 1, sorted_indices)
     return packed_tensor
+
+
+def extract_expert_targets(self, inputs: list[dict]) -> list[Optional[str]]:
+    """Try a few common keys; returns None when no expert target exists."""
+    out: list[Optional[str]] = []
+    for ex in inputs:
+        t = None
+        if "target" in ex and ex["target"] is not None:
+            t = ex["target"]
+        out.append(t)
+    return out
+
+
+def build_texts(prompts: list, completions: list, reward_tok, is_chat: bool) -> list[str]:
+    """Build discriminator inputs exactly like your reward path (chat-template or plain concat)."""
+    if is_chat:
+        full_messages = [{"messages": p + c} for p, c in zip(prompts, completions)]
+        return [apply_chat_template(x, reward_tok)["text"] for x in full_messages]
+    else:
+        return [p + c for p, c in zip(prompts, completions)]
 
 # ---------------------------------------------------------------------------
 class AIRLTrainer(GRPOTrainer):
@@ -206,7 +225,6 @@ class AIRLTrainer(GRPOTrainer):
     ) -> None:
 
         self.reward_model = reward_model
-
         # Tokenizers --------------------------------------------------------------------
         self.policy_tokenizer = policy_tokenizer
         self.reward_tokenizer = reward_tokenizer
@@ -268,6 +286,10 @@ class AIRLTrainer(GRPOTrainer):
         opt_kwargs["weight_decay"] = getattr(args, "reward_weight_decay", opt_kwargs.get("weight_decay", 0.0))
         self.reward_optimizer = opt_cls(self.reward_model.parameters(), **opt_kwargs)
         self.reward_optimizer.zero_grad()
+        self.reward_model.to(self.accelerator.device)  # harmless if already on device
+        self.reward_model, self.reward_optimizer = self.accelerator.prepare(
+            self.reward_model, self.reward_optimizer
+        )
 
         if not self.use_outcome_rewards: # Only the reward model is used for training
             self.reward_weights = torch.zeros_like(self.reward_weights, dtype=torch.float32)
@@ -288,11 +310,295 @@ class AIRLTrainer(GRPOTrainer):
         self.neg_label_smoothing = getattr(args, "neg_label_smoothing", None)  # defaults to self.eps if None
         
         self.num_generations_with_expert = self.num_generations + 1 if self.add_expert_to_policy_optim else self.num_generations
-
+        self.reward_warmup_steps = self.args.reward_warmup_steps
+        self.warmup_done = False
+        self.max_length = self.args.max_prompt_length + self.args.max_completion_length
 
     # -----------------------------------------------------------------------
     # Core overwrites overrides
-    # -----------------------------------------------------------------------
+    # -----------------------------------------------------------------------$
+    def train(self, *args, **kwargs):
+        if self.reward_warmup_steps > 0 and not self.warmup_done:
+            self._warmup_discriminator()
+            self.warmup_done = True
+        return super().train(*args, **kwargs)
+
+
+    @profiling_decorator
+    def _update_reward_model_step(
+        self,
+        neg_prompts: list[Dict[str: str]],
+        neg_completions: list[str],
+        pos_prompts: list[Dict[str: str]],
+        pos_completions: list[str],
+        *,
+        do_step: bool = True,
+        log_prefix: str = "disc",
+        is_chat: bool = False,
+    ) -> dict[str, float]:
+        """
+        One discriminator update (or forward-only if do_step=False).
+
+        Typical regime:
+        len(pos_*) = B
+        len(neg_*) = B * K  (K = self.num_generations)
+        We do NOT repeat positives. Instead we balance BCE with weights.
+
+        Pairwise margin (optional) is computed per-prompt by reshaping negatives to (B, K)
+        and comparing each positive to an aggregate negative (mean/max).
+        """
+        device = self.accelerator.device
+
+        B = len(pos_completions)
+        if B == 0:
+            raise ValueError("Empty pos_completions in _update_reward_model_step.")
+        if len(pos_prompts) != B:
+            raise ValueError(f"pos_prompts length mismatch: {len(pos_prompts)=} vs {B=}.")
+
+        N = len(neg_completions)
+        if N == 0:
+            raise ValueError("Empty neg_completions in _update_reward_model_step.")
+        if N % B != 0:
+            raise ValueError(f"Expected len(neg_completions) to be a multiple of B. Got {N=} and {B=}.")
+        K = N // B
+        
+        pos_texts = build_texts(pos_prompts, pos_completions, self.reward_tokenizer, is_chat=is_chat)
+        neg_texts = build_texts(neg_prompts, neg_completions, self.reward_tokenizer, is_chat=is_chat)
+        pos_w, neg_w = K, 1.0
+
+        # ---- Microbatch sizing:
+        ga = int(getattr(self.args, "gradient_accumulation_steps", 1))
+        total = B + N
+        default_micro = math.ceil(total / max(1, ga))
+        micro_bs = int(getattr(self, "max_micro_batch", default_micro))
+        micro_bs = max(1, micro_bs)
+
+        # ----- Accumulate losses as *sums* (no graph) for logging
+        bce_pos_list = []
+        bce_neg_list = []
+        logits_pos_all = []
+        logits_neg_all = []
+
+        if do_step:
+            self.reward_optimizer.zero_grad()
+
+        def _tok(texts: list[str]):
+            return self.reward_tokenizer(
+                text=texts, return_tensors="pt", padding="max_length", padding_side="right",
+                add_special_tokens=False,truncation=True, max_length=self.max_length,
+            ).to(device)
+            
+        def _prompt_only_texts(prompts_chunk):
+            empty = [[{"role": "assistant", "content": ""}]] * len(prompts_chunk)
+            return build_texts(prompts_chunk, empty, self.reward_tokenizer, is_chat=is_chat)
+
+        def _completion_mask(full_batch, prompts_chunk):
+            """
+            full_batch: tokenised prompt+completion
+            prompts_chunk: corresponding prompts (same length)
+            Returns bool mask [bs, L] that is True ONLY for completion tokens (excludes prompt + pad).
+            """
+            prompt_batch = _tok(_prompt_only_texts(prompts_chunk))
+            prompt_lens = prompt_batch["attention_mask"].sum(dim=1)          # [bs]
+            attn = full_batch["attention_mask"].bool()                       # [bs, L]
+            L = attn.size(1)
+            idx = torch.arange(L, device=device).unsqueeze(0)                # [1, L]
+            return attn & (idx >= prompt_lens.unsqueeze(1))                  # [bs, L]
+
+        # ------------------------------------------------------------------
+        # PASS 1: count total valid completion tokens (only matters if dense)
+        # -----------------------------------------------------------------
+        if self.dense_rewards:
+            T_pos = torch.tensor(0.0, device=device)
+            T_neg = torch.tensor(0.0, device=device)
+
+            for i in range(0, B, micro_bs):
+                j = min(i + micro_bs, B)
+                batch_pos = _tok(pos_texts[i:j])
+                mask = _completion_mask(batch_pos, pos_prompts[i:j])
+                T_pos += mask.sum().to(T_pos.dtype)
+
+            for i in range(0, N, micro_bs):
+                j = min(i + micro_bs, N)
+                batch_neg = _tok(neg_texts[i:j])
+                mask = _completion_mask(batch_neg, neg_prompts[i:j])
+                T_neg += mask.sum().to(T_neg.dtype)
+
+        # ------------------------------------------------------------------
+        # PASS 2: forward/backward microbatched with EXACT global denominators
+        # ------------------------------------------------------------------
+        if do_step:
+            self.reward_optimizer.zero_grad()
+
+        # Logging accumulators (exact means)
+        pos_sum = torch.tensor(0.0, device=device)
+        neg_sum = torch.tensor(0.0, device=device)
+        pos_cnt = torch.tensor(0.0, device=device)  # either B (seq) or T_pos (dense) depending on logits dim
+        neg_cnt = torch.tensor(0.0, device=device)
+
+        logits_pos_all = []
+        logits_neg_all = []
+
+        # ---- POS
+        for i in range(0, B, micro_bs):
+            j = min(i + micro_bs, B)
+            batch_pos = _tok(pos_texts[i:j])
+            logits_pos = self.reward_model(**batch_pos).logits[..., 0]
+            y_pos = torch.rand_like(logits_pos) * self.eps + (1.0 - self.eps)
+
+            if self.dense_rewards:
+                mask = _completion_mask(batch_pos, pos_prompts[i:j])
+                loss_elt = F.binary_cross_entropy_with_logits(logits_pos, y_pos, reduction="none")
+                loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
+                cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
+
+                pos_sum += loss_sum.detach()
+                pos_cnt += cnt.detach()
+                logits_pos_all.append(logits_pos.detach()[mask])
+                denom = T_pos.clamp_min(1.0)
+            else:
+                loss_sum = F.binary_cross_entropy_with_logits(logits_pos, y_pos, reduction="sum")
+                cnt = torch.tensor(float(logits_pos.numel()), device=device)
+
+                pos_sum += loss_sum.detach()
+                pos_cnt += cnt.detach()
+                logits_pos_all.append(logits_pos.detach().view(-1))
+                denom = torch.tensor(float(B), device=device)
+
+            if do_step:
+                scale = (pos_w / (pos_w + neg_w)) * (1.0 / denom)
+                self.accelerator.backward(loss_sum * scale)
+
+        # ---- NEG
+        for i in range(0, N, micro_bs):
+            j = min(i + micro_bs, N)
+            batch_neg = _tok(neg_texts[i:j])
+            logits_neg = self.reward_model(**batch_neg).logits[..., 0]
+            y_neg = torch.rand_like(logits_neg) * self.eps
+            
+            if self.dense_rewards:
+                mask = _completion_mask(batch_neg, neg_prompts[i:j])
+                loss_elt = F.binary_cross_entropy_with_logits(logits_neg, y_neg, reduction="none")
+                loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
+                cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
+
+                neg_sum += loss_sum.detach()
+                neg_cnt += cnt.detach()
+                logits_neg_all.append(logits_neg.detach()[mask])
+                denom = T_neg.clamp_min(1.0)
+            else:
+                loss_sum = F.binary_cross_entropy_with_logits(logits_neg, y_neg, reduction="sum")
+                cnt = torch.tensor(float(logits_neg.numel()), device=device)
+
+                neg_sum += loss_sum.detach()
+                neg_cnt += cnt.detach()
+                logits_neg_all.append(logits_neg.detach().view(-1))
+                denom = torch.tensor(float(N), device=device)
+
+            if do_step:
+                scale = (neg_w / (pos_w + neg_w)) * (1.0 / denom)
+                self.accelerator.backward(loss_sum * scale)
+
+        if do_step:
+            reward_max_grad_norm = getattr(self.args, "max_grad_norm", None)
+            if reward_max_grad_norm is not None:
+                self.accelerator.clip_grad_norm_(self.reward_model.parameters(), float(reward_max_grad_norm))
+            self.reward_optimizer.step()
+
+        # Metrics (exact means + accuracies)
+        bce_pos = (pos_sum / pos_cnt.clamp_min(1.0))
+        bce_neg = (neg_sum / neg_cnt.clamp_min(1.0))
+        loss = (pos_w * bce_pos + neg_w * bce_neg) / (pos_w + neg_w)
+
+        logits_pos_det = torch.cat(logits_pos_all, dim=0)
+        logits_neg_det = torch.cat(logits_neg_all, dim=0)
+
+        p_pos = torch.sigmoid(logits_pos_det)
+        p_neg = torch.sigmoid(logits_neg_det)
+        acc_pos = (p_pos >= 0.5).float().mean()
+        acc_neg = (p_neg < 0.5).float().mean()
+        acc = p_pos.size(0) / (p_pos.size(0) + p_neg.size(0)) * acc_pos + p_neg.size(0) / (p_pos.size(0) + p_neg.size(0)) * acc_neg
+
+        def gmean(x: torch.Tensor) -> float:
+            return self.accelerator.gather(x.detach()).mean().item()
+
+        return {
+            f"{log_prefix}/loss": gmean(loss),
+            f"{log_prefix}/bce_pos": gmean(bce_pos),
+            f"{log_prefix}/bce_neg": gmean(bce_neg),
+            f"{log_prefix}/acc": gmean(acc),
+            f"{log_prefix}/acc_pos": gmean(acc_pos),
+            f"{log_prefix}/acc_neg": gmean(acc_neg),
+            f"{log_prefix}/logit_pos_mean": gmean(logits_pos_det.mean()),
+            f"{log_prefix}/logit_neg_mean": gmean(logits_neg_det.mean()),
+            f"{log_prefix}/prob_pos_mean": gmean(p_pos.mean()),
+            f"{log_prefix}/prob_neg_mean": gmean(p_neg.mean()),
+        }
+
+
+    def _warmup_discriminator(self):
+        if self.reward_warmup_steps <= 0:
+            return
+        
+        disc_tok = self.reward_tokenizer
+        policy_was_training = self.model.training
+        reward_was_training = self.reward_model.training
+        self.model.eval()
+        self.reward_model.train()
+
+        dataloader = self.get_train_dataloader()
+        iterator = iter(dataloader)
+
+        for step_idx in tqdm(range(self.reward_warmup_steps), desc="Warming up Reward Model"):
+            try:
+                batch = next(iterator)
+            except StopIteration:
+                iterator = iter(dataloader)
+                batch = next(iterator)
+
+            neg_prompts = [x["prompt"] for x in batch]
+
+            images = None
+            if "images" in batch[0]:
+                images = [x.get("images") for x in batch]
+            elif "image" in batch[0]:
+                images = [[x.get("image")] if x.get("image") is not None else None for x in batch]
+            if images is not None and all(img_list == [] for img_list in images):
+                images = None
+
+            # Efficient negatives (uses vLLM if GRPOTrainer configured that way)
+            with torch.no_grad():
+                _, completion_ids_list, _, _, _ = self._generate(neg_prompts, images)
+
+            neg_completions = self.processing_class.batch_decode(completion_ids_list, skip_special_tokens=True)
+            neg_completions = [[{"role": "assistant", "content": c}] for c in neg_completions]
+            pos_prompts = [batch[i]["prompt"] for i in range(0, len(batch), self.num_generations)]
+            pos_completions = [batch[i]["target"] for i in range(0, len(batch), self.num_generations)]
+            pos_completions = [[{"role": "assistant", "content": c + self.reward_tokenizer.eos_token}] for c in pos_completions]
+            
+            is_chat = is_conversational(batch[0])
+            metrics = self._update_reward_model_step(
+                neg_prompts, neg_completions, pos_prompts, pos_completions, do_step=True, log_prefix="reward_warmup", is_chat=is_chat
+            )
+
+            if (step_idx + 1) % self.args.logging_steps == 0 or (step_idx + 1) == self.reward_warmup_steps:
+                metrics["reward_warmup/step"] = step_idx + 1
+                self.log(metrics)
+                if self.accelerator.is_main_process:
+                    logger.info(
+                        f"[reward warmup] step {step_idx+1}/{self.reward_warmup_steps} | "
+                        f"loss={metrics['reward_warmup/loss']:.4f}"
+                        f"acc={metrics['reward_warmup/acc']:.2f} | POS: "
+                        f"acc={metrics['reward_warmup/bce_pos']:.4f}"
+                        f"acc={metrics['reward_warmup/acc_pos']:.2f} | NEG: "
+                        f"acc={metrics['reward_warmup/bce_neg']:.4f}"
+                        f"acc={metrics['reward_warmup/acc_neg']:.2f}"
+                    )
+
+        if policy_was_training: self.model.train()
+        if not reward_was_training: self.reward_model.eval()
+
+
     @profiling_decorator
     def _calculate_rewards(self, inputs, prompts, completions, completion_ids_list):
         device = self.accelerator.device
@@ -323,15 +629,12 @@ class AIRLTrainer(GRPOTrainer):
                 # === BRANCH A: NEURAL REWARD MODEL ===
                 if isinstance(reward_func, nn.Module):
                     # OPTIMIZATION: We no longer need 'prompt_texts'. We only need the full conversation.
-                    if is_conversational(inputs[0]):
-                        full_messages = [{"messages": p + c} for p, c in zip(prompts, completions)]
-                        full_texts = [apply_chat_template(x, reward_processing_class)["text"] for x in full_messages]
-                    else:
-                        full_texts = [p + c for p, c in zip(prompts, completions)]
+                    full_texts = build_texts(prompts, completions, reward_processing_class, is_conversational(inputs[0]))
 
                     # Tokenize (Padding side = Right) ATTENTION always right padded
                     reward_inputs = reward_processing_class(
-                        text=full_texts, return_tensors="pt", padding=True, padding_side="right", add_special_tokens=False
+                        text=full_texts, return_tensors="pt", padding="max_length", padding_side="right", 
+                        add_special_tokens=False, truncation=True, max_length=self.max_length
                     ).to(device)
 
                     with torch.inference_mode():
@@ -516,7 +819,7 @@ class AIRLTrainer(GRPOTrainer):
         # Add expert demonstrations to the batch if specified
         if self.add_expert_to_policy_optim:
             B, max_completion_length = completion_ids.shape
-            expert_completions = list(set([x["target"] + self.processing_class.eos_token for x in inputs]))
+            expert_completions = [inputs[i]["target"] + self.processing_class.eos_token for i in range(0, B, self.num_generations)]
             expert_tokens = self.processing_class(
                 text=expert_completions, return_tensors="pt", padding="max_length", padding_side="right", 
                 add_special_tokens=False, max_length=max_completion_length, truncation=True
@@ -650,13 +953,33 @@ class AIRLTrainer(GRPOTrainer):
         # Decode
         prompts_text = self.processing_class.batch_decode(prompt_ids, skip_special_tokens=True)
         completions_text = self.processing_class.batch_decode(completion_ids, skip_special_tokens=True)
-        if is_conversational(inputs[0]):
+        is_chat = is_conversational(inputs[0])
+        if is_chat:
             completions = []
             for prompt, completion in zip(prompts, completions_text):
                 bootstrap = prompt.pop()["content"] if prompt[-1]["role"] == "assistant" else ""
                 completions.append([{"role": "assistant", "content": bootstrap + completion}])
         else:
             completions = completions_text
+            
+        # Update Reward Model: import for AIRL
+        if self.add_expert_to_policy_optim:
+            prompts_neg = [p for i, p in enumerate(prompts) if (i+1) % self.num_generations_with_expert != 0]
+            completions_neg = [c for i, c in enumerate(completions) if (i+1) % self.num_generations_with_expert != 0]
+            prompts_pos = [p for i, p in enumerate(prompts) if (i+1) % self.num_generations_with_expert == 0]
+            completions_pos = [c for i, c in enumerate(completions) if (i+1) % self.num_generations_with_expert == 0]
+        else:
+            prompts_neg = prompts
+            completions_neg = completions
+            prompts_pos =  [inputs[i]["prompts"] for i in range(0, len(inputs), self.num_generations)]
+            completions_pos = [
+                [{"role": "assistant", "content": inputs[i]["targets"]}] for i in range(0, len(inputs), self.num_generations)
+            ]
+            
+        self._update_reward_model_step(
+            prompts_neg, completions_neg, prompts_pos, completions_pos, 
+            do_step=True, log_prefix="reward", is_chat=is_chat
+        )
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
@@ -752,7 +1075,8 @@ class AIRLTrainer(GRPOTrainer):
             output["num_images"] = num_images
         return output
 
-  
+
+
     def save_model(self, output_dir, _internal_call=True):
         """
         Save the policy (handled by super) AND the reward model (+ tokenizer).
