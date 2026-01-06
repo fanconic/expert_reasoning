@@ -6,8 +6,8 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/qwen3b_sft/checkpoint-500"
-  reward_name: "Qwen/Qwen2.5-3B-Instruct"
+  policy_name: "Qwen/Qwen2.5-7B-Instruct"
+  reward_name: "Qwen/Qwen2.5-7B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -34,7 +34,7 @@ model:
   advantage_calculation: "discounted_dense" # discounted_dense or avaverage_dense
 
   # Reward model settings
-  use_outcome_rewards: true  # Use outcome rewards in addition to reward model
+  use_outcome_rewards: false  # Use outcome rewards in addition to reward model
   reward_updates_per_policy_step: 1
   disc_temperature: 1
   classifier_loss: "bce"
@@ -58,7 +58,7 @@ dataset:
   name: "gsm8k_kd"
   split: "train"
   train_ratio: 1
-  val_ratio: 0.01
+  val_ratio: 0.1
 
 training:
   # Common training params
@@ -72,8 +72,8 @@ training:
   optim: "paged_adamw_8bit"
   logging_steps: 10
   max_grad_norm: 1.0
-  output_dir: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}"
-  report_to: "none"
+  output_dir: "/mnt/pdata/caf83/icml_math/outputs/${wandb.run_name}"
+  report_to: "wandb"
   per_device_train_batch_size: 16
   max_micro_batch: 4  #max batch for the reward model such that I don't run out of memory
   gradient_accumulation_steps: 2
@@ -88,7 +88,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 2
+  eval_steps: 100
   per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
@@ -96,4 +96,4 @@ eval:
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: debug
+  run_name: qwen7b_1_warmup

@@ -132,6 +132,27 @@ def create_completion_attention_mask(
     final_mask = shift_mask & non_padding_mask
     return final_mask
 
+def focal_loss(inputs, targets, alpha=0.25, gamma=2.0, reduction="none"):
+    """
+    inputs: logits
+    targets: labels (0 or 1)
+    """
+    bce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
+    pt = torch.exp(-bce_loss) # Prevents nans
+    focal_term = (1 - pt) ** gamma
+    
+    # Alpha balancing (optional, but good for imbalanced SFT vs Expert batches)
+    if alpha is not None:
+        alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+        loss = alpha_t * focal_term * bce_loss
+    else:
+        loss = focal_term * bce_loss
+        
+    if reduction == "mean":
+        return loss.mean()
+    elif reduction == "sum":
+        return loss.sum()
+    return loss
 
 def pad_to_attention_layout(x: torch.Tensor, new_mask: torch.Tensor, pad_value: float) -> torch.Tensor:
     """
@@ -139,16 +160,25 @@ def pad_to_attention_layout(x: torch.Tensor, new_mask: torch.Tensor, pad_value: 
         x: [B, L] tensor (right-padded)
         new_mask: [B, L + C] tensor (mixed left/right padding)
         pad_value: Value to fill padding with (default 0)
-    Returns:
-        new_x: [B, L + C] tensor aligned with attention_mask
     """
     B, L = x.shape
     total_len = new_mask.shape[1]
+    if L > total_len:
+        x = x[:, :total_len]
+        L = total_len
+        
     C = total_len - L
-    new_x = torch.full( (B, total_len), fill_value=pad_value, dtype=x.dtype, device=x.device)
+    new_x = torch.full((B, total_len), fill_value=pad_value, dtype=x.dtype, device=x.device)
     is_left_padded = new_mask[:, 0] == 0
-    new_x[~is_left_padded, :L] = x[~is_left_padded]
-    new_x[is_left_padded, C:] = x[is_left_padded]
+
+    # If left padded (standard HF), data goes to the right (C:)
+    if is_left_padded.any():
+        new_x[is_left_padded, C:] = x[is_left_padded]
+        
+    # If right padded (unsloth/packed), data goes to the left (:L)
+    if (~is_left_padded).any():
+        new_x[~is_left_padded, :L] = x[~is_left_padded]
+        
     return new_x
 
 
@@ -374,8 +404,6 @@ class AIRLTrainer(GRPOTrainer):
         micro_bs = max(1, micro_bs)
 
         # ----- Accumulate losses as *sums* (no graph) for logging
-        bce_pos_list = []
-        bce_neg_list = []
         logits_pos_all = []
         logits_neg_all = []
 
@@ -404,6 +432,38 @@ class AIRLTrainer(GRPOTrainer):
             L = attn.size(1)
             idx = torch.arange(L, device=device).unsqueeze(0)                # [1, L]
             return attn & (idx >= prompt_lens.unsqueeze(1))                  # [bs, L]
+        
+        def _sentence_boundary_mask(full_batch, prompts_chunk, base_completion_mask):
+            """
+            Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
+            Sentence boundaries are: '.', '\n', or '.\n' sequences.
+            """
+            input_ids = full_batch["input_ids"]  # [bs, L]
+            bs, L = input_ids.shape
+            
+            # Get token IDs for sentence boundaries
+            period_ids = self.reward_tokenizer.encode(".", add_special_tokens=False)
+            newline_ids = self.reward_tokenizer.encode("\n", add_special_tokens=False)
+            period_id = period_ids[0] if period_ids else -1
+            newline_id = newline_ids[0] if newline_ids else -1
+            
+            # Vectorized: find all periods and newlines in completion region
+            is_period = (input_ids == period_id) & base_completion_mask  # [bs, L]
+            is_newline = (input_ids == newline_id) & base_completion_mask  # [bs, L]
+            
+            # Detect .\n pattern: period followed by newline
+            is_newline_after_period = is_period[:, :-1] & is_newline[:, 1:]  # [bs, L-1]
+            is_newline_after_period = F.pad(is_newline_after_period, (1, 0), value=False)  # [bs, L]
+            
+            # Mark boundaries: newlines OR (periods that aren't followed by newlines)
+            boundary_mask = is_newline | (is_period & ~is_newline_after_period)
+            boundary_mask = torch.ones_like(boundary_mask) # TODO: ATTNETION, make modular
+            
+            # Always include last completion token
+            last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)  # [bs]
+            boundary_mask[torch.arange(bs, device=device), last_indices] |= base_completion_mask.any(dim=1)
+            
+            return boundary_mask
 
         # ------------------------------------------------------------------
         # PASS 1: count total valid completion tokens (only matters if dense)
@@ -415,13 +475,15 @@ class AIRLTrainer(GRPOTrainer):
             for i in range(0, B, micro_bs):
                 j = min(i + micro_bs, B)
                 batch_pos = _tok(pos_texts[i:j])
-                mask = _completion_mask(batch_pos, pos_prompts[i:j])
+                base_mask = _completion_mask(batch_pos, pos_prompts[i:j])
+                mask = _sentence_boundary_mask(batch_pos, pos_prompts[i:j], base_mask)
                 T_pos += mask.sum().to(T_pos.dtype)
 
             for i in range(0, N, micro_bs):
                 j = min(i + micro_bs, N)
                 batch_neg = _tok(neg_texts[i:j])
-                mask = _completion_mask(batch_neg, neg_prompts[i:j])
+                base_mask = _completion_mask(batch_neg, neg_prompts[i:j])
+                mask = _sentence_boundary_mask(batch_neg, neg_prompts[i:j], base_mask)
                 T_neg += mask.sum().to(T_neg.dtype)
 
         # ------------------------------------------------------------------
@@ -447,8 +509,11 @@ class AIRLTrainer(GRPOTrainer):
             y_pos = torch.rand_like(logits_pos) * self.eps + (1.0 - self.eps)
 
             if self.dense_rewards:
-                mask = _completion_mask(batch_pos, pos_prompts[i:j])
-                loss_elt = F.binary_cross_entropy_with_logits(logits_pos, y_pos, reduction="none")
+                base_mask = _completion_mask(batch_pos, pos_prompts[i:j])
+                mask = _sentence_boundary_mask(batch_pos, pos_prompts[i:j], base_mask)
+                
+                # No ramp weighting for sentence boundaries - treat all equally
+                loss_elt = focal_loss(logits_pos, y_pos, gamma=2.0, reduction="none")
                 loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
                 cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
 
@@ -477,8 +542,11 @@ class AIRLTrainer(GRPOTrainer):
             y_neg = torch.rand_like(logits_neg) * self.eps
             
             if self.dense_rewards:
-                mask = _completion_mask(batch_neg, neg_prompts[i:j])
-                loss_elt = F.binary_cross_entropy_with_logits(logits_neg, y_neg, reduction="none")
+                base_mask = _completion_mask(batch_neg, neg_prompts[i:j])
+                mask = _sentence_boundary_mask(batch_neg, neg_prompts[i:j], base_mask)
+                
+                # No ramp weighting for sentence boundaries - treat all equally
+                loss_elt = focal_loss(logits_neg, y_neg, gamma=2.0, reduction="none")
                 loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
                 cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
 
@@ -539,8 +607,7 @@ class AIRLTrainer(GRPOTrainer):
     def _warmup_discriminator(self):
         if self.reward_warmup_steps <= 0:
             return
-        
-        disc_tok = self.reward_tokenizer
+
         policy_was_training = self.model.training
         reward_was_training = self.reward_model.training
         self.model.eval()
@@ -587,11 +654,11 @@ class AIRLTrainer(GRPOTrainer):
                 if self.accelerator.is_main_process:
                     logger.info(
                         f"[reward warmup] step {step_idx+1}/{self.reward_warmup_steps} | "
-                        f"loss={metrics['reward_warmup/loss']:.4f}"
+                        f"loss={metrics['reward_warmup/loss']:.4f} "
                         f"acc={metrics['reward_warmup/acc']:.2f} | POS: "
-                        f"acc={metrics['reward_warmup/bce_pos']:.4f}"
+                        f"loss={metrics['reward_warmup/bce_pos']:.4f} "
                         f"acc={metrics['reward_warmup/acc_pos']:.2f} | NEG: "
-                        f"acc={metrics['reward_warmup/bce_neg']:.4f}"
+                        f"loss={metrics['reward_warmup/bce_neg']:.4f} "
                         f"acc={metrics['reward_warmup/acc_neg']:.2f}"
                     )
 
@@ -769,13 +836,15 @@ class AIRLTrainer(GRPOTrainer):
             is_std_zero = torch.isclose(std_rewards, torch.zeros_like(std_rewards))
             if self.scale_rewards != "none":
                 advantages = advantages / (std_rewards + 1e-4)
+                
+            all_process_advantages = advantages.clone()  # keep the aggregated advantages for logging
 
         # Slice to keep only the local part of the data
         process_slice = slice(
             self.accelerator.process_index * len(prompts),
             (self.accelerator.process_index + 1) * len(prompts),
         )
-        all_process_advantages = advantages.clone()  # keep the aggregated advantages for logging
+
         advantages = advantages[process_slice]
 
         return advantages, all_process_advantages, mean_grouped_rewards, std_rewards, is_std_zero
@@ -824,7 +893,8 @@ class AIRLTrainer(GRPOTrainer):
                 text=expert_completions, return_tensors="pt", padding="max_length", padding_side="right", 
                 add_special_tokens=False, max_length=max_completion_length, truncation=True
             )
-            expert_completion_ids_list = self.processing_class(text=expert_completions, add_special_tokens=False).input_ids
+            raw_expert_ids = self.processing_class(text=expert_completions, add_special_tokens=False).input_ids
+            expert_completion_ids_list = [ids[:max_completion_length] for ids in raw_expert_ids]
             expert_completion_ids = expert_tokens["input_ids"].to(completion_ids.device).unsqueeze(1)
             expert_completion_mask = expert_tokens["attention_mask"].to(completion_ids.device).unsqueeze(1)
             
@@ -887,7 +957,9 @@ class AIRLTrainer(GRPOTrainer):
                 max_left_pad = max(left_pad_tokens_per_prompt).item()
                 prompt_completion_ids = left_pack_padding(prompt_completion_ids, self.processing_class.pad_token_id)
                 pseudo_completion_input_ids = prompt_completion_ids[:, -(logits_to_keep +max_left_pad):]
-                pseudo_completion_mask = create_completion_attention_mask(pseudo_completion_input_ids, left_pad_tokens_per_prompt, max_left_pad, self.processing_class.pad_token_id).to(attention_mask.dtype)      
+                pseudo_completion_mask = create_completion_attention_mask(
+                    pseudo_completion_input_ids, left_pad_tokens_per_prompt, max_left_pad, self.processing_class.pad_token_id
+                ).to(attention_mask.dtype)      
         self.model.for_training()
 
         num_images = [len(img_list) for img_list in images] if images is not None else None
@@ -975,11 +1047,15 @@ class AIRLTrainer(GRPOTrainer):
             completions_pos = [
                 [{"role": "assistant", "content": inputs[i]["targets"]}] for i in range(0, len(inputs), self.num_generations)
             ]
-            
-        self._update_reward_model_step(
-            prompts_neg, completions_neg, prompts_pos, completions_pos, 
-            do_step=True, log_prefix="reward", is_chat=is_chat
-        )
+
+        if mode == "train":
+            reward_metrics = self._update_reward_model_step(
+                prompts_neg, completions_neg, prompts_pos, completions_pos, 
+                do_step=True, log_prefix="reward", is_chat=is_chat
+            )
+        
+        if (self.state.global_step + 1) % self.args.logging_steps == 0:
+            self.log(reward_metrics)
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
@@ -1003,13 +1079,15 @@ class AIRLTrainer(GRPOTrainer):
             self._metrics[mode][f"rewards/{reward_func_name}/std"].append(std_func_rewards)
         self._metrics[mode]["reward"].append(mean_grouped_rewards.mean().item())
         self._metrics[mode]["reward_std"].append(std_rewards.mean().item())
-        self._metrics[mode]["frac_reward_zero_std"].append(is_std_zero.float().mean().item())
-
+        self._metrics[mode]["frac_reward_zero_std"].append(is_std_zero.float().mean().item())   
         # Log prompt and completion texts
         self._logs["prompt"].extend(gather_object(prompts_text))
         self._logs["completion"].extend(gather_object(completions_text))
         for i, name in enumerate(self.reward_func_names):
-            self._logs["rewards"][name].extend(rewards_per_func[:, i].tolist())
+            if rewards_per_func.dim() == 3:
+                self._logs["rewards"][name].extend(rewards_per_func[:, i].nanmean(1).tolist())
+            else:   
+                self._logs["rewards"][name].extend(rewards_per_func[:, i].tolist())
         self._logs["advantages"].extend(all_process_advantages.tolist())
 
         if images is not None:
@@ -1074,7 +1152,6 @@ class AIRLTrainer(GRPOTrainer):
         if images is not None:
             output["num_images"] = num_images
         return output
-
 
 
     def save_model(self, output_dir, _internal_call=True):

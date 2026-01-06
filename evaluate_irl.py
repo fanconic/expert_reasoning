@@ -10,13 +10,10 @@ from src.models.model_module_trl import irl_load_model_and_tokenizer_trl
 from src.rewards.reward_functions import (
     strict_format_reward_func,
     soft_format_reward_func,
-    answer_reward_function,
     eval_correctness_gsm8k,
     eval_correctness_countdown,
-    eval_correctness_medical_o1,
     int_reward_func,
     xmlcount_reward_func,
-    correctness_reward_func,
 )
 import torch
 import numpy as np

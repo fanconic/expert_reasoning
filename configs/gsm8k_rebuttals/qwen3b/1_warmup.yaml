@@ -12,8 +12,8 @@ model:
   max_completion_length: 824
   load_in_4bit: true
   fast_inference: ${unsloth}
-  policy_gpu_memory_utilization: 0.6
-  reward_gpu_memory_utilization: 0.15
+  policy_gpu_memory_utilization: 0.4
+  reward_gpu_memory_utilization: 0.4
   
   # Common settings
   lora_rank: 256  # Base LoRA rank
@@ -30,7 +30,7 @@ model:
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
   dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
-  dense_gamma: 0.99
+  dense_gamma: 0.9
   advantage_calculation: "discounted_dense" # discounted_dense or avaverage_dense
 
   # Reward model settings
@@ -96,4 +96,4 @@ eval:
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: 1_warmup
+  run_name: qwen3b_1_warmup
