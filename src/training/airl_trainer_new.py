@@ -236,7 +236,7 @@ def switch_label_if_correct_func(
     [completions_pos.append(neg) for mask, neg in zip(correct_mask, completions_neg) if mask]
     prompts_neg = [neg for mask, neg in zip(correct_mask, prompts_neg) if not mask]
     completions_neg = [neg for mask, neg in zip(correct_mask, completions_neg) if not mask]
-    return prompts_neg, completions_neg, prompts_pos, completions_poss
+    return prompts_neg, completions_neg, prompts_pos, completions_pos
 
 def perturb_expert_completions(
     prompts_neg: List[Any], 
@@ -471,9 +471,7 @@ class AIRLTrainer(GRPOTrainer):
         N = len(neg_completions)
         if N == 0:
             raise ValueError("Empty neg_completions in _update_reward_model_step.")
-        if N % B != 0:
-            raise ValueError(f"Expected len(neg_completions) to be a multiple of B. Got {N=} and {B=}.")
-        K = N // B
+        K = N / B
         
         pos_texts = build_texts(pos_prompts, pos_completions, self.reward_tokenizer, is_chat=is_chat)
         neg_texts = build_texts(neg_prompts, neg_completions, self.reward_tokenizer, is_chat=is_chat)
