@@ -7,39 +7,7 @@ from src.azure.azure_connection import client, DEPLOYMENT
 # "INFO HTTP 200 OK" are not printed to stdout.
 for _lg in ("azure.core.pipeline.policies.http_logging_policy", "azure", "httpx", "urllib3"):
     logging.getLogger(_lg).setLevel(logging.WARNING)
-
-
-
-def flip_operator_in_one_step(promtp:str, text: str) -> str:
-    """
-    Corrupt exactly ONE arithmetic line inside <think> by flipping an operator
-    (x -> +, + -> -, - -> +) while leaving numbers and dRHS unchanged.
-    This makes the step false but preserves formatting and tags.
-    """
-    m = re.search(r"<think>\s*(.*?)\s*</think>", text, flags=re.DOTALL)
-    if not m:
-        return text
-    think = m.group(1)
-    lines = think.splitlines()
-
-    # find candidate lines with an operator
-    idxs = [i for i, ln in enumerate(lines) if (" x " in ln) or (" + " in ln) or (" - " in ln)]
-    if not idxs:
-        return text
-
-    i = random.choice(idxs)
-    ln = lines[i]
-    if " x " in ln:
-        ln = ln.replace(" x ", " + ", 1)
-    elif " + " in ln:
-        ln = ln.replace(" + ", " - ", 1)
-    elif " - " in ln:
-        ln = ln.replace(" - ", " + ", 1)
-    lines[i] = ln
-
-    new_think = "\n".join(lines)
-    return text[:m.start(1)] + new_think + text[m.end(1):]
-
+    
 _ANSWER_RE = re.compile(r"(<answer>\s*)(.*?)(\s*</answer>)", flags=re.DOTALL)
 _THINK_RE  = re.compile(r"<think>\s*(.*?)\s*</think>", flags=re.DOTALL)
 
@@ -60,10 +28,10 @@ def _extract_think_numbers(text: str) -> list[str]:
     think = m.group(1)
     return re.findall(r"\b[+-]?\d+(?:\.\d+)?\b", think)
 
-def flip_operator_in_one_step(promtp:str, text: str) -> str:
+def flip_operator_in_one_step(text: str) -> str:
     """
     Corrupt exactly ONE arithmetic line inside <think> by flipping an operator
-    (x -> +, + -> -, - -> +) while leaving numbers and RHS unchanged.
+    to a random different operator (*, /, +, -) while leaving numbers and RHS unchanged.
     This makes the step false but preserves formatting and tags.
     """
     m = re.search(r"<think>\s*(.*?)\s*</think>", text, flags=re.DOTALL)
@@ -73,25 +41,30 @@ def flip_operator_in_one_step(promtp:str, text: str) -> str:
     lines = think.splitlines()
 
     # find candidate lines with an operator
-    idxs = [i for i, ln in enumerate(lines) if (" x " in ln) or (" + " in ln) or (" - " in ln)]
+    idxs = [i for i, ln in enumerate(lines) if ("*" in ln) or ("/" in ln) or ("+" in ln) or ("-" in ln)]
     if not idxs:
         return text
 
     i = random.choice(idxs)
     ln = lines[i]
-    if " x " in ln:
-        ln = ln.replace(" x ", " + ", 1)
-    elif " + " in ln:
-        ln = ln.replace(" + ", " - ", 1)
-    elif " - " in ln:
-        ln = ln.replace(" - ", " + ", 1)
+    
+    # Find the first operator in the line
+    operators = ['*', '/', '+', '-']
+    for op in operators:
+        if op in ln:
+            # Get remaining operators to choose from
+            remaining_ops = [o for o in operators if o != op]
+            new_op = random.choice(remaining_ops)
+            ln = ln.replace(op, new_op, 1)
+            break
+    
     lines[i] = ln
 
     new_think = "\n".join(lines)
     return text[:m.start(1)] + new_think + text[m.end(1):]
 
 
-def corrupt_answer_nearby_number(promtp:str, text: str) -> str:
+def corrupt_answer_nearby_number(text: str) -> str:
     """
     If the answer is numeric, nudge it by the smallest unit that preserves its
     formatting (int: ±1; float: ±10^-decimals). If boolean, flip. Otherwise,
@@ -139,7 +112,7 @@ def corrupt_answer_nearby_number(promtp:str, text: str) -> str:
     return _replace_answer_block(text, s + ".")
 
 
-def corrupt_answer_with_think_number(promtp:str, text: str) -> str:
+def corrupt_answer_with_think_number(text: str) -> str:
     """
     Replace the answer with a *different* number that appears in <think>.
     If none exist or all equal the current answer, fall back to nearby-number corruption.
@@ -161,7 +134,7 @@ def corrupt_answer_with_think_number(promtp:str, text: str) -> str:
 
 
 
-def corrupt_numbers(promtp:str, text: str) -> str:
+def corrupt_numbers(text: str) -> str:
     def repl(m):
         num = m.group(0)
         try:
@@ -170,7 +143,7 @@ def corrupt_numbers(promtp:str, text: str) -> str:
                 return f"{val + random.choice([-1.0, 1.0])*random.uniform(0.5, 2.0):.3f}"
             else:
                 val = int(num)
-                return str(val + random.choice([-2, -1, 1, 2]))
+                return str(val + random.choice([-10, -5, -2, -1, 1, 2, 5, 10]))
         except Exception:
             return num
     return re.sub(r"\b\d+(\.\d+)?\b", repl, text, count=max(1, len(re.findall(r'\d', text)) // 4))

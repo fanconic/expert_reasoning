@@ -190,6 +190,12 @@ class IRLConfig(GRPOConfig):
             "help": "Add the expert demonstration also to the advantage calculation in a balanced or single fashion"
         },
     )
+    switch_label_if_correct: bool = field(
+        default=False,
+        metadata={
+            "help": "switch labels of generations if the answer is correct (requires a verifiable reward)"
+        },
+    )
     classifier_loss: str = field(
         default="bce", metadata={"help": "Loss of the classifier `bce` or `wgan`"}
     )

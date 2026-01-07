@@ -29,6 +29,7 @@ from collections import defaultdict
 import math
 from typing import Any, Dict, List, Optional, Union, Callable
 import os
+import random
 
 # Third-party imports
 import torch
@@ -221,6 +222,45 @@ def backfill_rewards(rewards, mask):
     result = torch.gather(rewards, 1, next_valid_index)
     
     return result
+
+def switch_label_if_correct_func(
+    prompts_neg: List[Any], 
+    completions_neg: List[Any], 
+    prompts_pos: List[Any],
+    completions_pos: List[Any],
+    correctness_func: Callable,
+    answers: List[Any],
+):
+    correct_mask = correctness_func(prompts=None, completions=completions_neg, answer=answers)
+    [prompts_pos.append(neg) for mask, neg in zip(correct_mask, prompts_neg) if mask]
+    [completions_pos.append(neg) for mask, neg in zip(correct_mask, completions_neg) if mask]
+    prompts_neg = [neg for mask, neg in zip(correct_mask, prompts_neg) if not mask]
+    completions_neg = [neg for mask, neg in zip(correct_mask, completions_neg) if not mask]
+    return prompts_neg, completions_neg, prompts_pos, completions_poss
+
+def perturb_expert_completions(
+    prompts_neg: List[Any], 
+    completions_neg: List[Any], 
+    prompts_pos: List[Any],
+    completions_pos: List[Any],
+    perturb_fns: List[Callable],
+    n_perturbs: int
+): 
+    
+    for _ in range(n_perturbs):
+        if perturb_fns:
+            n_perturbs = random.choice(range(1, len(perturb_fns)+1))
+            selected_perturbs = random.sample(perturb_fns, k=n_perturbs)
+            for prompt, expert_text in zip(prompts_pos, completions_pos):
+                text_to_perturb = expert_text[0]["content"]
+                for perturb_func in selected_perturbs:
+                    text_to_perturb = perturb_func(text=text_to_perturb)
+                neg_expert_text = [{"role": "assistant", "content": text_to_perturb}]
+                prompts_neg.append(prompt)
+                completions_neg.append(neg_expert_text)
+        # TODO implement if it's precomputed for MedReason
+        
+    return prompts_neg, completions_neg, prompts_pos, completions_pos
 # ---------------------------------------------------------------------------
 class AIRLTrainer(GRPOTrainer):
     """Adversarial IRL trainer using the AIRL discriminator‑style reward.
@@ -344,6 +384,7 @@ class AIRLTrainer(GRPOTrainer):
         # Negatives from perturbed expert reasonings
         self.neg_perturb_fns = getattr(args, "neg_perturb_fns", None)  # List[Callable[[str], str]] or None
         self.num_neg_perturbations_per_expert = getattr(args, "num_neg_perturbations_per_expert", 1)
+        self.switch_label_if_correct = getattr(args, "switch_label_if_correct", False)
         self.neg_sample_weight = getattr(args, "neg_sample_weight", 1.0)  # weight in BCE
         self.disc_pairwise_margin = getattr(args, "disc_pairwise_margin", 0.0)  # >0 to enable pairwise hinge
         self.neg_label_smoothing = getattr(args, "neg_label_smoothing", None)  # defaults to self.eps if None
@@ -662,7 +703,29 @@ class AIRLTrainer(GRPOTrainer):
             pos_prompts = [batch[i]["prompt"] for i in range(0, len(batch), self.num_generations)]
             pos_completions = [batch[i]["target"] for i in range(0, len(batch), self.num_generations)]
             pos_completions = [[{"role": "assistant", "content": c + self.reward_tokenizer.eos_token}] for c in pos_completions]
-            
+                
+            # Check which negatives are correct and switch labels
+            if self.switch_label_if_correct:
+                neg_prompts, neg_completions, pos_prompts, pos_completions = switch_label_if_correct_func(
+                    prompts_neg=neg_prompts, 
+                    completions_neg=neg_completions, 
+                    prompts_pos=pos_prompts,
+                    completions_pos=pos_completions,
+                    correctness_func=self.reward_funcs[-1],
+                    answers=[x["answer"] for x in batch]
+                )
+                
+            # Pertub texts and make them negative
+            if self.num_neg_perturbations_per_expert:
+                neg_prompts, neg_completions, pos_prompts, pos_completions = perturb_expert_completions(
+                    prompts_neg=neg_prompts, 
+                    completions_neg=neg_completions, 
+                    prompts_pos=pos_prompts,
+                    completions_pos=pos_completions,
+                    perturb_fns=self.neg_perturb_fns,
+                    n_perturbs=self.num_neg_perturbations_per_expert,
+                )
+                
             is_chat = is_conversational(batch[0])
             metrics = self._update_reward_model_step(
                 neg_prompts, neg_completions, pos_prompts, pos_completions, do_step=True, log_prefix="reward_warmup", is_chat=is_chat
@@ -1073,13 +1136,34 @@ class AIRLTrainer(GRPOTrainer):
             ]
 
         if mode == "train":
+            if self.switch_label_if_correct:
+                prompts_neg, completions_neg, prompts_pos, completions_pos = switch_label_if_correct_func(
+                    prompts_neg=prompts_neg, 
+                    completions_neg=completions_neg, 
+                    prompts_pos=prompts_pos,
+                    completions_pos=completions_pos,
+                    correctness_func=self.reward_funcs[-1],
+                    answers=[x["answer"] for i, x in enumerate(inputs) if (i+1) % self.num_generations_with_expert != 0]
+                )
+
+            # Pertub texts and make them negative
+            if self.num_neg_perturbations_per_expert:
+                prompts_neg, completions_neg, prompts_pos, completions_pos = perturb_expert_completions(
+                    prompts_neg=prompts_neg, 
+                    completions_neg=completions_neg, 
+                    prompts_pos=prompts_pos,
+                    completions_pos=completions_pos,
+                    perturb_fns=self.neg_perturb_fns,
+                    n_perturbs=self.num_neg_perturbations_per_expert,
+                )
+                
             reward_metrics = self._update_reward_model_step(
                 prompts_neg, completions_neg, prompts_pos, completions_pos, 
                 do_step=True, log_prefix="reward", is_chat=is_chat
             )
         
-        if (self.state.global_step + 1) % self.args.logging_steps == 0:
-            self.log(reward_metrics)
+            if (self.state.global_step + 1) % self.args.logging_steps == 0:
+                self.log(reward_metrics)
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
@@ -1094,7 +1178,19 @@ class AIRLTrainer(GRPOTrainer):
         if advantages.ndim == 2:
             advantages = pad_to_attention_layout(advantages, pseudo_completion_mask, float("nan"))
             advantages = advantages.nan_to_num(0.0)
-
+        
+        # Remove the experts from the reward metric logging 
+        if self.add_expert_to_policy_optim:
+            B = advantages.size(0)
+            non_expert_mask = [(i+1) % self.num_generations_with_expert != 0 for i in range(B)]
+            rewards_per_func = rewards_per_func[non_expert_mask]
+            mean_grouped_rewards = mean_grouped_rewards[non_expert_mask] 
+            std_rewards = std_rewards[non_expert_mask] 
+            is_std_zero = is_std_zero[non_expert_mask] 
+            prompts_text = [p for p, m in zip(prompts_text, non_expert_mask) if m]
+            completions_text = [c for c, m in zip(completions_text, non_expert_mask) if m]
+            all_process_advantages = all_process_advantages[non_expert_mask]
+            
         # Calculate mean reward per function, but only for samples where the function was applied (non-NaN values)
         for i, reward_func_name in enumerate(self.reward_func_names):
             mean_rewards = torch.nanmean(rewards_per_func[:, i]).item()

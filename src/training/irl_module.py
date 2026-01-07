@@ -55,6 +55,7 @@ def run_irl_training(
         response_only=cfg.model.response_only,
         num_neg_perturbations_per_expert=cfg.model.num_neg_perturbations_per_expert,
         neg_perturb_fns=[PERTURB_FN_MAP[name] for name in cfg.model.neg_perturb_fns],
+        switch_label_if_correct=getattr(cfg.model, "switch_label_if_correct", False),
         neg_sample_weight=cfg.model.neg_sample_weight,
         disc_pairwise_margin=cfg.model.disc_pairwise_margin,
         standard_grpo=cfg.training.standard_grpo,

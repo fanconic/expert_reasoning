@@ -6,6 +6,7 @@ from math_verify import verify
 def get_reward_functions(dataset_name: str) -> List:
     """
     Return a list of all reward functions to be used during training.
+    ATTENTION: CORRECTNESS SHOULD ALWAYS BE AT THE END
 
     Returns:
         list: A list of reward functions in the order they should be applied.
