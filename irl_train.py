@@ -12,6 +12,14 @@ import os
 @hydra.main(config_path="configs", config_name="config_irl_train", version_base="1.3")
 def main(cfg: DictConfig):
     print("IRL Training Configuration:\n", OmegaConf.to_yaml(cfg))
+    
+    # Create output directory if it doesn't exist and save config
+    os.makedirs(cfg.training.output_dir, exist_ok=True)
+    config_save_path = os.path.join(cfg.training.output_dir, "training_config.yaml")
+    with open(config_save_path, 'w') as f:
+        OmegaConf.save(config=cfg, f=f)
+    print(f"Configuration saved to: {config_save_path}")
+    
     if cfg.unsloth:
         from src.models.model_module import irl_load_model_and_tokenizer
         model_tokenizer_loader = irl_load_model_and_tokenizer

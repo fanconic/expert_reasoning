@@ -45,7 +45,8 @@ from transformers import (
     PreTrainedTokenizerBase,
     TrainerCallback,
     Trainer,
-    is_wandb_available
+    is_wandb_available,
+    get_scheduler
 )
 from trl import GRPOTrainer
 from transformers.utils import is_datasets_available, is_flash_attn_2_available, is_peft_available, is_rich_available
@@ -398,9 +399,22 @@ class AIRLTrainer(GRPOTrainer):
     # Core overwrites overrides
     # -----------------------------------------------------------------------$
     def train(self, *args, **kwargs):
+        # Set the learning rate warm up as the same as the scheduler warmup steps
+        num_policy_steps = self.args.max_steps
+        total_reward_steps = self.reward_warmup_steps + num_policy_steps
+        if self.reward_optimizer is not None:
+            self.reward_scheduler = get_scheduler(
+                name=self.args.lr_scheduler_type,
+                optimizer=self.reward_optimizer,
+                num_warmup_steps=self.reward_warmup_steps, 
+                num_training_steps=total_reward_steps,
+            )
+
+        # Run warmup of the reward model
         if self.reward_warmup_steps > 0 and not self.warmup_done:
             self._warmup_discriminator()
             self.warmup_done = True
+
         return super().train(*args, **kwargs)
     
     
@@ -475,7 +489,7 @@ class AIRLTrainer(GRPOTrainer):
         
         pos_texts = build_texts(pos_prompts, pos_completions, self.reward_tokenizer, is_chat=is_chat)
         neg_texts = build_texts(neg_prompts, neg_completions, self.reward_tokenizer, is_chat=is_chat)
-        pos_w, neg_w = K, 1.0
+        pos_w, neg_w = 1.0, 1.0
 
         # ---- Microbatch sizing:
         ga = int(getattr(self.args, "gradient_accumulation_steps", 1))
@@ -563,7 +577,7 @@ class AIRLTrainer(GRPOTrainer):
             j = min(i + micro_bs, B)
             batch_pos = _tok(pos_texts[i:j])
             logits_pos = self.reward_model(**batch_pos).logits[..., 0]
-            y_pos = torch.rand_like(logits_pos) * self.eps + (1.0 - self.eps)
+            y_pos = torch.ones_like(logits_pos) * (1.0 - self.eps)
 
             if self.dense_rewards in ["full", "partial"]:
                 base_mask = _completion_mask(batch_pos, pos_prompts[i:j])
@@ -597,7 +611,7 @@ class AIRLTrainer(GRPOTrainer):
             j = min(i + micro_bs, N)
             batch_neg = _tok(neg_texts[i:j])
             logits_neg = self.reward_model(**batch_neg).logits[..., 0]
-            y_neg = torch.rand_like(logits_neg) * self.eps
+            y_neg = torch.ones_like(logits_neg) * self.eps
             
             if self.dense_rewards in ["full", "partial"]:
                 base_mask = _completion_mask(batch_neg, neg_prompts[i:j])
@@ -631,6 +645,8 @@ class AIRLTrainer(GRPOTrainer):
             if reward_max_grad_norm is not None:
                 self.accelerator.clip_grad_norm_(self.reward_model.parameters(), float(reward_max_grad_norm))
             self.reward_optimizer.step()
+            if hasattr(self, "reward_scheduler") and self.reward_scheduler is not None:
+                self.reward_scheduler.step()
 
         # Metrics (exact means + accuracies)
         bce_pos = (pos_sum / pos_cnt.clamp_min(1.0))
@@ -648,10 +664,13 @@ class AIRLTrainer(GRPOTrainer):
 
         def gmean(x: torch.Tensor) -> float:
             return self.accelerator.gather(x.detach()).mean().item()
+        
+        current_reward_lr = self.reward_optimizer.param_groups[0]["lr"]
 
         return {
             f"{log_prefix}/loss": gmean(loss),
             f"{log_prefix}/bce_pos": gmean(bce_pos),
+            f"{log_prefix}/lr": current_reward_lr,
             f"{log_prefix}/bce_neg": gmean(bce_neg),
             f"{log_prefix}/acc": gmean(acc),
             f"{log_prefix}/acc_pos": gmean(acc_pos),

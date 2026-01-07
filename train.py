@@ -17,6 +17,12 @@ from src.training.grpo_module import run_grpo_training
 @hydra.main(config_path="configs", config_name="config_train", version_base="1.3")
 def main(cfg: DictConfig):
     print("Configuration:\n", OmegaConf.to_yaml(cfg))
+    
+    os.makedirs(cfg.training.output_dir, exist_ok=True)
+    config_save_path = os.path.join(cfg.training.output_dir, "training_config.yaml")
+    with open(config_save_path, 'w') as f:
+        OmegaConf.save(config=cfg, f=f)
+    print(f"Configuration saved to: {config_save_path}")
 
     set_seed(cfg.seed)
 

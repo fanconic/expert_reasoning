@@ -24,6 +24,7 @@ from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_sc
 from vllm import SamplingParams
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
+import os
 
 # --- NEW IMPORTS FOR GUIDANCE ---
 import copy
@@ -211,6 +212,13 @@ def score_with_reward_model(
 @hydra.main(config_path="configs", config_name="config_eval", version_base="1.3")
 def main(cfg: DictConfig):
     print("Evaluation configuration:\n", OmegaConf.to_yaml(cfg))
+    
+    os.makedirs(cfg.training.output_dir, exist_ok=True)
+    config_save_path = os.path.join(cfg.training.output_dir, "evaluation_config.yaml")
+    with open(config_save_path, 'w') as f:
+        OmegaConf.save(config=cfg, f=f)
+    print(f"Configuration saved to: {config_save_path}")
+    
     set_seed(cfg.seed)
 
     if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":
