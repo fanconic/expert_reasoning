@@ -26,21 +26,21 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
             ("soft_format_reward_func", soft_format_reward_func),
             ("strict_format_reward_func", strict_format_reward_func),
             ("int_reward_func", int_reward_func),
-            ("correctness_reward_func", gsm8k_correctness_reward_func),
+            ("gsm8k_correctness_reward_func", gsm8k_correctness_reward_func),
         ]
     elif cfg.dataset.name == "countdown" or cfg.dataset.name == "countdown_kd":
         reward_fns = [
             ("xmlcount_reward_func", xmlcount_reward_func),
             ("soft_format_reward_func", soft_format_reward_func),
             ("strict_format_reward_func", strict_format_reward_func),
-            ("correctness_reward_func", countdown_correctness_function),
+            ("countdown_correctness_reward_func", countdown_correctness_function),
         ]
     elif cfg.dataset.name == "medical" or cfg.dataset.name == "medical_kd":
         reward_fns = [
             ("xmlcount_reward_func", xmlcount_reward_func),
             ("soft_format_reward_func", soft_format_reward_func),
             ("strict_format_reward_func", strict_format_reward_func),
-            ("correctness_reward_func", medical_correctness_reward_func),
+            ("medical_correctness_reward_func", medical_correctness_reward_func),
         ]
     else:
         raise ValueError(f"Unknown dataset name: {cfg.dataset.name}")
@@ -122,6 +122,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         sampling_params=sampling_params,
         batch_size=cfg.eval.per_device_eval_batch_size,
         output_dir=cfg.training.output_dir,
+        metric_for_best_model=reward_fns[-1][0]
     )
 
     trainer = SFTTrainer(

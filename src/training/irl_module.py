@@ -1,7 +1,7 @@
 from src.rewards.perturbations import PERTURB_FN_MAP
 from src.config.irl_config import IRLConfig
 from src.training.airl_trainer_new import AIRLTrainer
-
+import os
 
 def run_irl_training(
     policy_model,
@@ -14,7 +14,7 @@ def run_irl_training(
     val_dataset=None,
     reward_processing_classes=None,
 ):
-
+    dataset_name = "gsm8k" if "gsm8k" in cfg.dataset.name else "medical"
     irl_config = IRLConfig(
         learning_rate=cfg.model.policy_learning_rate,
         reward_learning_rate=cfg.model.reward_learning_rate,
@@ -71,7 +71,13 @@ def run_irl_training(
         expert_error_rate=getattr(cfg.dataset, "expert_error_rate", 0.0),
         beta=getattr(cfg.training, "beta", 0.0),
         reward_warmup_steps=getattr(cfg.training, "reward_warmup_steps", 0),
-        vllm_importance_sampling_correction=False # set this one to false, else it leads to mismatch (https://github.com/huggingface/trl/issues/4205)
+        vllm_importance_sampling_correction=False, # set this one to false, else it leads to mismatch (https://github.com/huggingface/trl/issues/4205)
+        save_strategy="steps",  # or "epoch" or "no"
+        save_total_limit=2,  # Keep only 2 checkpoints: best + final
+        load_best_model_at_end=True,  # Load best model when training ends
+        metric_for_best_model=f"eval/rewards/{dataset_name}_correctness_reward_func/mean",  # Replace with your actual reward metric name
+        greater_is_better=True,  # Set to False if lower is better for your metric
+        #save_only_model=True,  # Don't save optimizer states to save space
     )
 
     def formatting_prompt_func(examples):
@@ -117,4 +123,5 @@ def run_irl_training(
     )
 
     trainer.train()
+    trainer.save_model(os.path.join(cfg.training.output_dir, "best_model"))
     return trainer

@@ -1,6 +1,5 @@
 from trl import GRPOConfig, GRPOTrainer
-import wandb
-
+import os
 
 def run_grpo_training(
     model, 
@@ -21,7 +20,7 @@ def run_grpo_training(
         training_cfg: Training configuration (expects attributes like max_steps, etc.).
         val_dataset: Optional validation dataset.
     """
-
+    dataset_name = "gsm8k" if "gsm8k" in cfg.dataset.name else "medical"
     grpo_config = GRPOConfig(
         learning_rate=cfg.training.learning_rate,
         adam_beta1=cfg.training.adam_beta1,
@@ -51,7 +50,11 @@ def run_grpo_training(
         top_p=cfg.sampling.top_p,
         log_completions=True,
         num_completions_to_print=2,
-        save_total_limit=1
+        save_strategy="steps",  # or "epoch" or "no"
+        save_total_limit=2,  # Keep only 2 checkpoints: best + final
+        load_best_model_at_end=True,  # Load best model when training ends
+        metric_for_best_model=f"eval/rewards/{dataset_name}_correctness_reward_func/mean",  # Replace with your actual reward metric name
+        greater_is_better=True,  # Set to False if lower is better for your metric
     )
 
     # Instantiate the GRPOTrainer.
@@ -64,6 +67,8 @@ def run_grpo_training(
         eval_dataset=val_dataset,
         reward_processing_classes=reward_processing_classes,
     )
+    
 
     trainer.train()
+    trainer.save_model(os.path.join(cfg.training.output_dir, "best_model"))
     return trainer
