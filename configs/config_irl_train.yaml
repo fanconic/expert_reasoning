@@ -29,7 +29,7 @@ model:
   reward_lora_rank: 256  # Optional: override base rank for reward
   reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
-  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_rewards: "partial"  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
   advantage_calculation: "discounted_dense" # discounted_dense or avaverage_dense
 
@@ -62,7 +62,7 @@ dataset:
 
 training:
   # Common training params
-  reward_warmup_steps: 100
+  reward_warmup_steps: 10
   standard_grpo: false
   warmup_ratio: 0.1
   adam_beta1: 0.9

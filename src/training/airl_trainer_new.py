@@ -212,6 +212,15 @@ def build_texts(prompts: list, completions: list, reward_tok, is_chat: bool) -> 
     else:
         return [p + c for p, c in zip(prompts, completions)]
 
+def backfill_rewards(rewards, mask):
+    B, T = rewards.shape
+    indices = torch.arange(T, device=rewards.device).expand(B, T)
+    masked_indices = torch.where(mask.bool(), indices, torch.tensor(T, device=rewards.device))
+    next_valid_index = torch.cummin(masked_indices.flip(1), dim=1)[0].flip(1)
+    next_valid_index = next_valid_index.clamp(max=T-1).long()
+    result = torch.gather(rewards, 1, next_valid_index)
+    
+    return result
 # ---------------------------------------------------------------------------
 class AIRLTrainer(GRPOTrainer):
     """Adversarial IRL trainer using the AIRL discriminator‑style reward.
@@ -352,6 +361,39 @@ class AIRLTrainer(GRPOTrainer):
             self._warmup_discriminator()
             self.warmup_done = True
         return super().train(*args, **kwargs)
+    
+    
+    def _sentence_boundary_mask(self, full_batch, base_completion_mask):
+            """
+            Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
+            Sentence boundaries are: '.', '\n', or '.\n' sequences.
+            """
+            input_ids = full_batch["input_ids"]  # [bs, L]
+            bs, L = input_ids.shape
+            
+            # Get token IDs for sentence boundaries
+            period_ids = self.reward_tokenizer.encode(".", add_special_tokens=False)
+            newline_ids = self.reward_tokenizer.encode("\n", add_special_tokens=False)
+            period_newline_ids = self.reward_tokenizer.encode(".\n", add_special_tokens=False)
+            
+            period_id = period_ids[0] if period_ids else -1
+            newline_id = newline_ids[0] if newline_ids else -1
+            period_newline_ids = period_newline_ids[0] if period_newline_ids else -1
+            
+            # Vectorized: find all periods and newlines in completion region
+            is_period = (input_ids == period_id) & base_completion_mask  # [bs, L]
+            is_newline = (input_ids == newline_id) & base_completion_mask  # [bs, L]
+            is_period_newline = (input_ids == period_newline_ids) & base_completion_mask  # [bs, L]
+            
+            
+            # Mark boundaries: newlines OR (periods that aren't followed by newlines)
+            boundary_mask = is_newline | is_period  | is_period_newline
+            
+            # Always include last completion token
+            last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)  # [bs]
+            boundary_mask[torch.arange(bs, device=self.accelerator.device), last_indices] |= base_completion_mask.any(dim=1)
+            
+            return boundary_mask
 
 
     @profiling_decorator
@@ -433,37 +475,7 @@ class AIRLTrainer(GRPOTrainer):
             idx = torch.arange(L, device=device).unsqueeze(0)                # [1, L]
             return attn & (idx >= prompt_lens.unsqueeze(1))                  # [bs, L]
         
-        def _sentence_boundary_mask(full_batch, prompts_chunk, base_completion_mask):
-            """
-            Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
-            Sentence boundaries are: '.', '\n', or '.\n' sequences.
-            """
-            input_ids = full_batch["input_ids"]  # [bs, L]
-            bs, L = input_ids.shape
-            
-            # Get token IDs for sentence boundaries
-            period_ids = self.reward_tokenizer.encode(".", add_special_tokens=False)
-            newline_ids = self.reward_tokenizer.encode("\n", add_special_tokens=False)
-            period_id = period_ids[0] if period_ids else -1
-            newline_id = newline_ids[0] if newline_ids else -1
-            
-            # Vectorized: find all periods and newlines in completion region
-            is_period = (input_ids == period_id) & base_completion_mask  # [bs, L]
-            is_newline = (input_ids == newline_id) & base_completion_mask  # [bs, L]
-            
-            # Detect .\n pattern: period followed by newline
-            is_newline_after_period = is_period[:, :-1] & is_newline[:, 1:]  # [bs, L-1]
-            is_newline_after_period = F.pad(is_newline_after_period, (1, 0), value=False)  # [bs, L]
-            
-            # Mark boundaries: newlines OR (periods that aren't followed by newlines)
-            boundary_mask = is_newline | (is_period & ~is_newline_after_period)
-            boundary_mask = torch.ones_like(boundary_mask) # TODO: ATTNETION, make modular
-            
-            # Always include last completion token
-            last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)  # [bs]
-            boundary_mask[torch.arange(bs, device=device), last_indices] |= base_completion_mask.any(dim=1)
-            
-            return boundary_mask
+        
 
         # ------------------------------------------------------------------
         # PASS 1: count total valid completion tokens (only matters if dense)
@@ -476,14 +488,20 @@ class AIRLTrainer(GRPOTrainer):
                 j = min(i + micro_bs, B)
                 batch_pos = _tok(pos_texts[i:j])
                 base_mask = _completion_mask(batch_pos, pos_prompts[i:j])
-                mask = _sentence_boundary_mask(batch_pos, pos_prompts[i:j], base_mask)
+                if self.dense_rewards == "partial":
+                    mask = self._sentence_boundary_mask(batch_pos, base_mask)
+                else:
+                    mask = base_mask
                 T_pos += mask.sum().to(T_pos.dtype)
 
             for i in range(0, N, micro_bs):
                 j = min(i + micro_bs, N)
                 batch_neg = _tok(neg_texts[i:j])
                 base_mask = _completion_mask(batch_neg, neg_prompts[i:j])
-                mask = _sentence_boundary_mask(batch_neg, neg_prompts[i:j], base_mask)
+                if self.dense_rewards == "partial":
+                    mask = self._sentence_boundary_mask(batch_neg, base_mask)
+                else:
+                    mask = base_mask
                 T_neg += mask.sum().to(T_neg.dtype)
 
         # ------------------------------------------------------------------
@@ -508,11 +526,12 @@ class AIRLTrainer(GRPOTrainer):
             logits_pos = self.reward_model(**batch_pos).logits[..., 0]
             y_pos = torch.rand_like(logits_pos) * self.eps + (1.0 - self.eps)
 
-            if self.dense_rewards:
+            if self.dense_rewards in ["full", "partial"]:
                 base_mask = _completion_mask(batch_pos, pos_prompts[i:j])
-                mask = _sentence_boundary_mask(batch_pos, pos_prompts[i:j], base_mask)
-                
-                # No ramp weighting for sentence boundaries - treat all equally
+                if self.dense_rewards == "full":
+                    mask = base_mask
+                elif self.dense_rewards == "partial":
+                    mask = self._sentence_boundary_mask(batch_pos, base_mask)
                 loss_elt = focal_loss(logits_pos, y_pos, gamma=2.0, reduction="none")
                 loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
                 cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
@@ -541,11 +560,12 @@ class AIRLTrainer(GRPOTrainer):
             logits_neg = self.reward_model(**batch_neg).logits[..., 0]
             y_neg = torch.rand_like(logits_neg) * self.eps
             
-            if self.dense_rewards:
+            if self.dense_rewards in ["full", "partial"]:
                 base_mask = _completion_mask(batch_neg, neg_prompts[i:j])
-                mask = _sentence_boundary_mask(batch_neg, neg_prompts[i:j], base_mask)
-                
-                # No ramp weighting for sentence boundaries - treat all equally
+                if self.dense_rewards == "full":
+                    mask = base_mask
+                elif self.dense_rewards == "partial":
+                    mask = self._sentence_boundary_mask(batch_neg, base_mask)
                 loss_elt = focal_loss(logits_neg, y_neg, gamma=2.0, reduction="none")
                 loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
                 cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
@@ -716,6 +736,10 @@ class AIRLTrainer(GRPOTrainer):
                             gather_indices = gather_indices.clamp(max=reward_logits.size(1) - 1)
                             reward_comp = reward_logits.gather(1, gather_indices)
                             reward_comp[~output_mask] = float('nan')
+                            if self.dense_rewards=="partial":
+                                end_of_thought_mask = self._sentence_boundary_mask(reward_inputs, reward_inputs["attention_mask"])
+                                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
+                                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
                             rewards_per_func[:, i, :] = reward_comp
                         else:
                             # Sequence-level reward (last token)
