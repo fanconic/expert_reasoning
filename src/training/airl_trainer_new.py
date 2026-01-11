@@ -247,20 +247,25 @@ def perturb_expert_completions(
     perturb_fns: List[Callable],
     n_perturbs: int
 ): 
+    if not perturb_fns:
+        return prompts_neg, completions_neg, prompts_pos, completions_pos
     
     for _ in range(n_perturbs):
-        if perturb_fns:
-            n_perturbs = random.choice(range(1, len(perturb_fns)+1))
-            selected_perturbs = random.sample(perturb_fns, k=n_perturbs)
-            for prompt, expert_text in zip(prompts_pos, completions_pos):
-                text_to_perturb = expert_text[0]["content"]
-                for perturb_func in selected_perturbs:
-                    text_to_perturb = perturb_func(text=text_to_perturb)
-                neg_expert_text = [{"role": "assistant", "content": text_to_perturb}]
-                prompts_neg.append(prompt)
-                completions_neg.append(neg_expert_text)
-        # TODO implement if it's precomputed for MedReason
+        num_selected = random.choice(range(1, len(perturb_fns) + 1))
+        selected_perturbs = random.sample(perturb_fns, k=num_selected)
         
+        new_prompts, new_completions = [], []
+        for prompt, expert_text in zip(prompts_pos, completions_pos):
+            text = expert_text[0]["content"]
+            for perturb_func in selected_perturbs:
+                text = perturb_func(text=text)
+            
+            new_prompts.append(prompt)
+            new_completions.append([{"role": "assistant", "content": text}])
+        
+        prompts_neg.extend(new_prompts)
+        completions_neg.extend(new_completions)
+    
     return prompts_neg, completions_neg, prompts_pos, completions_pos
 # ---------------------------------------------------------------------------
 class AIRLTrainer(GRPOTrainer):
