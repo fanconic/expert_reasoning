@@ -696,6 +696,7 @@ class AIRLTrainer(GRPOTrainer):
             f"{log_prefix}/logit_neg_mean": gmean(logits_neg_det.mean()),
             f"{log_prefix}/prob_pos_mean": gmean(p_pos.mean()),
             f"{log_prefix}/prob_neg_mean": gmean(p_neg.mean()),
+            f"{log_prefix}/neg_pos_ratio": K,
         }
 
 
@@ -1366,7 +1367,7 @@ class AIRLTrainer(GRPOTrainer):
         if not self.accelerator.is_main_process:
             return
 
-        output_dir = output_dir or self.args.output_dir
+        output_dir = self.args.output_dir
         reward_dir = os.path.join(output_dir, "reward_model")
         os.makedirs(reward_dir, exist_ok=True)
 

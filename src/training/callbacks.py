@@ -181,3 +181,36 @@ class GenerationEvalCallback(TrainerCallback):
             shutil.copytree(self.best_checkpoint, best_model_dir)
             print(f"Best model (step {self.best_checkpoint.split('-')[-1]}) saved to {best_model_dir}")
             print(f"Best {self.metric_for_best_model}: {self.best_metric:.4f}")
+            
+            
+import os
+
+class SaveBestByMetricCallback(TrainerCallback):
+    def __init__(self, metric_key: str, output_dir: str, greater_is_better: bool = True):
+        self.metric_key = metric_key
+        self.output_dir = output_dir
+        self.greater = greater_is_better
+        self.best = None
+        self.trainer = None  # will be injected after trainer is created
+
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.best_dir = os.path.join(self.output_dir, "best_model")
+
+    def on_evaluate(self, args, state, control, metrics=None, **kwargs):
+        if not state.is_world_process_zero:
+            return control
+        
+        last_logging = state.log_history[-1] if state.log_history else {}
+
+        val = last_logging[self.metric_key]
+        is_best = (
+            self.best is None
+            or (val > self.best if self.greater else val < self.best)
+        )
+        if is_best:
+            self.best = val
+            self.trainer.save_model(self.best_dir)
+            print(f"Best model saved to {self.best_dir}")
+            print(f"Best {self.metric_key}: {self.best:.4f}")
+                
+        return control

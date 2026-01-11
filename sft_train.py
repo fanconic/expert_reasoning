@@ -1,3 +1,6 @@
+import os
+os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
+
 import hydra
 from omegaconf import DictConfig, OmegaConf
 import wandb

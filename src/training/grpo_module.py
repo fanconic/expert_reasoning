@@ -1,5 +1,5 @@
 from trl import GRPOConfig, GRPOTrainer
-import os
+from src.training.callbacks import SaveBestByMetricCallback
 
 def run_grpo_training(
     model, 
@@ -52,9 +52,6 @@ def run_grpo_training(
         num_completions_to_print=2,
         save_strategy="steps",  # or "epoch" or "no"
         save_total_limit=1,  # Keep only 2 checkpoints: best + final
-        load_best_model_at_end=True,  # Load best model when training ends
-        metric_for_best_model=f"eval/rewards/{dataset_name}_correctness_reward_func/mean",  # Replace with your actual reward metric name
-        greater_is_better=True,  # Set to False if lower is better for your metric
     )
 
     # Instantiate the GRPOTrainer.
@@ -67,7 +64,13 @@ def run_grpo_training(
         eval_dataset=val_dataset,
         reward_processing_classes=reward_processing_classes,
     )
-
+    cb = SaveBestByMetricCallback(
+            f"rewards/{dataset_name}_correctness_reward_func/mean",
+            cfg.training.output_dir, 
+            greater_is_better=True
+    )
+    cb.trainer = trainer
+    trainer.add_callback(cb)
+        
     trainer.train()
-    trainer.save_model(os.path.join(cfg.training.output_dir, "best_model"))
     return trainer

@@ -69,6 +69,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         eval_accumulation_steps=cfg.eval.eval_accumulation_steps,
         prediction_loss_only=cfg.eval.prediction_loss_only,
         num_train_epochs=cfg.training.epochs,
+        completion_only_loss=True
     )
 
     # sampling params for generation
@@ -97,7 +98,7 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
             # 2) wrap the reasoning+answer as the assistant reply
             assistant_block = "<|im_start|>assistant\n" f"{tgt}" "<|im_end|>"
             texts.append(formatted_prompt + assistant_block)
-        return {"text": texts}
+        return {"prompt": prompts, "completion": completions}
 
     response_template = "<|im_start|>assistant\n"
     collator = DataCollatorForCompletionOnlyLM(
