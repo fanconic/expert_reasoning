@@ -22,7 +22,7 @@ model:
   # Policy model specific
   policy_lora_rank: 256  # Optional: override base rank for policy
   policy_learning_rate: 1e-5
-  add_expert_to_policy_optim: true
+  add_expert_to_policy_optim: false
   add_expert_to_policy_balanced: false
   
   # Reward model specific  
@@ -50,7 +50,7 @@ model:
   # reasoning perturbation
   num_neg_perturbations_per_expert: 2
   neg_perturb_fns: [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
-  switch_label_if_correct: true
+  switch_label_if_correct: false
   neg_sample_weight: 1.0
   disc_pairwise_margin: 0.0
   
@@ -63,7 +63,7 @@ dataset:
 
 training:
   # Common training params
-  reward_warmup_steps: 100
+  reward_warmup_steps: 1
   standard_grpo: false
   warmup_ratio: 0.1
   adam_beta1: 0.9
@@ -89,7 +89,7 @@ sampling:
 eval:
   do_eval: true
   eval_strategy: "steps"
-  eval_steps: 2
+  eval_steps: 1
   per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false

@@ -417,7 +417,6 @@ class AIRLTrainer(GRPOTrainer):
 
         return super().train(*args, **kwargs)
     
-    
     def _sentence_boundary_mask(self, full_batch, base_completion_mask):
             """
             Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
@@ -468,7 +467,7 @@ class AIRLTrainer(GRPOTrainer):
 
         Typical regime:
         len(pos_*) = B
-        len(neg_*) = B * K  (K = self.num_generations)
+        len(neg_*) = N
         We do NOT repeat positives. Instead we balance BCE with weights.
 
         Pairwise margin (optional) is computed per-prompt by reshaping negatives to (B, K)
@@ -585,7 +584,7 @@ class AIRLTrainer(GRPOTrainer):
                     mask = base_mask
                 elif self.dense_rewards == "partial":
                     mask = self._sentence_boundary_mask(batch_pos, base_mask)
-                loss_elt = focal_loss(logits_pos, y_pos, gamma=2.0, reduction="none")
+                loss_elt = F.binary_cross_entropy_with_logits(logits_pos, y_pos, reduction="none")
                 loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
                 cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
 
@@ -619,7 +618,7 @@ class AIRLTrainer(GRPOTrainer):
                     mask = base_mask
                 elif self.dense_rewards == "partial":
                     mask = self._sentence_boundary_mask(batch_neg, base_mask)
-                loss_elt = focal_loss(logits_neg, y_neg, gamma=2.0, reduction="none")
+                loss_elt = F.binary_cross_entropy_with_logits(logits_neg, y_neg, reduction="none")
                 loss_sum = (loss_elt * mask.to(loss_elt.dtype)).sum()
                 cnt = mask.sum().to(loss_sum.dtype).clamp_min(1)
 
@@ -762,6 +761,25 @@ class AIRLTrainer(GRPOTrainer):
                         f"acc={metrics['reward_warmup/acc_neg']:.2f}"
                     )
 
+
+        # Save reward model after warmup
+        reward_dir = os.path.join(self.args.output_dir, "reward_model_warmup")
+        os.makedirs(reward_dir, exist_ok=True)
+
+        # Unwrap reward model in case it's wrapped by accelerate/FS*DP etc.
+        reward_model_unwrapped = self.accelerator.unwrap_model(self.reward_model)
+        reward_model_unwrapped.save_pretrained(reward_dir, safe_serialization=True)
+
+        # Save reward tokenizer if available (kept separate from policy tokenizer on purpose)
+        if self.reward_tokenizer is not None:
+            self.reward_tokenizer.save_pretrained(reward_dir)
+
+        # Save the optimizer too
+        if getattr(self, "reward_optimizer", None) is not None:
+            torch.save(
+                self.reward_optimizer.state_dict(), os.path.join(reward_dir,"reward_optimizer_warmup.pt")
+            )
+            
         if policy_was_training: self.model.train()
         if not reward_was_training: self.reward_model.eval()
 
@@ -1046,6 +1064,7 @@ class AIRLTrainer(GRPOTrainer):
         logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
         
         batch_size = self.args.per_device_train_batch_size if mode == "train" else self.args.per_device_eval_batch_size
+        _was_training = self.model.training
         try:
             # TRL 0.23.1 and below path
             if not has_images:
@@ -1145,14 +1164,15 @@ class AIRLTrainer(GRPOTrainer):
             prompts_pos = [p for i, p in enumerate(prompts) if (i+1) % self.num_generations_with_expert == 0]
             completions_pos = [c for i, c in enumerate(completions) if (i+1) % self.num_generations_with_expert == 0]
         else:
-            prompts_neg = prompts
-            completions_neg = completions
-            prompts_pos =  [inputs[i]["prompts"] for i in range(0, len(inputs), self.num_generations)]
+            prompts_neg = prompts.copy()
+            completions_neg = completions.copy()
+            prompts_pos =  [inputs[i]["prompt"] for i in range(0, len(inputs), self.num_generations)]
             completions_pos = [
-                [{"role": "assistant", "content": inputs[i]["targets"]}] for i in range(0, len(inputs), self.num_generations)
+                [{"role": "assistant", "content": inputs[i]["target"]}] for i in range(0, len(inputs), self.num_generations)
             ]
 
         if mode == "train":
+            
             if self.switch_label_if_correct:
                 prompts_neg, completions_neg, prompts_pos, completions_pos = switch_label_if_correct_func(
                     prompts_neg=prompts_neg, 
@@ -1288,6 +1308,8 @@ class AIRLTrainer(GRPOTrainer):
             output["token_type_ids"] = forward_kwargs["token_type_ids"]
         if images is not None:
             output["num_images"] = num_images
+        if not _was_training:
+            self.model.for_inference()
         return output
 
 

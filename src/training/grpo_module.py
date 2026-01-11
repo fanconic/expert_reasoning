@@ -51,7 +51,7 @@ def run_grpo_training(
         log_completions=True,
         num_completions_to_print=2,
         save_strategy="steps",  # or "epoch" or "no"
-        save_total_limit=2,  # Keep only 2 checkpoints: best + final
+        save_total_limit=1,  # Keep only 2 checkpoints: best + final
         load_best_model_at_end=True,  # Load best model when training ends
         metric_for_best_model=f"eval/rewards/{dataset_name}_correctness_reward_func/mean",  # Replace with your actual reward metric name
         greater_is_better=True,  # Set to False if lower is better for your metric
@@ -67,7 +67,6 @@ def run_grpo_training(
         eval_dataset=val_dataset,
         reward_processing_classes=reward_processing_classes,
     )
-    
 
     trainer.train()
     trainer.save_model(os.path.join(cfg.training.output_dir, "best_model"))

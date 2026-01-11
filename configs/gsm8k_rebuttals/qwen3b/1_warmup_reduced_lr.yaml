@@ -6,8 +6,8 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/qwen7b_sft/checkpoint-500"
-  reward_name: "Qwen/Qwen2.5-7B-Instruct"
+  policy_name: "Qwen/Qwen2.5-3B-Instruct"
+  reward_name: "Qwen/Qwen2.5-3B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -21,15 +21,15 @@ model:
   
   # Policy model specific
   policy_lora_rank: 256  # Optional: override base rank for policy
-  policy_learning_rate: 1e-6
-  add_expert_to_policy_optim: true
+  policy_learning_rate: 5e-6
+  add_expert_to_policy_optim: false
   add_expert_to_policy_balanced: false
   
   # Reward model specific  
   reward_lora_rank: 256  # Optional: override base rank for reward
-  reward_learning_rate: 1e-6
+  reward_learning_rate: 1e-5
   disc_label_smoothing: 0.1
-  dense_rewards: "full"  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_rewards: "partial"  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.9
   advantage_calculation: "discounted_dense" # discounted_dense or avaverage_dense
 
@@ -90,11 +90,11 @@ eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 100
-  per_device_eval_batch_size: 16
+  per_device_eval_batch_size: 32
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: qwen7b_1_warmup
+  run_name: qwen3b_1_warmup_full

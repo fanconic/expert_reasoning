@@ -73,10 +73,10 @@ def run_irl_training(
         reward_warmup_steps=getattr(cfg.training, "reward_warmup_steps", 0),
         vllm_importance_sampling_correction=False, # set this one to false, else it leads to mismatch (https://github.com/huggingface/trl/issues/4205)
         save_strategy="steps",  # or "epoch" or "no"
-        save_total_limit=2,  # Keep only 2 checkpoints: best + final
-        load_best_model_at_end=True,  # Load best model when training ends
-        metric_for_best_model=f"eval/rewards/{dataset_name}_correctness_reward_func/mean",  # Replace with your actual reward metric name
-        greater_is_better=True,  # Set to False if lower is better for your metric
+        save_total_limit=1,  # Keep only 2 checkpoints: best + final
+        #load_best_model_at_end=True,  # Load best model when training ends
+        #metric_for_best_model=f"rewards/{dataset_name}_correctness_reward_func/mean",  # Replace with your actual reward metric name
+        #greater_is_better=True,  # Set to False if lower is better for your metric
         #save_only_model=True,  # Don't save optimizer states to save space
     )
 

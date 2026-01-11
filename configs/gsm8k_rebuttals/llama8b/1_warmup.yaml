@@ -6,7 +6,7 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  policy_name: "meta-llama/Llama-3.1-8B-Instruct"
+  policy_name: "/mnt/pdata/caf83/tabular_reasoning/outputs/llama8b_sft/checkpoint-500"
   reward_name: "meta-llama/Llama-3.1-8B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
@@ -21,7 +21,7 @@ model:
   
   # Policy model specific
   policy_lora_rank: 256  # Optional: override base rank for policy
-  policy_learning_rate: 1e-5
+  policy_learning_rate: 1e-6
   add_expert_to_policy_optim: true
   add_expert_to_policy_balanced: false
   
@@ -90,7 +90,7 @@ eval:
   do_eval: true
   eval_strategy: "steps"
   eval_steps: 100
-  per_device_eval_batch_size: 32
+  per_device_eval_batch_size: 16
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
