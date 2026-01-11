@@ -53,7 +53,7 @@ from transformers.utils import is_datasets_available, is_flash_attn_2_available,
 from trl.data_utils import apply_chat_template, is_conversational
 from trl.extras.profiling import profiling_context, profiling_decorator
 from trl.import_utils import is_vllm_available, is_liger_kernel_available
-from trl.trainer.grpo_trainer import nanstd, nanmin, nanmax
+from trl.trainer.grpo_trainer import nanstd, nanmin, nanmax, print_prompt_completions_sample
 from trl.trainer.utils import (
     pad,
 )
@@ -321,6 +321,7 @@ class AIRLTrainer(GRPOTrainer):
 
         # Internal buffers --------------------------------------------------------------
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
+        self.eval_reward_buffer = defaultdict(list)
 
         # Reward functions --------------------------------------------------------------
         self.dense_rewards = args.dense_rewards
@@ -421,6 +422,18 @@ class AIRLTrainer(GRPOTrainer):
             self.warmup_done = True
 
         return super().train(*args, **kwargs)
+    
+    def evaluate(self, eval_dataset=None, ignore_keys=None, metric_key_prefix="eval"):
+        self.eval_reward_buffer.clear()
+        metrics = super().evaluate(eval_dataset, ignore_keys, metric_key_prefix)
+    
+        if self.eval_reward_buffer:
+            for key, values in self.eval_reward_buffer.items():
+                if values:
+                    final_mean = sum(values) / len(values)
+                    final_key = f"{metric_key_prefix}_{key}"
+                    metrics[final_key] = final_mean
+        return metrics
     
     def _sentence_boundary_mask(self, full_batch, base_completion_mask):
             """
@@ -1237,6 +1250,8 @@ class AIRLTrainer(GRPOTrainer):
         for i, reward_func_name in enumerate(self.reward_func_names):
             mean_rewards = torch.nanmean(rewards_per_func[:, i]).item()
             self._metrics[mode][f"rewards/{reward_func_name}/mean"].append(mean_rewards)
+            if mode == "eval":
+                self.eval_reward_buffer[f"rewards/{reward_func_name}/mean"].append(mean_rewards)
             std_func_rewards = nanstd(rewards_per_func[:, i]).item()
             self._metrics[mode][f"rewards/{reward_func_name}/std"].append(std_func_rewards)
         self._metrics[mode]["reward"].append(mean_grouped_rewards.mean().item())
@@ -1360,6 +1375,7 @@ class AIRLTrainer(GRPOTrainer):
             torch.save(
                 self.reward_optimizer.state_dict(), reward_dir / "reward_optimizer.pt"
             )
+            
 
 
 # ---------------------------------------------------------------------------
