@@ -11,7 +11,7 @@ from src.training.sft_module import run_sft_training
 from src.utils.utils import set_seed
 
 
-@hydra.main(config_path="configs", config_name="config_train", version_base="1.3")
+@hydra.main(config_path="configs", config_name="config_sft_train", version_base="1.3")
 def main(cfg: DictConfig):
     print("SFT Training Configuration:\n", OmegaConf.to_yaml(cfg))
     
@@ -54,9 +54,6 @@ def main(cfg: DictConfig):
         cfg,
         val_dataset=val_dataset,
     )
-
-    metrics = trainer.evaluate()
-    print(metrics)
 
 
 if __name__ == "__main__":

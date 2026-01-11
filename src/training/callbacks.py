@@ -182,8 +182,7 @@ class GenerationEvalCallback(TrainerCallback):
             print(f"Best model (step {self.best_checkpoint.split('-')[-1]}) saved to {best_model_dir}")
             print(f"Best {self.metric_for_best_model}: {self.best_metric:.4f}")
             
-            
-import os
+        
 
 class SaveBestByMetricCallback(TrainerCallback):
     def __init__(self, metric_key: str, output_dir: str, greater_is_better: bool = True):
