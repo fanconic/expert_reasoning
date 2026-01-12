@@ -32,6 +32,7 @@ import os
 import random
 
 # Third-party imports
+from peft import set_peft_model_state_dict
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -49,11 +50,11 @@ from transformers import (
     get_scheduler
 )
 from trl import GRPOTrainer
-from transformers.utils import is_datasets_available, is_flash_attn_2_available, is_peft_available, is_rich_available
+from transformers.utils import is_peft_available
 from trl.data_utils import apply_chat_template, is_conversational
 from trl.extras.profiling import profiling_context, profiling_decorator
 from trl.import_utils import is_vllm_available, is_liger_kernel_available
-from trl.trainer.grpo_trainer import nanstd, nanmin, nanmax, print_prompt_completions_sample
+from trl.trainer.grpo_trainer import nanstd, nanmin, nanmax
 from trl.trainer.utils import (
     pad,
 )
@@ -183,7 +184,6 @@ def pad_to_attention_layout(x: torch.Tensor, new_mask: torch.Tensor, pad_value: 
         
     return new_x
 
-
 def left_pack_padding(tensor: torch.Tensor, pad_id: int) -> torch.Tensor:
     """
     Moves all padding tokens in each sequence of a batch to the right.
@@ -194,7 +194,6 @@ def left_pack_padding(tensor: torch.Tensor, pad_id: int) -> torch.Tensor:
     packed_tensor = torch.gather(tensor, 1, sorted_indices)
     return packed_tensor
 
-
 def extract_expert_targets(self, inputs: list[dict]) -> list[Optional[str]]:
     """Try a few common keys; returns None when no expert target exists."""
     out: list[Optional[str]] = []
@@ -204,7 +203,6 @@ def extract_expert_targets(self, inputs: list[dict]) -> list[Optional[str]]:
             t = ex["target"]
         out.append(t)
     return out
-
 
 def build_texts(prompts: list, completions: list, reward_tok, is_chat: bool) -> list[str]:
     """Build discriminator inputs exactly like your reward path (chat-template or plain concat)."""
@@ -267,6 +265,7 @@ def perturb_expert_completions(
         completions_neg.extend(new_completions)
     
     return prompts_neg, completions_neg, prompts_pos, completions_pos
+
 # ---------------------------------------------------------------------------
 class AIRLTrainer(GRPOTrainer):
     """Adversarial IRL trainer using the AIRL discriminator‑style reward.
@@ -376,6 +375,10 @@ class AIRLTrainer(GRPOTrainer):
         self.reward_model, self.reward_optimizer = self.accelerator.prepare(
             self.reward_model, self.reward_optimizer
         )
+        self.reward_warmup_steps = self.args.reward_warmup_steps
+        self.warmup_done = False
+        if args.warmup_reward_dir:
+            self.load_reward_warmup_checkpoint(args.warmup_reward_dir)
 
         if not self.use_outcome_rewards: # Only the reward model is used for training
             self.reward_weights = torch.zeros_like(self.reward_weights, dtype=torch.float32)
@@ -396,9 +399,7 @@ class AIRLTrainer(GRPOTrainer):
         self.disc_pairwise_margin = getattr(args, "disc_pairwise_margin", 0.0)  # >0 to enable pairwise hinge
         self.neg_label_smoothing = getattr(args, "neg_label_smoothing", None)  # defaults to self.eps if None
         
-        self.num_generations_with_expert = self.num_generations + 1 if self.add_expert_to_policy_optim else self.num_generations
-        self.reward_warmup_steps = self.args.reward_warmup_steps
-        self.warmup_done = False
+        self.num_generations_with_expert = self.num_generations + 1 if self.add_expert_to_policy_optim else self.num_generations 
         self.max_length = self.args.max_prompt_length + self.args.max_completion_length
 
     # -----------------------------------------------------------------------
@@ -407,7 +408,7 @@ class AIRLTrainer(GRPOTrainer):
     def train(self, *args, **kwargs):
         # Set the learning rate warm up as the same as the scheduler warmup steps
         num_policy_steps = self.args.max_steps
-        total_reward_steps = self.reward_warmup_steps + num_policy_steps
+        total_reward_steps = self.reward_warmup_steps + num_policy_steps // self.reward_updates_per_policy_step
         if self.reward_optimizer is not None:
             self.reward_scheduler = get_scheduler(
                 name=self.args.lr_scheduler_type,
@@ -801,6 +802,57 @@ class AIRLTrainer(GRPOTrainer):
             
         if policy_was_training: self.model.train()
         if not reward_was_training: self.reward_model.eval()
+        
+        
+    def load_reward_warmup_checkpoint(self, checkpoint_path: str):
+        """
+        Loads the reward model and optimizer state from a warmup checkpoint.
+        Call this before train() to bypass the _warmup_discriminator step.
+        """
+        from safetensors.torch import load_file as safe_load_file
+        
+        if not os.path.isdir(checkpoint_path):
+            logger.warning(f"Checkpoint path {checkpoint_path} does not exist. Skipping load.")
+            return
+
+        logger.info(f"Loading reward model warmup checkpoint from {checkpoint_path}...")
+
+        unwrapped_model = self.accelerator.unwrap_model(self.reward_model)
+        is_peft = is_peft_available() and isinstance(unwrapped_model, PeftModel)
+
+        if is_peft:
+            logger.info("Detected PEFT model. Loading adapters...")
+            adapters_weights = safe_load_file(os.path.join(checkpoint_path, "adapter_model.safetensors"))
+            set_peft_model_state_dict(unwrapped_model, adapters_weights)
+            del adapters_weights
+            torch.cuda.empty_cache()
+        else:
+            model_path = os.path.join(checkpoint_path, "model.safetensors")
+            if os.path.exists(model_path):
+                state_dict = safe_load_file(model_path)
+            else:
+                model_path = os.path.join(checkpoint_path, "pytorch_model.bin")
+                if os.path.exists(model_path):
+                    state_dict = torch.load(model_path, map_location=self.accelerator.device)
+                else:
+                    raise FileNotFoundError(f"No model weights (safetensors/bin) found in {checkpoint_path}")
+            
+            unwrapped_model.load_state_dict(state_dict, strict=True)
+
+        # --- 2. Load Optimizer State ---
+        opt_path = os.path.join(checkpoint_path, "reward_optimizer_warmup.pt")
+        if os.path.exists(opt_path):
+            logger.info(f"Loading reward optimizer state from {opt_path}...")
+            opt_state = torch.load(opt_path, map_location="cpu")
+            self.reward_optimizer.load_state_dict(opt_state)
+            del opt_state
+            torch.cuda.empty_cache()
+        else:
+            logger.warning(f"No optimizer checkpoint found at {opt_path}. Optimizer starts fresh.")
+
+        self.warmup_done = False
+        self.reward_warmup_steps = 1 #Make one, otherwise there is OOM
+        logger.info("Reward model loaded. Warmup phase will be skipped.")
 
 
     @profiling_decorator
@@ -846,7 +898,7 @@ class AIRLTrainer(GRPOTrainer):
                             # logits: (B, Full_Len)
                             reward_logits = reward_func(**reward_inputs).logits[:, :, 0] / self.disc_temperature
                             if self.clip_reward_model:
-                                reward_logits = torch.clamp(reward_logits, self.reward_lb, self.reward_ub)
+                                reward_logits.clamp_(self.reward_lb, self.reward_ub)
                             full_lens = reward_inputs["attention_mask"].sum(dim=1).long()
                             start_indices = (full_lens - completion_lens).clamp(min=0)
                             gather_indices = start_indices[:, None] + torch.arange(seq_len, device=device)[None, :]
@@ -1190,7 +1242,7 @@ class AIRLTrainer(GRPOTrainer):
                 [{"role": "assistant", "content": inputs[i]["target"]}] for i in range(0, len(inputs), self.num_generations)
             ]
 
-        if mode == "train":
+        if mode == "train" and  self.state.global_step % self.reward_updates_per_policy_step == 0:
             
             if self.switch_label_if_correct:
                 prompts_neg, completions_neg, prompts_pos, completions_pos = switch_label_if_correct_func(

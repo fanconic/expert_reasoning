@@ -199,6 +199,9 @@ class IRLConfig(GRPOConfig):
     classifier_loss: str = field(
         default="bce", metadata={"help": "Loss of the classifier `bce` or `wgan`"}
     )
+    warmup_reward_dir: str = field(
+        default=None, metadata={"help": "If path it is set, it loads the warmed up reward model and its optimiser"}
+    )
 
     # ------------------------------------------------------------------
     # === Reward Model Warm-up ===

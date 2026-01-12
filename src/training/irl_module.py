@@ -77,6 +77,7 @@ def run_irl_training(
         load_best_model_at_end=True,  # Load best model when training ends
         metric_for_best_model=f"eval_rewards/{dataset_name}_correctness_reward_func/mean",  # Replace with your actual reward metric name
         greater_is_better=True,  # Set to False if lower is better for your metric
+        warmup_reward_dir=getattr(cfg.model, "warmup_reward_dir", None),
     )
 
     def formatting_prompt_func(examples):

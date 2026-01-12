@@ -56,7 +56,7 @@ model:
   
 
 dataset:
-  name: "gsm8k_kd"
+  name: "medical_kd"
   split: "train"
   train_ratio: 1
   val_ratio: 0.1
@@ -73,7 +73,7 @@ training:
   optim: "paged_adamw_8bit"
   logging_steps: 10
   max_grad_norm: 1.0
-  output_dir: "/mnt/pdata/caf83/icml_math/outputs/${wandb.run_name}"
+  output_dir: "/mnt/pdata/caf83/icml_medicine/outputs/${wandb.run_name}"
   report_to: "wandb"
   per_device_train_batch_size: 16
   max_micro_batch: 4  #max batch for the reward model such that I don't run out of memory
@@ -95,6 +95,6 @@ eval:
   prediction_loss_only: false
 
 wandb:
-  project: "expert_reasoning_math_icml"
+  project: "expert_reasoning_medical_icml"
   entity: eth_dlad_team32
   run_name: qwen7b_8ga_8gens
