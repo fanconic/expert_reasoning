@@ -200,7 +200,6 @@ class SaveBestByMetricCallback(TrainerCallback):
             return control
         
         last_logging = state.log_history[-1] if state.log_history else {}
-
         val = last_logging[self.metric_key]
         is_best = (
             self.best is None

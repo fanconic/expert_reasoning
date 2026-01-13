@@ -1,4 +1,3 @@
-from transformers import DataCollatorForSeq2Seq
 from trl import SFTConfig, SFTTrainer
 
 
@@ -17,7 +16,7 @@ from src.rewards.reward_functions import (
 )
 
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
-    
+
     if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":
         reward_fns = [
             ("xmlcount_reward_func", xmlcount_reward_func),
@@ -42,7 +41,6 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         ]
     else:
         raise ValueError(f"Unknown dataset name: {cfg.dataset.name}")
-    
 
     sft_config = SFTConfig(
         learning_rate=cfg.training.learning_rate,
@@ -67,7 +65,6 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         eval_accumulation_steps=cfg.eval.eval_accumulation_steps,
         prediction_loss_only=cfg.eval.prediction_loss_only,
         num_train_epochs=cfg.training.epochs,
-        dataset_kwargs = {"skip_prepare_dataset": True},   # YES
     )
 
     # sampling params for generation
@@ -85,60 +82,21 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         """
         prompts = examples["prompt"]  # list of lists of messages
         targets = examples["target"]  # list of "<think>…</think><answer>…</answer>" strings
-        new_promtps, completions = [], []
+        texts = []
         for msgs, tgt in zip(prompts, targets):
             # 1) format system+user
             formatted_prompt = tokenizer.apply_chat_template(
                 msgs, tokenize=False, add_generation_prompt=True
             )
-            completion = tgt + tokenizer.eos_token
-            new_promtps.append(formatted_prompt)
-            completions.append(completion)
-        return {"prompt": new_promtps, "completion": completions}
-    
-    
-    def tokenize_completion_only(examples, tokenizer, max_length):
-        prompts = examples["prompt"]         # already string prompts (chat templated)
-        completions = examples["completion"] # already string completions (target + eos)
-
-        input_ids_list, attn_list, labels_list = [], [], []
-
-        for p, c in zip(prompts, completions):
-            p_ids = tokenizer(p, add_special_tokens=False).input_ids
-            c_ids = tokenizer(c, add_special_tokens=False).input_ids
-
-            input_ids = p_ids + c_ids
-            labels = [-100] * len(p_ids) + c_ids
-
-            # truncate (keep the *end* so completion survives; or keep start—pick your preference)
-            if len(input_ids) > max_length:
-                # keep tail (often better if completion is at end)
-                input_ids = input_ids[-max_length:]
-                labels = labels[-max_length:]
-
-                # if we truncated into the prompt/completion boundary, we may have lost some prompt masking;
-                # still fine because labels for prompt are -100 wherever prompt remains.
-
-            attention_mask = [1] * len(input_ids)
-
-            input_ids_list.append(input_ids)
-            attn_list.append(attention_mask)
-            labels_list.append(labels)
-
-        return {"input_ids": input_ids_list, "attention_mask": attn_list, "labels": labels_list}
-
-    max_len = cfg.model.max_prompt_length + cfg.model.max_completion_length
-
-    train_dataset = train_dataset.map(formatting_prompt_func, batched=True)
-    val_dataset   = val_dataset.map(formatting_prompt_func, batched=True)
+            texts.append(formatted_prompt + tgt + tokenizer.eos_token)
+        return {"text": texts}
 
     train_dataset = train_dataset.map(
-        lambda ex: tokenize_completion_only(ex, tokenizer, max_len),
+        formatting_prompt_func,
         batched=True,
     )
-
     val_dataset = val_dataset.map(
-        lambda ex: tokenize_completion_only(ex, tokenizer, max_len),
+        formatting_prompt_func,
         batched=True,
     )
 
@@ -152,16 +110,6 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         output_dir=cfg.training.output_dir,
         metric_for_best_model=reward_fns[-1][0]
     )
-    
-    def get_collator(tokenizer):
-        return DataCollatorForSeq2Seq(
-            tokenizer=tokenizer,
-            padding=True,
-            label_pad_token_id=-100,
-            return_tensors="pt",
-        )
-    
-    collator = get_collator(tokenizer)
 
     trainer = SFTTrainer(
         model=model,
@@ -172,7 +120,6 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
         eval_dataset=val_dataset,
         dataset_num_proc=1,
         callbacks=[gen_eval_cb],
-        data_collator=collator,
     )
 
     trainer.train()

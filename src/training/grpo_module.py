@@ -65,7 +65,7 @@ def run_grpo_training(
         reward_processing_classes=reward_processing_classes,
     )
     cb = SaveBestByMetricCallback(
-            f"rewards/{dataset_name}_correctness_reward_func/mean",
+            f"eval_rewards/{dataset_name}_correctness_reward_func/mean",
             cfg.training.output_dir, 
             greater_is_better=True
     )
