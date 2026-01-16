@@ -247,7 +247,6 @@ def perturb_expert_completions(
 ): 
     if not perturb_fns:
         return prompts_neg, completions_neg, prompts_pos, completions_pos
-    
     for _ in range(n_perturbs):
         num_selected = random.choice(range(1, len(perturb_fns) + 1))
         selected_perturbs = random.sample(perturb_fns, k=num_selected)
@@ -265,6 +264,35 @@ def perturb_expert_completions(
         completions_neg.extend(new_completions)
     
     return prompts_neg, completions_neg, prompts_pos, completions_pos
+
+
+def perturb_expert_completions_medical(
+    prompts_neg: List[Any], 
+    completions_neg: List[Any],
+    prompts_pos: List[Any], 
+    corrupted_reasonings: List[Any],
+    corrupted_answers: List[Any],
+    n_perturbs: int
+): 
+
+    corrupted_targets = []
+    for reasonings, answers in zip(corrupted_reasonings, corrupted_answers):
+        corrupted_targets_single = []
+        for reasoning, answer in zip(reasonings, answers):
+            corrupted_targets_single.append(f"<think>\n{reasoning}\n</think>\n<answer>\n{answer}\n</answer>")
+        corrupted_targets.append(corrupted_targets_single)  
+    
+    new_prompts, new_completions = [], []
+    for prompt, corruptions in zip(prompts_pos, corrupted_targets):
+        for i, text in enumerate(corruptions):
+            if i+1==n_perturbs:
+                break
+            new_prompts.append(prompt)
+            new_completions.append([{"role": "assistant", "content": text}])
+    
+    prompts_neg.extend(new_prompts)
+    completions_neg.extend(new_completions)
+    return prompts_neg, completions_neg
 
 # ---------------------------------------------------------------------------
 class AIRLTrainer(GRPOTrainer):
@@ -739,7 +767,20 @@ class AIRLTrainer(GRPOTrainer):
             pos_prompts = [batch[i]["prompt"] for i in range(0, len(batch), self.num_generations)]
             pos_completions = [batch[i]["target"] for i in range(0, len(batch), self.num_generations)]
             pos_completions = [[{"role": "assistant", "content": c + self.reward_tokenizer.eos_token}] for c in pos_completions]
-                
+            
+            # medical corruptions (before label switch, as they are wrong guaranteed)
+            if self.num_neg_perturbations_per_expert and "corrupted_reasonings" in batch[0].keys():
+                corrupted_reasonings = [batch[i]["corrupted_reasonings"] for i in range(0, len(batch), self.num_generations)]
+                corrupted_answers = [batch[i]["corrupted_answers"] for i in range(0, len(batch), self.num_generations)]
+                neg_prompts, neg_completions = perturb_expert_completions_medical(
+                    prompts_neg=neg_prompts, 
+                    completions_neg=neg_completions,
+                    prompts_pos=pos_prompts,
+                    corrupted_reasonings=corrupted_reasonings,
+                    corrupted_answers=corrupted_answers,
+                    n_perturbs=self.num_neg_perturbations_per_expert,
+                )
+            
             # Check which negatives are correct and switch labels
             if self.switch_label_if_correct:
                 neg_prompts, neg_completions, pos_prompts, pos_completions = switch_label_if_correct_func(
@@ -752,7 +793,8 @@ class AIRLTrainer(GRPOTrainer):
                 )
                 
             # Pertub texts and make them negative
-            if self.num_neg_perturbations_per_expert:
+            
+            if self.num_neg_perturbations_per_expert and not "corrupted_reasonings" in batch[0].keys():
                 neg_prompts, neg_completions, pos_prompts, pos_completions = perturb_expert_completions(
                     prompts_neg=neg_prompts, 
                     completions_neg=neg_completions, 
@@ -761,6 +803,7 @@ class AIRLTrainer(GRPOTrainer):
                     perturb_fns=self.neg_perturb_fns,
                     n_perturbs=self.num_neg_perturbations_per_expert,
                 )
+            
                 
             is_chat = is_conversational(batch[0])
             metrics = self._update_reward_model_step(
@@ -1244,6 +1287,19 @@ class AIRLTrainer(GRPOTrainer):
 
         if mode == "train" and  self.state.global_step % self.reward_updates_per_policy_step == 0:
             
+            # medical corruptions (before label switch, as they are wrong guaranteed)
+            if self.num_neg_perturbations_per_expert and "corrupted_reasonings" in inputs[0].keys():
+                corrupted_reasonings = [inputs[i]["corrupted_reasonings"] for i in range(0, len(inputs), self.num_generations)]
+                corrupted_answers = [inputs[i]["corrupted_answers"] for i in range(0, len(inputs), self.num_generations)]
+                prompts_neg, completions_neg = perturb_expert_completions_medical(
+                    prompts_neg=prompts_neg, 
+                    completions_neg=completions_neg,
+                    prompts_pos=prompts_pos, 
+                    corrupted_reasonings=corrupted_reasonings,
+                    corrupted_answers=corrupted_answers,
+                    n_perturbs=self.num_neg_perturbations_per_expert,
+                )
+            
             if self.switch_label_if_correct:
                 prompts_neg, completions_neg, prompts_pos, completions_pos = switch_label_if_correct_func(
                     prompts_neg=prompts_neg, 
@@ -1255,7 +1311,7 @@ class AIRLTrainer(GRPOTrainer):
                 )
 
             # Pertub texts and make them negative
-            if self.num_neg_perturbations_per_expert:
+            if self.num_neg_perturbations_per_expert and not "corrupted_reasonings" in inputs[0].keys():
                 prompts_neg, completions_neg, prompts_pos, completions_pos = perturb_expert_completions(
                     prompts_neg=prompts_neg, 
                     completions_neg=completions_neg, 

@@ -8,6 +8,7 @@ defaults:
 model:
   policy_name: "meta-llama/Llama-3.1-8B-Instruct"
   reward_name: "meta-llama/Llama-3.1-8B-Instruct"
+  #warmup_reward_dir: /mnt/pdata/caf83/icml_medicine/warmed_up_rewards/llama8b/partial/
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -40,7 +41,7 @@ model:
   classifier_loss: "bce"
 
   # Clip the reward of the discriminator
-  clip_reward_model: false
+  clip_reward_model: true
   reward_lb: -5.0
   reward_ub: 5.0
 
@@ -97,4 +98,4 @@ eval:
 wandb:
   project: "expert_reasoning_medical_icml"
   entity: eth_dlad_team32
-  run_name: llama8b_8ga_8gens
+  run_name: llama8b_correct_corrupt_clipped

@@ -42,8 +42,8 @@ model:
 
   # Clip the reward of the discriminator
   clip_reward_model: true
-  reward_lb: -4.0
-  reward_ub: 4.0
+  reward_lb: -5.0
+  reward_ub: 5.0
 
   # response only
   response_only: false

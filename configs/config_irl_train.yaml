@@ -56,14 +56,14 @@ model:
   
 
 dataset:
-  name: "gsm8k_kd"
+  name: "medical_kd"
   split: "train"
   train_ratio: 1
   val_ratio: 0.01
 
 training:
   # Common training params
-  reward_warmup_steps: 0
+  reward_warmup_steps: 1
   standard_grpo: false
   warmup_ratio: 0.1
   adam_beta1: 0.9

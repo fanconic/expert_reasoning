@@ -213,8 +213,8 @@ def score_with_reward_model(
 def main(cfg: DictConfig):
     print("Evaluation configuration:\n", OmegaConf.to_yaml(cfg))
     
-    os.makedirs(cfg.training.output_dir, exist_ok=True)
-    config_save_path = os.path.join(cfg.training.output_dir, "evaluation_config.yaml")
+    os.makedirs(cfg.model.name, exist_ok=True)
+    config_save_path = os.path.join(cfg.model.name, "evaluation_config.yaml")
     with open(config_save_path, 'w') as f:
         OmegaConf.save(config=cfg, f=f)
     print(f"Configuration saved to: {config_save_path}")

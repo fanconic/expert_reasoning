@@ -28,8 +28,8 @@ training:
   lr_scheduler_type: "cosine"
   optim: "paged_adamw_8bit"
   logging_steps: 10
-  per_device_train_batch_size: 16
-  gradient_accumulation_steps: 8
+  per_device_train_batch_size: 6
+  gradient_accumulation_steps: 6
   num_generations: 8
   epochs: 2
   max_steps: 500
@@ -47,7 +47,7 @@ eval:
   eval_strategy: "steps"
   eval_steps: 100
   use_vllm: true
-  per_device_eval_batch_size: 16
+  per_device_eval_batch_size: 6
   eval_accumulation_steps: 2
   prediction_loss_only: false
 
