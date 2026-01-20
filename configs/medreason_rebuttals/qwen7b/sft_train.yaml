@@ -47,8 +47,8 @@ eval:
   eval_strategy: "steps"
   eval_steps: 100
   use_vllm: true
-  per_device_eval_batch_size: 16
-  eval_accumulation_steps: 6
+  per_device_eval_batch_size: 6
+  eval_accumulation_steps: 2
   prediction_loss_only: false
 
 wandb:

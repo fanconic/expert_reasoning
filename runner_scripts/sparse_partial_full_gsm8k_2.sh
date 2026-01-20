@@ -1,5 +1,5 @@
 #!/bin/bash
-export GPU_NUM="3"
+export GPU_NUM="1"
 export DATASET="gsm8k_rebuttals"
 export MODEL="llama3b"
 
