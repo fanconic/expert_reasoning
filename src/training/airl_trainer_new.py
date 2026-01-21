@@ -194,16 +194,6 @@ def left_pack_padding(tensor: torch.Tensor, pad_id: int) -> torch.Tensor:
     packed_tensor = torch.gather(tensor, 1, sorted_indices)
     return packed_tensor
 
-def extract_expert_targets(self, inputs: list[dict]) -> list[Optional[str]]:
-    """Try a few common keys; returns None when no expert target exists."""
-    out: list[Optional[str]] = []
-    for ex in inputs:
-        t = None
-        if "target" in ex and ex["target"] is not None:
-            t = ex["target"]
-        out.append(t)
-    return out
-
 def build_texts(prompts: list, completions: list, reward_tok, is_chat: bool) -> list[str]:
     """Build discriminator inputs exactly like your reward path (chat-template or plain concat)."""
     if is_chat:
@@ -264,7 +254,6 @@ def perturb_expert_completions(
         completions_neg.extend(new_completions)
     
     return prompts_neg, completions_neg, prompts_pos, completions_pos
-
 
 def perturb_expert_completions_medical(
     prompts_neg: List[Any], 

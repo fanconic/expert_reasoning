@@ -6,8 +6,8 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  checkpoint: 500
-  name: "/mnt/pdata/caf83/icml_math/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}"
+  checkpoint: best_model
+  name: "/mnt/pdata/caf83/icml_math/outputs/${wandb.run_name}/${model.checkpoint}"
   policy_name: "${model.name}"
   reward_name: "Qwen/Qwen2.5-3B-Instruct"
   max_prompt_length: 300
@@ -23,16 +23,15 @@ model:
   
   # Policy model specific
   policy_lora_rank: 256  # Optional: override base rank for policy
-  policy_learning_rate: 1e-5
-  add_expert_to_policy_optim: true
-  add_expert_to_policy_balanced: false
 
   # Reward model specific  
   reward_lora_rank: 256  # Optional: override base rank for reward
-  reward_learning_rate: 1e-5
-  dense_rewards: true  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_rewards: partial  # Whether to use dense rewards (token-level) or sparse (sequence-level)
   dense_gamma: 0.99
-  advantage_calculation: "discounted_dense"
+  advantage_calculation: "average_dense" # discounted_dense or average_dense
+  clip_reward_model: true
+  reward_lb: -5.0
+  reward_ub: 5.0
 
 dataset:
   name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
@@ -48,8 +47,9 @@ eval:
   use_vllm: true
   per_device_eval_batch_size: 6
   report_to: "none"
+  max_micro_batch: 96
 
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: eval
+  run_name: qwen3b_8ga_8gens

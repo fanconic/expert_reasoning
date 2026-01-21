@@ -155,14 +155,57 @@ def generate_with_chunk_guidance(
     return current_gens 
 
 
+def sentence_boundary_mask(tokenizer, full_batch, base_completion_mask, device):
+    """
+    Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
+    Sentence boundaries are: '.', '\n', or '.\n' sequences.
+    """
+    input_ids = full_batch["input_ids"]  # [bs, L]
+    bs, L = input_ids.shape
+    
+    # Get token IDs for sentence boundaries
+    period_ids = tokenizer.encode(".", add_special_tokens=False)
+    newline_ids = tokenizer.encode("\n", add_special_tokens=False)
+    period_newline_ids = tokenizer.encode(".\n", add_special_tokens=False)
+
+    period_id = period_ids[0] if period_ids else -1
+    newline_id = newline_ids[0] if newline_ids else -1
+    period_newline_ids = period_newline_ids[0] if period_newline_ids else -1
+    
+    # Vectorized: find all periods and newlines in completion region
+    is_period = (input_ids == period_id) & base_completion_mask  # [bs, L]
+    is_newline = (input_ids == newline_id) & base_completion_mask  # [bs, L]
+    is_period_newline = (input_ids == period_newline_ids) & base_completion_mask  # [bs, L]
+    
+    
+    # Mark boundaries: newlines OR (periods that aren't followed by newlines)
+    boundary_mask = is_newline | is_period  | is_period_newline
+    
+    # Always include last completion token
+    last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)  # [bs]
+    boundary_mask[torch.arange(bs, device=device), last_indices] |= base_completion_mask.any(dim=1)
+    
+    return boundary_mask
+
+def backfill_rewards(rewards, mask):
+    B, T = rewards.shape
+    indices = torch.arange(T, device=rewards.device).expand(B, T)
+    masked_indices = torch.where(mask.bool(), indices, torch.tensor(T, device=rewards.device))
+    next_valid_index = torch.cummin(masked_indices.flip(1), dim=1)[0].flip(1)
+    next_valid_index = next_valid_index.clamp(max=T-1).long()
+    result = torch.gather(rewards, 1, next_valid_index)
+    
+    return result
+
+
 # ==========================================
 # 3. Helper for Scoring (Existing)
 # ==========================================
 @torch.no_grad()
 def score_with_reward_model(
-    reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt, dense=False
+    reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt, dense_reward=False, max_length=512, micro_batch=16,
+    clip_reward_model=False, reward_lb=-5.0, reward_ub=5.0
 ):
-    MICROBATCH_SIZE = 16 
     device = next(reward_model.parameters()).device
     texts = []
     idx_slices = [] 
@@ -177,32 +220,56 @@ def score_with_reward_model(
 
     if len(texts) == 0: return [[] for _ in prompts_msgs]
 
-    if dense:
-        completion_texts = []
-        for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
-            for c in completions:
-                content = c if isinstance(c, str) else c.get("content", "")
-                completion_texts.append(content + (reward_tokenizer.eos_token or ""))
-    pad_side = "left" if dense else "right"
-    flat_logits = [] 
-    for i in range(0, len(texts), MICROBATCH_SIZE):
-        batch_texts = texts[i : i + MICROBATCH_SIZE]
-        enc = reward_tokenizer(
-            text=batch_texts, return_tensors="pt", padding=True, add_special_tokens=False,
-            truncation=True, max_length=1124, padding_side=pad_side,
+    # tokenise completions, to check their lengths (needs an EOS token)
+    completion_texts = []
+    for completions in decoded_per_prompt:
+        for c in completions:
+            content = c if isinstance(c, str) else c.get("content", "")
+            completion_texts.append(content + (reward_tokenizer.eos_token or ""))
+    
+    # Prepare completion lengths
+    completion_tokens = reward_tokenizer(
+            text=completion_texts, return_tensors="pt", padding="max_length", add_special_tokens=False,
+            truncation=True, max_length=max_length, padding_side="right",
         ).to(device)
-        out = reward_model(**enc).logits.squeeze(-1) 
-        if dense:
-            batch_comp = completion_texts[i : i + len(batch_texts)]
-            response_mask = reward_tokenizer(
-                text=batch_comp, return_tensors="pt", padding="max_length", add_special_tokens=False,
-                truncation=True, padding_side="left", max_length=out.size(1),
-            ).to(device)["attention_mask"]
-            out = out.masked_fill(response_mask == 0, np.nan) 
-            out_cpu = out.detach().float().cpu()
+    seq_len = completion_tokens["attention_mask"].sum(dim=1).long().max().item()
+    
+    # Tokenise inputs to the reward model
+    reward_inputs = reward_tokenizer(
+        text=texts, return_tensors="pt", padding="max_length", add_special_tokens=False,
+        truncation=True, max_length=max_length, padding_side="right",
+    ).to(device)
+    
+
+    flat_logits = [] 
+    for i in range(0, len(texts), micro_batch):
+        batch_inputs = {k: v[i : i + micro_batch] for k, v in reward_inputs.items()}
+        batch_completions = {k: v[i : i + micro_batch] for k, v in completion_tokens.items()}
+
+        with torch.inference_mode():
+            reward_logits = reward_model(**batch_inputs).logits.squeeze(-1)
+            # Clip the reward model, if it was done during training
+            if not dense_reward:
+                reward_logits = reward_logits.unsqueeze(1).repeat(1, max_length)
+            if clip_reward_model:
+                reward_logits = torch.clamp(reward_logits, min=reward_lb, max=reward_ub)
+
+            completion_lens = batch_completions["attention_mask"].sum(dim=1).long()
+            full_lens = batch_inputs["attention_mask"].sum(dim=1).long()   
+            start_indices = (full_lens - completion_lens).clamp(min=0)
+            gather_indices = start_indices[:, None] + torch.arange(seq_len, device=device)[None, :]
+            gather_indices = gather_indices.clamp(max=reward_logits.size(1) - 1)
+            reward_comp = reward_logits.gather(1, gather_indices)
+            output_mask = torch.arange(seq_len, device=device)[None, :] < completion_lens[:, None]
+            reward_comp[~output_mask] = float('nan')
+            if dense_reward=="partial":
+                end_of_thought_mask = sentence_boundary_mask(reward_tokenizer, reward_inputs, reward_inputs["attention_mask"], device)
+                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
+                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
+
+            out_cpu = reward_comp.detach().float().cpu()
             for row in out_cpu: flat_logits.append(row.tolist())
-        else:
-            flat_logits.extend((out.detach().float().cpu().tolist()))
+            
     logits = flat_logits
     all_scores = []
     for s, e in idx_slices: all_scores.append(logits[s:e])
@@ -358,10 +425,15 @@ def main(cfg: DictConfig):
                 reward_tokenizer=reward_tokenizer,
                 prompts_msgs=prompts,
                 decoded_per_prompt=completions,
-                dense=cfg.model.dense_rewards
+                dense_reward=cfg.model.dense_rewards,
+                max_length=cfg.model.max_prompt_length + cfg.model.max_completion_length,
+                micro_batch=cfg.eval.max_micro_batch,
+                clip_reward_model=cfg.model.clip_reward_model,
+                reward_lb=cfg.model.reward_lb,
+                reward_ub=cfg.model.reward_ub,
             )  
         else:
-            batch_scores = [[1] * len(c) for c in completions]
+            batch_scores = [[[0]] * len(c) for c in completions]
         
         # Store results
         for prompt, generations, scores, rewards in zip(prompts, completions, batch_scores, batch_rewards):
@@ -375,10 +447,7 @@ def main(cfg: DictConfig):
                 result = result | rews
                 all_results.append(result)
                 
-                if cfg.model.dense_rewards:
-                    all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
-                else:
-                    all_reward_scores.append(scores)
+                all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
 
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)
