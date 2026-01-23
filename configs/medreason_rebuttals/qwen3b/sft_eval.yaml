@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning_medical_icml"
   entity: eth_dlad_team32
-  run_name: llama8b_sft
+  run_name: qwen3b_sft

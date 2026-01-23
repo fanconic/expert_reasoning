@@ -202,6 +202,9 @@ class IRLConfig(GRPOConfig):
     warmup_reward_dir: str = field(
         default=None, metadata={"help": "If path it is set, it loads the warmed up reward model and its optimiser"}
     )
+    dense_partial_fixed_n: int = field(
+        default=10, metadata={"help": "If set to an integer n, use every n-th token for dense reward in 'partial_fixed' mode"}
+    )
 
     # ------------------------------------------------------------------
     # === Reward Model Warm-up ===

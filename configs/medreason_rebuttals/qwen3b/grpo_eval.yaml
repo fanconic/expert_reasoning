@@ -7,7 +7,7 @@ defaults:
 
 model:
   checkpoint: 500
-  name: "/mnt/pdata/caf83/icml_math/icml_medicine/${wandb.run_name}/best_model" 
+  name: "/mnt/pdata/caf83/icml_medicine/outputs/${wandb.run_name}/best_model" 
   policy_name: null
   reward_name: null
   lora_rank: 256
@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning_medical_icml"
   entity: eth_dlad_team32
-  run_name: llama8b_grpo
+  run_name: qwen3b_grpo

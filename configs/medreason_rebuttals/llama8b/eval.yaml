@@ -27,6 +27,7 @@ model:
   # Reward model specific  
   reward_lora_rank: 256  # Optional: override base rank for reward
   dense_rewards: partial  # Whether to use dense rewards (token-level) or sparse (sequence-level)
+  dense_partial_fixed_n: 15
   dense_gamma: 0.99
   advantage_calculation: "average_dense" # discounted_dense or average_dense
   clip_reward_model: true
@@ -34,7 +35,7 @@ model:
   reward_ub: 5.0
 
 dataset:
-  name: "medical_kd_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "medical_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
 
 sampling:

@@ -187,6 +187,30 @@ def sentence_boundary_mask(tokenizer, full_batch, base_completion_mask, device):
     
     return boundary_mask
 
+
+def every_n_tokens_mask(full_batch, base_completion_mask, n: int):
+    """
+    Returns mask [bs, L] that is True every n tokens within the completion
+    and always True at the final completion token.
+    """
+    input_ids = full_batch["input_ids"]  # [bs, L]
+    bs, L = input_ids.shape
+    device = input_ids.device
+
+    # Count token positions within the completion (1-based)
+    token_indices = base_completion_mask.long().cumsum(dim=1)  # [bs, L]
+
+    # Mark every n-th token (ignore positions outside completion)
+    every_n_mask = (token_indices % n == 0) & base_completion_mask
+
+    # Find last completion token index per batch
+    last_indices = token_indices.argmax(dim=1)  # [bs]
+
+    # Ensure last completion token is always included
+    every_n_mask[torch.arange(bs, device=device),last_indices] |= base_completion_mask.any(dim=1)
+    return every_n_mask
+
+
 def backfill_rewards(rewards, mask):
     B, T = rewards.shape
     indices = torch.arange(T, device=rewards.device).expand(B, T)
@@ -204,7 +228,7 @@ def backfill_rewards(rewards, mask):
 @torch.no_grad()
 def score_with_reward_model(
     reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt, dense_reward=False, max_length=512, micro_batch=16,
-    clip_reward_model=False, reward_lb=-5.0, reward_ub=5.0
+    clip_reward_model=False, reward_lb=-5.0, reward_ub=5.0, dense_partial_fixed_n=10
 ):
     device = next(reward_model.parameters()).device
     texts = []
@@ -266,6 +290,10 @@ def score_with_reward_model(
                 end_of_thought_mask = sentence_boundary_mask(reward_tokenizer, reward_inputs, reward_inputs["attention_mask"], device)
                 end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
                 reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
+            elif dense_reward=="partial_fixed":
+                end_of_thought_mask = every_n_tokens_mask(reward_inputs, reward_inputs["attention_mask"], dense_partial_fixed_n)
+                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
+                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
 
             out_cpu = reward_comp.detach().float().cpu()
             for row in out_cpu: flat_logits.append(row.tolist())
@@ -308,7 +336,7 @@ def main(cfg: DictConfig):
 
     # Load data
     no_system = getattr(cfg.dataset, "no_system", False)
-    dataset = get_dataset(cfg.dataset.name, split=cfg.dataset.split, ratio=0.1, no_system=no_system)
+    dataset = get_dataset(cfg.dataset.name, split=cfg.dataset.split, ratio=1, no_system=no_system)
     loader = DataLoader(
         dataset, batch_size=cfg.eval.per_device_eval_batch_size, shuffle=False,
         collate_fn=lambda examples: examples,
@@ -431,6 +459,7 @@ def main(cfg: DictConfig):
                 clip_reward_model=cfg.model.clip_reward_model,
                 reward_lb=cfg.model.reward_lb,
                 reward_ub=cfg.model.reward_ub,
+                dense_partial_fixed_n=cfg.model.dense_partial_fixed_n
             )  
         else:
             batch_scores = [[[0]] * len(c) for c in completions]
