@@ -47,9 +47,8 @@ STRICT_FMT = re.compile(
 SOFT_FMT = re.compile(r"<think>.*?</think>.*?<answer>.*?</answer>", flags=re.DOTALL)
 
 
-def strict_format_reward_func(completions, **kwargs):
-    responses = [c[0]["content"].strip() for c in completions]
-    return [0.5 if STRICT_FMT.match(r) else 0.0 for r in responses]
+def strict_format_reward_func(response, **kwargs):
+    return 0.5 if STRICT_FMT.match(response) else 0.0
 
 
 def soft_format_reward_func(completions, **kwargs):
@@ -515,18 +514,19 @@ def extract_flags(df: pd.DataFrame, num_generations: int = 16, disc: bool = True
 # -------------------------------
 
 
-def read_and_enhance(jsonl_path: str, gamma: float = 0.9) -> pd.DataFrame:
+def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = False) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
     df["reward_model_score_np"] = df["reward_model_score"].apply(
         lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
     )
     df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
-    df["reward_model_score_np_discounted"] = df["reward_model_score_np"].apply(
-        lambda r: compute_advantages(r, gamma=gamma)
-    )
-    df["mean_rewards_discounted"] = df["reward_model_score_np_discounted"].apply(
-        lambda x: np.nanmean(x)
-    )
+    df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
+    # df["reward_model_score_np_discounted"] = df["reward_model_score_np"].apply(
+    #     lambda r: compute_advantages(r, gamma=gamma)
+    # )
+    # df["mean_rewards_discounted"] = df["reward_model_score_np_discounted"].apply(
+    #     lambda x: np.nanmean(x)
+    # )
 
     from transformers import AutoTokenizer
 
@@ -567,22 +567,15 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9) -> pd.DataFrame:
             else (-10, -4)
         )
     )
-    df["selector"] = df.apply(
-        lambda x: np.nanmean(
-            x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
-        ),
-        axis=1,
-    )
-    df["selector_discounted"] = df.apply(
-        lambda x: np.nanmean(
-            x.reward_model_score_np_discounted[
-                x.answer_positions[0] : x.answer_positions[1]
-            ]
-        ),
-        axis=1,
-    )
-    # df["selector"] = df["mean_rewards"]
-    # df["selector_discounted"] = df["mean_rewards_discounted"]
+    if answer_only:
+        df["selector"] = df.apply(
+            lambda x: np.nanmean(
+                x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
+            ),
+            axis=1,
+        )
+    else:
+        df["selector"] = df["mean_rewards"].copy()
     return df
 
 
@@ -734,7 +727,7 @@ def plot_success_at_k_given(
         all_correct_flags.append(
             np.array(sub_df.correctness_reward_func == 2, dtype=int).tolist()
         )
-        all_scores.append(sub_df["selector_discounted"].tolist())
+        all_scores.append(sub_df["selector"].tolist())
 
     all_dummy_scores = [[0.0] * num_generations for _ in range(len(all_correct_flags))]
     
@@ -879,52 +872,52 @@ def plot_reward_distributions(
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
 
-    correct = df[df.correctness_reward_func == 2].mean_rewards_discounted
-    wrong = df[df.correctness_reward_func == 0].mean_rewards_discounted
-    t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
+    # correct = df[df.correctness_reward_func == 2].mean_rewards_discounted
+    # wrong = df[df.correctness_reward_func == 0].mean_rewards_discounted
+    # t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
 
-    plt.figure(figsize=(6, 3))
-    sns.histplot(
-        wrong,
-        label="Wrong Answer",
-        kde=True,
-        stat="probability",
-        bins=50,
-        color="C1",
-        alpha=0.5,
-        edgecolor=None,
-        shrink=0.85,
-        linewidth=0,
-    )
-    sns.histplot(
-        correct,
-        label="Correct Answer",
-        kde=True,
-        stat="probability",
-        bins=50,
-        color="C0",
-        alpha=0.5,
-        edgecolor=None,
-        shrink=0.85,
-        linewidth=0,
-    )
-    plt.legend()
-    plt.xlabel("Mean Discounted Rewards")
-    plt.ylabel("Probability")
-    # plt.title("Distribution of Discounted Rewards based on Correctness")
-    p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
-    text = f"t = {t_stat:.2f}, {p_text}"
-    plt.text(
-        0.03,
-        0.78,
-        text,
-        transform=plt.gca().transAxes,
-        fontsize=10,
-        va="top",
-        bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
-    )
-    plt.savefig(out_pdf_discounted, bbox_inches="tight")
-    plt.close()
+    # plt.figure(figsize=(6, 3))
+    # sns.histplot(
+    #     wrong,
+    #     label="Wrong Answer",
+    #     kde=True,
+    #     stat="probability",
+    #     bins=50,
+    #     color="C1",
+    #     alpha=0.5,
+    #     edgecolor=None,
+    #     shrink=0.85,
+    #     linewidth=0,
+    # )
+    # sns.histplot(
+    #     correct,
+    #     label="Correct Answer",
+    #     kde=True,
+    #     stat="probability",
+    #     bins=50,
+    #     color="C0",
+    #     alpha=0.5,
+    #     edgecolor=None,
+    #     shrink=0.85,
+    #     linewidth=0,
+    # )
+    # plt.legend()
+    # plt.xlabel("Mean Discounted Rewards")
+    # plt.ylabel("Probability")
+    # # plt.title("Distribution of Discounted Rewards based on Correctness")
+    # p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
+    # text = f"t = {t_stat:.2f}, {p_text}"
+    # plt.text(
+    #     0.03,
+    #     0.78,
+    #     text,
+    #     transform=plt.gca().transAxes,
+    #     fontsize=10,
+    #     va="top",
+    #     bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
+    # )
+    # plt.savefig(out_pdf_discounted, bbox_inches="tight")
+    # plt.close()
 
 
 def plot_rewards_vs_discounted(df: pd.DataFrame, out_pdf: str | Path):
@@ -1011,58 +1004,58 @@ def plot_formatting_distributions(
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
 
-    plt.figure(figsize=(10, 5))
-    sns.histplot(
-        df[df.strict_format_reward_func == 0].selector_discounted,
-        label="Wrong Format",
-        kde=True,
-        stat="probability",
-        bins=50,
-        color="C1",
-        alpha=0.5,
-        edgecolor=None,
-        shrink=0.85,
-        linewidth=0,
-    )
-    sns.histplot(
-        df[df.strict_format_reward_func == 0.5].selector_discounted,
-        label="Correct Format",
-        kde=True,
-        stat="probability",
-        bins=50,
-        color="C0",
-        alpha=0.5,
-        edgecolor=None,
-        shrink=0.85,
-        linewidth=0,
-    )
+    # plt.figure(figsize=(10, 5))
+    # sns.histplot(
+    #     df[df.strict_format_reward_func == 0].selector_discounted,
+    #     label="Wrong Format",
+    #     kde=True,
+    #     stat="probability",
+    #     bins=50,
+    #     color="C1",
+    #     alpha=0.5,
+    #     edgecolor=None,
+    #     shrink=0.85,
+    #     linewidth=0,
+    # )
+    # sns.histplot(
+    #     df[df.strict_format_reward_func == 0.5].selector_discounted,
+    #     label="Correct Format",
+    #     kde=True,
+    #     stat="probability",
+    #     bins=50,
+    #     color="C0",
+    #     alpha=0.5,
+    #     edgecolor=None,
+    #     shrink=0.85,
+    #     linewidth=0,
+    # )
 
-    correct = df[df.strict_format_reward_func == 0.5].selector_discounted
-    wrong = df[df.strict_format_reward_func == 0.0].selector_discounted
-    t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
-    plt.legend()
-    plt.xlabel("Mean Discounted Rewards")
-    plt.ylabel("Probability")
-    # plt.title("Distribution of Discounted Rewards based on Formatting")
-    p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
-    text = f"t = {t_stat:.2f}, {p_text}"
-    plt.text(
-        0.02,
-        0.95,
-        text,
-        transform=plt.gca().transAxes,
-        fontsize=10,
-        va="top",
-        bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
-    )
-    plt.savefig(out_pdf_discounted, bbox_inches="tight")
-    plt.close()
+    # correct = df[df.strict_format_reward_func == 0.5].selector_discounted
+    # wrong = df[df.strict_format_reward_func == 0.0].selector_discounted
+    # t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
+    # plt.legend()
+    # plt.xlabel("Mean Discounted Rewards")
+    # plt.ylabel("Probability")
+    # # plt.title("Distribution of Discounted Rewards based on Formatting")
+    # p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
+    # text = f"t = {t_stat:.2f}, {p_text}"
+    # plt.text(
+    #     0.02,
+    #     0.95,
+    #     text,
+    #     transform=plt.gca().transAxes,
+    #     fontsize=10,
+    #     va="top",
+    #     bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
+    # )
+    # plt.savefig(out_pdf_discounted, bbox_inches="tight")
+    # plt.close()
 
 
 def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
     reward_cols = [
         "selector",
-        "selector_discounted",
+        #"selector_discounted",
         "xmlcount_reward_func",
         "strict_format_reward_func",
         #"int_reward_func",
@@ -1070,7 +1063,7 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
     ]
     rename_map = {
         "selector": "Rewards",
-        "selector_discounted": "Rewards\n(Discounted)",
+        #"selector_discounted": "Rewards\n(Discounted)",
         "xmlcount_reward_func": "XML Count",
         "strict_format_reward_func": "Strict Format",
         #"int_reward_func": "Integer",
@@ -1147,7 +1140,7 @@ def run_all_plots(
     )
 
     # raw vs discounted
-    plot_rewards_vs_discounted(df_airl, out_dir / "rewards_vs_discounted.pdf")
+    #plot_rewards_vs_discounted(df_airl, out_dir / "rewards_vs_discounted.pdf")
 
     # formatting distributions
     plot_formatting_distributions(
@@ -1162,7 +1155,7 @@ def run_all_plots(
     # Token-based dense reward visualisations (best-effort; requires tokenizer + fields)
     if make_token_figs:
         colour_map = CUSTOM_COLOR_MAP
-        discs = [False, True]
+        discs = [False]
 
         for disc in discs:
             reward_score_name = (
@@ -1170,19 +1163,17 @@ def run_all_plots(
             )
             postfix = "discounted" if disc else "raw"
             mean_name = "mean_rewards_discounted" if disc else "mean_rewards"
-
             if "response_token" in df_airl.columns:
                 plt.rcParams["text.usetex"] = False
                 correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
                 wrong_mean =  df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
                 overall_mean = df_airl[mean_name].mean()
-                
+
+                # standardise rewards by subtracting overall mean
                 df_airl["reward_model_standard"] = df_airl[reward_score_name].apply(lambda x: x - overall_mean)
-                
                 
                 positive_indicies = df_airl[(abs(df_airl[mean_name]- correct_mean) < 0.5) & (df_airl["correctness_reward_func"] == 2) & (df_airl["strict_format_reward_func"] == 0.5)][mean_name].index[:5]
                 negative_indicies = df_airl[(abs(df_airl[mean_name]- wrong_mean) < 0.5) & (df_airl["correctness_reward_func"] != 2) & (df_airl["strict_format_reward_func"] == 0.5)][mean_name].index[:5]
-                exit()
                 all_indices = np.concatenate([positive_indicies, negative_indicies ])
                 df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
                 df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))

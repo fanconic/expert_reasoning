@@ -1,170 +1,177 @@
 """
 plot_main.py
 
-Main entry point. Define your experiments (triplets of run folders), loop through
-and generate figures/tables into an experiment-specific output folder.
+Run plotting for multiple experiments across two domains (math + medicine).
 
 Usage:
     python plot_main.py
-
-Edit the `EXPERIMENTS` list below as needed. Each experiment is a dict with keys:
-    - airl: run folder name for AIRL (expert reasoning)
-    - sft:  run folder name for SFT
-    - grpo: run folder name for GRPO / outcome-supervised
-    - ckpt: checkpoint number as str or int (default '500')
-    - label (optional): custom label used to name the output folder
-
-Figures are saved under:
-    {BASE}/figures/{label or airl__sft__grpo}/
-where BASE defaults to "/mnt/pdata/caf83/tabular_reasoning/outputs".
+    python plot_main.py --ckpt best_model
+    python plot_main.py --no-token-figs
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Mapping, Union
 
-import pandas as pd
-
-from plot_helpers import (
-    ensure_dir,
-    read_and_enhance,
-    run_all_plots,
-)
+from plot_helpers import ensure_dir, read_and_enhance, run_all_plots
 
 # -------------------------------
 # Config
 # -------------------------------
-BASE = Path("/mnt/pdata/caf83/icml_math/outputs")
-BASE_REBUTTALS = Path("/mnt/pdata/caf83/icml_math/outputs")
 
-# BASE = Path("/mnt/pdata/caf83/icml_medicine/outputs")
-# BASE_REBUTTALS = Path("/mnt/pdata/caf83/icml_medicine/outputs")
+DOMAINS: Dict[str, Path] = {
+    "math": Path("/mnt/pdata/caf83/icml_math/outputs"),
+    "medicine": Path("/mnt/pdata/caf83/icml_medicine/outputs"),
+}
 
 DEFAULT_CKPT = "best_model"
 
-# Define your experiments here
-EXPERIMENTS: List[Dict] = [
+RunName = Union[str, Mapping[str, str]]  # either "foo" or {"math": "foo", "medicine": "bar"}
+
+EXPERIMENTS: List[Dict[str, Any]] = [
+    # Base runs (AIRL differs slightly by domain)
     {
-        "airl": "qwen3b_8ga_8gens",
+        "airl": {"math": "qwen3b_8ga_8gens", "medicine": "qwen3b_correct_corrupt_clipped"},
         "sft": "qwen3b_sft",
         "grpo": "qwen3b_grpo",
-        "ckpt": DEFAULT_CKPT,
         "label": "qwen3b",
     },
-    {
-        "airl": "llama3b_8ga_8gens_reward_clipped",
-        "sft": "llama3b_sft",
-        "grpo": "llama3b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama3b",
-    },
-    {
-        "airl": "qwen7b_8ga_8gens",
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "qwen7b",
-    },
-    {
-        "airl": "llama8b_8ga_8gens_clipped_reward",
-        "sft": "llama8b_sft",
-        "grpo": "llama8b_grpo",
-        "ckpt": DEFAULT_CKPT,
-        "label": "llama8b",
-    },    
+    # {
+    #     "airl": {"math": "llama3b_8ga_8gens_reward_clipped", "medicine": "llama3b_correct_corrupt_clipped"},
+    #     "sft": "llama3b_sft",
+    #     "grpo": "llama3b_grpo",
+    #     "label": "llama3b",
+    # },
+    # {
+    #     "airl": {"math": "qwen7b_8ga_8gens", "medicine": "qwen7b_correct_corrupt_clipped"},
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "label": "qwen7b",
+    # },
+    # {
+    #     "airl": {"math": "llama8b_8ga_8gens_clipped_reward", "medicine": "llama8b_correct_corrupt_clipped"},
+    #     "sft": "llama8b_sft",
+    #     "grpo": "llama8b_grpo",
+    #     "label": "llama8b",
+    # },
+
+    # # Sparse
+    # {"airl": "qwen3b_8ga_8gens_clipped_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
+    # {"airl": "llama3b_8ga_8gens_clipped_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
+    # {"airl": "qwen7b_8ga_8gens_clipped_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
+    # {"airl": "llama8b_8ga_8gens_clipped_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
+
+    # # Full
+    # {"airl": "qwen3b_8ga_8gens_clipped_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
+    # {"airl": "llama3b_8ga_8gens_clipped_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
+    # {"airl": "qwen7b_8ga_8gens_clipped_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
+    # {"airl": "llama8b_8ga_8gens_clipped_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
+
+    # # OVR
+    # {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
+    # {"airl": "llama3b_ovr", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_ovr"},
+    # {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
+    # {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
+
+    # # Partial fixed
+    # {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
+    # {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
+    # {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
+    # {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
 ]
+
 
 # -------------------------------
 # Helpers
 # -------------------------------
 
+def resolve_run(name_or_map: RunName, domain: str) -> str:
+    """Allow run name to be either a single string or per-domain mapping."""
+    if isinstance(name_or_map, str):
+        return name_or_map
+    try:
+        return name_or_map[domain]
+    except KeyError as e:
+        raise KeyError(f"Missing run name for domain='{domain}' in {name_or_map}") from e
 
-def jsonl_path(run_name: str, ckpt: str | int) -> Path:
-    return BASE / run_name / f"{ckpt}" / "eval_results.jsonl"
+
+def eval_jsonl(base: Path, run_name: str, ckpt: str) -> Path:
+    return base / run_name / ckpt / "eval_results.jsonl"
 
 
-def label_for(exp: Dict) -> str:
-    if "label" in exp and exp["label"]:
-        return exp["label"]
+def exp_label(exp: Dict[str, Any]) -> str:
+    if exp.get("label"):
+        return str(exp["label"])
+    # fallback if label omitted
     return f"{exp['airl']}__{exp['sft']}__{exp['grpo']}"
+
+
+def run_one_experiment(domain: str, base: Path, exp: Dict[str, Any], ckpt: str, make_token_figs: bool, answer_only: bool) -> None:
+    airl_run = resolve_run(exp["airl"], domain)
+    sft_run = resolve_run(exp["sft"], domain)     # usually str, but this keeps it flexible
+    grpo_run = resolve_run(exp["grpo"], domain)
+
+    airl_p = eval_jsonl(base, airl_run, ckpt)
+    sft_p = eval_jsonl(base, sft_run, ckpt)
+    grpo_p = eval_jsonl(base, grpo_run, ckpt)
+
+    label = exp_label(exp)
+    out_dir = Path("./figures") / domain / label
+    ensure_dir(str(out_dir))
+
+    missing = [p for p in (airl_p, sft_p, grpo_p) if not p.exists()]
+    if missing:
+        print(f"[WARNING] Skipping '{domain}/{label}' — missing: {[str(m) for m in missing]}")
+        return
+
+    print(f"[INFO] Running '{domain}/{label}' (ckpt={ckpt})")
+
+    try:
+        df_airl = read_and_enhance(str(airl_p), answer_only=answer_only)
+        df_sft = read_and_enhance(str(sft_p), answer_only=answer_only)
+        df_grpo = read_and_enhance(str(grpo_p), answer_only=answer_only)
+    except Exception as e:
+        print(f"[ERROR] Failed to read/enhance for '{domain}/{label}': {e}")
+        return
+
+    try:
+        run_all_plots(
+            df_airl,
+            df_sft,
+            df_grpo,
+            str(out_dir),
+            num_generations=16,
+            make_token_figs=make_token_figs,
+        )
+    except Exception as e:
+        print(f"[ERROR] Plotting failed for '{domain}/{label}': {e}")
+        return
+
+    print(f"[DONE] Saved figures to: {out_dir}")
 
 
 # -------------------------------
 # Main
 # -------------------------------
 
-
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--base",
-        type=str,
-        default=str(BASE),
-        help="Base outputs directory containing the run folders",
-    )
-    parser.add_argument(
-        "--ckpt",
-        type=str,
-        default=None,
-        help="Override checkpoint number for all experiments",
-    )
-    parser.add_argument(
-        "--no-token-figs",
-        action="store_true",
-        help="Skip token-level dense reward figures",
-    )
+    parser.add_argument("--ckpt", type=str, default=DEFAULT_CKPT, help="Checkpoint folder name (default: best_model)")
+    parser.add_argument("--no-token-figs", action="store_true", help="Skip token-level dense reward figures")
     args = parser.parse_args()
 
-
-    for exp in EXPERIMENTS:
-        ckpt = (
-            args.ckpt if args.ckpt is not None else str(exp.get("ckpt", DEFAULT_CKPT))
-        )
-        airl_run, sft_run, grpo_run = exp["airl"], exp["sft"], exp["grpo"]
-
-        airl_p = BASE_REBUTTALS / airl_run / f"{ckpt}" / "eval_results.jsonl"
-        sft_p = BASE / sft_run / f"{ckpt}" / "eval_results.jsonl"
-        grpo_p = BASE / grpo_run / f"{ckpt}" / "eval_results.jsonl"
-
-        label = label_for(exp)
-        out_dir = f"./figures/{label}"
-        ensure_dir(out_dir)
-
-        missing = [p for p in [airl_p, sft_p, grpo_p] if not p.exists()]
-        if missing:
-            print(
-                f"[WARNING] Skipping '{label}' — missing files: {[str(m) for m in missing]}"
+    for domain, base_path in DOMAINS.items():
+        for exp in EXPERIMENTS:
+            run_one_experiment(
+                domain=domain,
+                base=base_path,
+                exp=exp,
+                ckpt=args.ckpt,
+                make_token_figs=True,
+                answer_only=True,
             )
-            continue
-
-        print(f"[INFO] Running experiment '{label}' (ckpt={ckpt})")
-
-        # Load and enhance
-        try:
-            df_airl = read_and_enhance(str(airl_p))
-            df_sft = read_and_enhance(str(sft_p))
-            df_grpo = read_and_enhance(str(grpo_p))
-        except Exception as e:
-            print(f"[ERROR] Failed to read/enhance data for '{label}': {e}")
-            continue
-
-        # Orchestrate plots
-        try:
-            run_all_plots(
-                df_airl,
-                df_sft,
-                df_grpo,
-                out_dir,
-                num_generations=16,
-                make_token_figs=not args.no_token_figs,
-            )
-        except Exception as e:
-            print(f"[ERROR] Plotting failed for '{label}': {e}")
-            continue
-
-        print(f"[DONE] Saved figures to: {out_dir}")
 
 
 if __name__ == "__main__":

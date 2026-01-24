@@ -7,9 +7,9 @@ defaults:
 
 model:
   checkpoint: best_model
-  name: "/mnt/pdata/caf83/icml_medicine/outputs/${wandb.run_name}/${model.checkpoint}"
+  name: "/mnt/pdata/caf83/icml_math/outputs/${wandb.run_name}/${model.checkpoint}"
   policy_name: "${model.name}"
-  reward_name: "Qwen/Qwen2.5-7B-Instruct"
+  reward_name: "meta-llama/Llama-3.1-8B-Instruct"
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
@@ -35,7 +35,7 @@ model:
   reward_ub: 5.0
 
 dataset:
-  name: "medical_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
+  name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
   split: "test"
 
 sampling:
@@ -48,9 +48,9 @@ eval:
   use_vllm: true
   per_device_eval_batch_size: 6
   report_to: "none"
-  max_micro_batch: 48
+  max_micro_batch: 96
 
 wandb:
-  project: "expert_reasoning_medical_icml"
+  project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: qwen7b_correct_corrupt_clipped
+  run_name: llama3b_switch_reward
