@@ -32,54 +32,54 @@ RunName = Union[str, Mapping[str, str]]  # either "foo" or {"math": "foo", "medi
 
 EXPERIMENTS: List[Dict[str, Any]] = [
     # Base runs (AIRL differs slightly by domain)
-    {
-        "airl": {"math": "qwen3b_8ga_8gens", "medicine": "qwen3b_correct_corrupt_clipped"},
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "label": "qwen3b",
-    },
-    {
-        "airl": {"math": "llama3b_8ga_8gens_reward_clipped", "medicine": "llama3b_correct_corrupt_clipped"},
-        "sft": "llama3b_sft",
-        "grpo": "llama3b_grpo",
-        "label": "llama3b",
-    },
-    {
-        "airl": {"math": "qwen7b_8ga_8gens", "medicine": "qwen7b_correct_corrupt_clipped"},
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "label": "qwen7b",
-    },
-    {
-        "airl": {"math": "llama8b_8ga_8gens_clipped_reward", "medicine": "llama8b_correct_corrupt_clipped"},
-        "sft": "llama8b_sft",
-        "grpo": "llama8b_grpo",
-        "label": "llama8b",
-    },
+    # {
+    #     "airl": {"math": "qwen3b_8ga_8gens", "medicine": "qwen3b_correct_corrupt_clipped"},
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "label": "qwen3b",
+    # },
+    # {
+    #     "airl": {"math": "llama3b_8ga_8gens_reward_clipped", "medicine": "llama3b_correct_corrupt_clipped"},
+    #     "sft": "llama3b_sft",
+    #     "grpo": "llama3b_grpo",
+    #     "label": "llama3b",
+    # },
+    # {
+    #     "airl": {"math": "qwen7b_8ga_8gens", "medicine": "qwen7b_correct_corrupt_clipped"},
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "label": "qwen7b",
+    # },
+    # {
+    #     "airl": {"math": "llama8b_8ga_8gens_clipped_reward", "medicine": "llama8b_correct_corrupt_clipped"},
+    #     "sft": "llama8b_sft",
+    #     "grpo": "llama8b_grpo",
+    #     "label": "llama8b",
+    # },
 
-    # Sparse
-    {"airl": "qwen3b_8ga_8gens_clipped_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
-    {"airl": "llama3b_8ga_8gens_clipped_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
-    {"airl": "qwen7b_8ga_8gens_clipped_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
-    {"airl": "llama8b_8ga_8gens_clipped_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
+    # # Sparse
+    # {"airl": "qwen3b_8ga_8gens_clipped_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
+    # {"airl": "llama3b_8ga_8gens_clipped_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
+    # {"airl": "qwen7b_8ga_8gens_clipped_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
+    # {"airl": "llama8b_8ga_8gens_clipped_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
 
-    # Full
-    {"airl": "qwen3b_8ga_8gens_clipped_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
-    {"airl": "llama3b_8ga_8gens_clipped_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
-    {"airl": "qwen7b_8ga_8gens_clipped_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
-    {"airl": "llama8b_8ga_8gens_clipped_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
+    # # Full
+    # {"airl": "qwen3b_8ga_8gens_clipped_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
+    # {"airl": "llama3b_8ga_8gens_clipped_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
+    # {"airl": "qwen7b_8ga_8gens_clipped_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
+    # {"airl": "llama8b_8ga_8gens_clipped_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
 
-    # OVR
-    {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
-    {"airl": "llama3b_ovr", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_ovr"},
-    {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
-    {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
+    # # OVR
+    # {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
+    # {"airl": "llama3b_ovr", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_ovr"},
+    # {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
+    # {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
 
-    # Partial fixed
-    {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
-    {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
-    {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
-    {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
+    # # Partial fixed
+    # {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
+    # {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
+    # {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
+    # {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
     
      # switch reward models
     {"airl": "llama3b_switch_reward", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_switch_reward"},

@@ -1,4 +1,7 @@
 # evaluate.py
+import os
+os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
+
 from src.models.model_module import load_model_and_tokenizer, irl_load_model_and_tokenizer
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -7,9 +10,6 @@ from torch.utils.data import DataLoader
 from src.utils.utils import set_seed, save_results_to_jsonl
 from src.data.dataset import get_dataset
 from src.rewards.reward_functions import (
-    strict_format_reward_func,
-    soft_format_reward_func,
-    int_reward_func,
     xmlcount_reward_func,
     gsm8k_correctness_reward_func,
     countdown_correctness_function,
@@ -24,7 +24,6 @@ from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_sc
 from vllm import SamplingParams
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
-import os
 
 # --- NEW IMPORTS FOR GUIDANCE ---
 import copy
