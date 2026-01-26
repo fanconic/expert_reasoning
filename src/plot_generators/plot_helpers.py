@@ -47,6 +47,35 @@ STRICT_FMT = re.compile(
 SOFT_FMT = re.compile(r"<think>.*?</think>.*?<answer>.*?</answer>", flags=re.DOTALL)
 
 
+def count_xml(text) -> float:
+    """
+    Calculate a score based on the presence and formatting of XML tags.
+
+    Awards partial points for each correctly formatted tag and penalizes
+    extra content after the closing </answer> tag.
+
+    Args:
+        text (str): The text to analyze for XML formatting.
+
+    Returns:
+        float: A score between 0.0 and 0.5 based on XML formatting quality.
+    """
+    count = 0.0
+    if text.count("<think>") == 1:
+        count += 0.125
+    if text.count("</think>") == 1:
+        count += 0.125
+    if text.count("<answer>") == 1:
+        count += 0.125
+        count -= len(text.split("</answer>")[-1]) * 0.001
+    if text.count("</answer>") == 1:
+        count += 0.125
+        count -= (len(text.split("</answer>")[-1]) - 1) * 0.001
+    return count
+
+
+
+
 def strict_format_reward_func(response, **kwargs):
     return 0.5 if STRICT_FMT.match(response) else 0.0
 
@@ -521,6 +550,7 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
     )
     df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
     df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
+    df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
     # df["reward_model_score_np_discounted"] = df["reward_model_score_np"].apply(
     #     lambda r: compute_advantages(r, gamma=gamma)
     # )
