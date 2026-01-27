@@ -542,6 +542,32 @@ def extract_flags(df: pd.DataFrame, num_generations: int = 16, disc: bool = True
 # IO + plotting orchestration
 # -------------------------------
 
+def discounted_mean(scores, gamma=0.9):
+    """
+    Calculates a weighted average where the last element has the highest weight (1.0),
+    and previous elements decay by a factor of gamma. Handles NaNs.
+    """
+    # Ensure input is a numpy array
+    scores = np.array(scores)
+    
+    # Create a mask for valid (non-NaN) values
+    mask = ~np.isnan(scores)
+    
+    # If all values are NaN, return NaN
+    if not np.any(mask):
+        return np.nan
+        
+    # Generate weights: [gamma^(n-1), ..., gamma^1, 1]
+    n = len(scores)
+    weights = gamma ** np.arange(n)[::-1]
+    
+    # Apply mask to both scores and weights
+    valid_scores = scores[mask]
+    valid_weights = weights[mask]
+    
+    # Calculate weighted average
+    return np.sum(valid_scores * valid_weights) / np.sum(valid_weights)
+
 
 def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = False) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
@@ -598,12 +624,13 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
         )
     )
     if answer_only:
-        df["selector"] = df.apply(
-            lambda x: np.nanmean(
-                x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
-            ),
-            axis=1,
-        )
+        # df["selector"] = df.apply(
+        #     lambda x: np.nanmean(
+        #         x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
+        #     ),
+        #     axis=1,
+        # )
+        df["selector"] = df["reward_model_score_np"].apply(lambda x: discounted_mean(x, gamma=0.9))
     else:
         df["selector"] = df["mean_rewards"].copy()
     return df
@@ -643,6 +670,33 @@ def save_latex_table_txt(
     lines.append("& AIRL (ours)    & " + _fmt_row("Exp. Reas. (ours)"))
     lines.append("& SFT            & " + _fmt_row("SFT"))
 
+    out_file = Path(out_file)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text("\n".join(lines))
+    
+def save_latex_table_txt_reranking(
+    results: Dict, cis: Dict, ks: Iterable[int], out_file: str | Path
+):
+    """
+    Write a LaTeX table fragment (4 columns for k in {1,3,5,10}).
+
+    Keys expected in `results`/`cis`:
+      - "Random Rerankning"               
+      - "Reasoning Reranking"             
+    """
+
+    def _fmt_row(vals_label: str) -> str:
+        return (
+            f"{results[vals_label][1]:.2f} [{cis[vals_label][1][0]:.2f}, {cis[vals_label][1][1]:.2f}] & "
+            f"{results[vals_label][3]:.2f} [{cis[vals_label][3][0]:.2f}, {cis[vals_label][3][1]:.2f}] & "
+            f"{results[vals_label][5]:.2f} [{cis[vals_label][5][0]:.2f}, {cis[vals_label][5][1]:.2f}] & "
+            f"{results[vals_label][10]:.2f} [{cis[vals_label][10][0]:.2f}, {cis[vals_label][10][1]:.2f}] \\\\"
+        )
+
+    lines = []
+    lines.append("Random Reranking & " + _fmt_row("random"))
+    lines.append("Reasoning Reranking & " + _fmt_row("reward"))
+    lines.append("Length Reranking & " + _fmt_row("heuristic"))
     out_file = Path(out_file)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text("\n".join(lines))
@@ -784,15 +838,27 @@ def plot_success_at_k_given(
         all_scores=all_dummy_scores,
     )
     
-    # results_heuristic = compute_success_at_k_from_scores(
-    #     all_correct_flags, all_scores_heuristic, ks
-    # )
-    # cis_heuristic = bootstrap_ci(
-    #     compute_success_at_k_from_scores,
-    #     all_correct_flags,
-    #     ks,
-    #     all_scores=all_scores_heuristic,
-    # )
+    results_heuristic = compute_success_at_k_from_scores(
+        all_correct_flags, all_scores_heuristic, ks
+    )
+    cis_heuristic = bootstrap_ci(
+        compute_success_at_k_from_scores,
+        all_correct_flags,
+        ks,
+        all_scores=all_scores_heuristic,
+    )
+    
+    results = {
+        "reward": results_given,
+        "random": results_uniform,
+        "heuristic": results_heuristic,
+    } 
+    cis = {
+        "reward": cis_given,
+        "random": cis_uniform,
+        "heuristic": cis_heuristic,
+    }
+    save_latex_table_txt_reranking(results, cis, ks, Path(out_path).parent / "pass_at_k_table_reranking.txt")
 
     prop_cycle = plt.rcParams.get("axes.prop_cycle")
     colors = prop_cycle.by_key()["color"] if prop_cycle else [None, None]
@@ -1195,22 +1261,44 @@ def run_all_plots(
             mean_name = "mean_rewards_discounted" if disc else "mean_rewards"
             if "response_token" in df_airl.columns:
                 plt.rcParams["text.usetex"] = False
+                # 1. Calculate Means
+                # Note: Keeping your logic where 'wrong' mean is based on 0, 
+                # but sampling pool is based on != 2.
                 correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
-                wrong_mean =  df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
+                wrong_mean   = df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
                 overall_mean = df_airl[mean_name].mean()
 
-                # standardise rewards by subtracting overall mean
-                df_airl["reward_model_standard"] = df_airl[reward_score_name].apply(lambda x: x - overall_mean)
-                
-                positive_indicies = df_airl[(abs(df_airl[mean_name]- correct_mean) < 0.5) & (df_airl["correctness_reward_func"] == 2) & (df_airl["strict_format_reward_func"] == 0.5)][mean_name].index[:5]
-                negative_indicies = df_airl[(abs(df_airl[mean_name]- wrong_mean) < 0.5) & (df_airl["correctness_reward_func"] != 2) & (df_airl["strict_format_reward_func"] == 0.5)][mean_name].index[:5]
-                all_indices = np.concatenate([positive_indicies, negative_indicies ])
+                # 2. Standardise rewards (Vectorized is faster than .apply)
+                df_airl["reward_model_standard"] = df_airl[reward_score_name] - overall_mean
+
+                # 3. Select Indices using Strategy 1 (nsmallest)
+
+                # --- Positive Indices ---
+                # Filter first: Correctness == 2 AND Strict Format == 0.5
+                pos_subset = df_airl[
+                    (df_airl["correctness_reward_func"] == 2) & 
+                    (df_airl["strict_format_reward_func"] == 0.5)
+                ]
+                # Find the 5 points with the smallest absolute difference from correct_mean
+                positive_indices = (pos_subset[mean_name] - correct_mean).abs().nsmallest(5).index
+
+
+                # --- Negative Indices ---
+                # Filter first: Correctness != 2 AND Strict Format == 0.5
+                neg_subset = df_airl[
+                    (df_airl["correctness_reward_func"] != 2) & 
+                    (df_airl["strict_format_reward_func"] == 0.5)
+                ]
+                # Find the 5 points with the smallest absolute difference from wrong_mean
+                negative_indices = (neg_subset[mean_name] - wrong_mean).abs().nsmallest(5).index
+                all_indices = np.concatenate([positive_indices, negative_indices ])
+               
                 df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
                 df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))
                 max_value = df_airl.loc[all_indices, "reward_model_max"].max()
                 min_value = df_airl.loc[all_indices, "reward_model_min"].min()
             
-                for i, idx in enumerate(positive_indicies):
+                for i, idx in enumerate(positive_indices):
                     tokens = df_airl.loc[idx, "response_token"]
                     scores = df_airl.loc[idx, "reward_model_standard"]
                     question = df_airl.loc[idx, "prompt"][1]["content"]
@@ -1227,7 +1315,7 @@ def run_all_plots(
                         min_val=min_value
                     )
             
-                for i, idx in enumerate(negative_indicies):
+                for i, idx in enumerate(negative_indices):
                     tokens = df_airl.loc[idx, "response_token"]
                     scores = df_airl.loc[idx, "reward_model_standard"]
                     question = df_airl.loc[idx, "prompt"][1]["content"]

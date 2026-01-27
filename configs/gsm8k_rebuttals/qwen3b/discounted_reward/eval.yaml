@@ -31,8 +31,8 @@ model:
   dense_gamma: 0.9
   advantage_calculation: "discounted_dense" # discounted_dense or average_dense
   clip_reward_model: true
-  reward_lb: -5.0
-  reward_ub: 5.0
+  reward_lb: -3.0
+  reward_ub: 3.0
 
 dataset:
   name: "gsm8k_kd"   # Change to "gsm8k_kd" (or other) to switch datasets
