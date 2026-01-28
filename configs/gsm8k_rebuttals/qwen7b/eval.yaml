@@ -53,4 +53,4 @@ eval:
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: qwen7b_8ga_8gens
+  run_name: qwen7b_partial #qwen7b_8ga_8gens

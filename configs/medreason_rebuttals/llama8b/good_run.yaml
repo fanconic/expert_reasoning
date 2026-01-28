@@ -99,4 +99,4 @@ eval:
 wandb:
   project: "expert_reasoning_medical_icml"
   entity: eth_dlad_team32
-  run_name: llama8b_correct_corrupt_clipped
+  run_name: llama8b_partial #llama8b_correct_corrupt_clipped

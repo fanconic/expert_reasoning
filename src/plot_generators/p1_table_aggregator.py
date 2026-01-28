@@ -90,7 +90,7 @@ def format_cell(val_str, is_best=False, is_second=False, is_collapsed=False):
         except:
             ci_disp = raw_interval
             
-        return f"\\textcolor{{gray}}{{{mean_disp}$^*$ {{\\footnotesize {ci_disp}}}}}"
+        return f"\\textcolor{{gray}}{{{mean_disp}$^*$ {{\\scriptsize {ci_disp}}}}}"
 
     # --- 3. Format Interval (Percentage) ---
     try:
@@ -100,7 +100,7 @@ def format_cell(val_str, is_best=False, is_second=False, is_collapsed=False):
     except:
         ci_disp = raw_interval
         
-    fmt_interval = f"{{\\footnotesize\\color{{gray}}{ci_disp}}}"
+    fmt_interval = f"{{\\scriptsize\\color{{gray}}{ci_disp}}}"
 
     # --- 4. Format Mean (Bold/Underline) ---
     fmt_mean = mean_disp
@@ -222,7 +222,7 @@ def main():
     latex.append(r"\bottomrule")
     latex.append(r"\end{tabular}%")
     latex.append(r"}")
-    latex.append(r"\caption{\textbf{Pass@1 Performance (\%).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results greyed out). The values inside brackets indicate the 95\% confidence interval.}")
+    latex.append(r"\caption{\textbf{Pass@1 Performance (\%).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results grayed out). The values inside brackets indicate the 95\% confidence interval.}")
     latex.append(r"\label{tab:p1_results}")
     latex.append(r"\end{table}")
 

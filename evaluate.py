@@ -229,77 +229,113 @@ def score_with_reward_model(
     reward_model, reward_tokenizer, prompts_msgs, decoded_per_prompt, dense_reward=False, max_length=512, micro_batch=16,
     clip_reward_model=False, reward_lb=-5.0, reward_ub=5.0, dense_partial_fixed_n=10
 ):
+    # --- Optimization 1: Enable Unsloth Inference Kernels ---
+    FastLanguageModel.for_inference(reward_model)
+    
     device = next(reward_model.parameters()).device
+    
+    # 1. Flatten prompts and completions into a single list of strings
     texts = []
-    idx_slices = [] 
-    start = 0
+    completion_texts = []
+    
     for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
         for c in completions:
-            msgs = p_msgs + [{"role": "assistant", "content": c if isinstance(c, str) else c.get("content", "")}]
-            texts.append(apply_chat_template({"messages": msgs}, reward_tokenizer)["text"])
-        end = start + len(completions)
-        idx_slices.append((start, end))
-        start = end
-
-    if len(texts) == 0: return [[] for _ in prompts_msgs]
-
-    # tokenise completions, to check their lengths (needs an EOS token)
-    completion_texts = []
-    for completions in decoded_per_prompt:
-        for c in completions:
             content = c if isinstance(c, str) else c.get("content", "")
-            completion_texts.append(content + (reward_tokenizer.eos_token or ""))
-    
-    # Prepare completion lengths
-    completion_tokens = reward_tokenizer(
-            text=completion_texts, return_tensors="pt", padding="max_length", add_special_tokens=False,
-            truncation=True, max_length=max_length, padding_side="right",
-        ).to(device)
-    seq_len = completion_tokens["attention_mask"].sum(dim=1).long().max().item()
-    
-    # Tokenise inputs to the reward model
-    reward_inputs = reward_tokenizer(
-        text=texts, return_tensors="pt", padding="max_length", add_special_tokens=False,
-        truncation=True, max_length=max_length, padding_side="right",
-    ).to(device)
-    
+            # Build full text
+            msgs = p_msgs + [{"role": "assistant", "content": content}]
+            texts.append(apply_chat_template({"messages": msgs}, reward_tokenizer)["text"])
+            
+            # Build completion text for length calculation
+            comp_text = content + (reward_tokenizer.eos_token or "")
+            completion_texts.append(comp_text)
 
-    flat_logits = [] 
+    if not texts: return [[] for _ in prompts_msgs]
+
+    # Calculate global max seq_len strictly for the final output array shape
+    # We batch this strictly for CPU side length checking
+    global_tokens = reward_tokenizer(
+        completion_texts, return_attention_mask=True, add_special_tokens=False, padding=False
+    )
+    # The max length of any completion in the dataset (clamped to max_length limit)
+    seq_len = min(max(len(t) for t in global_tokens['input_ids']), max_length)
+
+    new_logits = []
+    
+    # --- Optimization 2: Dynamic Batching Loop ---
     for i in range(0, len(texts), micro_batch):
-        batch_inputs = {k: v[i : i + micro_batch] for k, v in reward_inputs.items()}
-        batch_completions = {k: v[i : i + micro_batch] for k, v in completion_tokens.items()}
+        batch_texts = texts[i : i + micro_batch]
+        batch_completion_texts = completion_texts[i : i + micro_batch]
+
+        # Tokenize ONLY this batch with padding=True (Dynamic Padding)
+        # This makes the tensor width = length of longest sequence in THIS batch, not 512.
+        batch_inputs = reward_tokenizer(
+            text=batch_texts, return_tensors="pt", padding=True, add_special_tokens=False,
+            truncation=True, max_length=max_length
+        ).to(device)
+        
+        # Tokenize completions just for length calculations
+        batch_completions = reward_tokenizer(
+            text=batch_completion_texts, return_tensors="pt", padding=True, add_special_tokens=False,
+            truncation=True, max_length=max_length
+        ).to(device)
 
         with torch.inference_mode():
-            reward_logits = reward_model(**batch_inputs).logits.squeeze(-1)
-            # Clip the reward model, if it was done during training
+            # Model Forward Pass
+            # logits shape: [micro_batch, dynamic_seq_len] or [micro_batch]
+            reward_outputs = reward_model(**batch_inputs)
+            reward_logits = reward_outputs.logits.squeeze(-1)
+            
+            current_batch_max_len = batch_inputs["input_ids"].shape[1]
+
+            # Handle Non-Dense (Scalar) Rewards
             if not dense_reward:
-                reward_logits = reward_logits.unsqueeze(1).repeat(1, max_length)
+                # --- Optimization 3: Use expand instead of repeat (Memory View) ---
+                reward_logits = reward_logits.unsqueeze(1).expand(-1, current_batch_max_len)
+            
             if clip_reward_model:
                 reward_logits = torch.clamp(reward_logits, min=reward_lb, max=reward_ub)
 
+            # Calculate indices
             completion_lens = batch_completions["attention_mask"].sum(dim=1).long()
-            full_lens = batch_inputs["attention_mask"].sum(dim=1).long()   
+            full_lens = batch_inputs["attention_mask"].sum(dim=1).long()
             start_indices = (full_lens - completion_lens).clamp(min=0)
+            
+            # Generate gather indices
+            # We must clamp to seq_len because the final output expects fixed width
             gather_indices = start_indices[:, None] + torch.arange(seq_len, device=device)[None, :]
-            gather_indices = gather_indices.clamp(max=reward_logits.size(1) - 1)
-            reward_comp = reward_logits.gather(1, gather_indices)
+            
+            # Important: Clamp indices to the current batch's dynamic width to avoid out-of-bounds
+            gather_indices_safe = gather_indices.clamp(max=current_batch_max_len - 1)
+            
+            # Gather
+            reward_comp = reward_logits.gather(1, gather_indices_safe)
+
+            # --- Handle Dense Partial Logic (Optional) ---
+            if dense_reward in ["partial", "partial_fixed"]:
+                # Note: These masks need to be regenerated for the dynamic batch shape
+                if dense_reward == "partial":
+                    end_of_thought_mask = sentence_boundary_mask(
+                        reward_tokenizer, batch_inputs, batch_inputs["attention_mask"], device
+                    )
+                else:
+                    end_of_thought_mask = every_n_tokens_mask(
+                        batch_inputs, batch_inputs["attention_mask"], dense_partial_fixed_n
+                    )
+                
+                # We need to act carefully here because gather_indices might be wider than the dynamic batch
+                # But since we clamped gather_indices_safe, it is valid for gathering.
+                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices_safe)
+                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
+                
+            # Apply NaN mask for padding/invalid tokens
             output_mask = torch.arange(seq_len, device=device)[None, :] < completion_lens[:, None]
             reward_comp[~output_mask] = float('nan')
-            if dense_reward=="partial":
-                end_of_thought_mask = sentence_boundary_mask(reward_tokenizer, reward_inputs, reward_inputs["attention_mask"], device)
-                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
-                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
-            elif dense_reward=="partial_fixed":
-                end_of_thought_mask = every_n_tokens_mask(reward_inputs, reward_inputs["attention_mask"], dense_partial_fixed_n)
-                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
-                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
 
             out_cpu = reward_comp.detach().float().cpu()
-            for row in out_cpu: flat_logits.append(row.tolist())
-            
-    logits = flat_logits
-    all_scores = []
-    for s, e in idx_slices: all_scores.append(logits[s:e])
+            new_logits.append(out_cpu)
+       
+    B = len(prompts_msgs)
+    all_scores = np.concatenate(new_logits, axis=0).reshape(B, -1, seq_len)
     return all_scores
 
 
@@ -470,13 +506,12 @@ def main(cfg: DictConfig):
                     "prompt": prompt,
                     "generation": generation,
                     "generation_idx": gen_idx,
-                    "reward_model_score": score,
+                    "reward_model_score": score[~np.isnan(score)].tolist(),
                 }
                 result = result | rews
                 all_results.append(result)
                 
                 all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
-
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)
             all_correct_flags.append(correct_flags)
@@ -529,7 +564,7 @@ def main(cfg: DictConfig):
         )
         
     # Save results to JSONL
-    output_file = f"{cfg.model.name}/eval_results.jsonl"
+    output_file = f"{cfg.model.name}/debug.jsonl"
     save_results_to_jsonl(output_file, all_results)
     print(f"\nSaved evaluation results to {output_file}")
 

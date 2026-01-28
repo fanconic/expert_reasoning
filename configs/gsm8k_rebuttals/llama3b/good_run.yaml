@@ -99,4 +99,4 @@ eval:
 wandb:
   project: "expert_reasoning_math_icml"
   entity: eth_dlad_team32
-  run_name: llama3b_8ga_8gens_reward_clipped
+  run_name: llama3b_partial #llama3b_8ga_8gens_reward_clipped

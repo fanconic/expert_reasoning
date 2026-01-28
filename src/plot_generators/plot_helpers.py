@@ -574,6 +574,7 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
     df["reward_model_score_np"] = df["reward_model_score"].apply(
         lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
     )
+    import IPython; IPython.embed(); exit()
     df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
     df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
     df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
@@ -1292,7 +1293,7 @@ def run_all_plots(
                 # Find the 5 points with the smallest absolute difference from wrong_mean
                 negative_indices = (neg_subset[mean_name] - wrong_mean).abs().nsmallest(5).index
                 all_indices = np.concatenate([positive_indices, negative_indices ])
-               
+                import IPython; IPython.embed()
                 df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
                 df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))
                 max_value = df_airl.loc[all_indices, "reward_model_max"].max()

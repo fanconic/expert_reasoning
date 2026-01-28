@@ -6,7 +6,7 @@ import pandas as pd
 
 ROOT_DIR = os.path.join('figures', 'answer_only')
 
-# Rows: The Methods (Transposed from before)
+# Rows: The Methods
 ALGO_ORDER = [
     ('sparse', '\\textit{Sparse}'),
     ('partial', '\\textit{Step-wise}'),
@@ -15,7 +15,7 @@ ALGO_ORDER = [
     #('ovr', '\\textit{Step-wise + OVR}')
 ]
 
-# Columns: The Backbones
+# Backbones (Grouped rows)
 MODEL_ORDER = [
     ('qwen3b', r'\texttt{Qwen2.5-3B}'),
     ('llama3b', r'\texttt{Llama3.2-3B}'),
@@ -24,8 +24,6 @@ MODEL_ORDER = [
 ]
 
 DATASETS = ['math', 'medicine']
-DATASET_LABELS = [r'\textsc{GSM8K}', r'\textsc{MedReason}']
-
 VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
 
 def extract_reranking_p1(filepath):
@@ -52,80 +50,79 @@ def get_mean(val_str):
     if not val_str: return -100.0
     try:
         clean = val_str.replace(r'\textbf{', '').replace(r'\underline{', '').replace('}', '')
-        return float(clean.split()[0])*100
+        return float(clean.split()[0]) * 100
     except:
         return -100.0
 
-def format_compact_cell(entry, is_best=False, is_second=False):
+def format_cell(val_str, is_best=False, is_second=False):
     """
-    Returns percentage format: \shortstack{ 81.2 (+2.0) \\ \small[80.1, 82.3] }
+    Formats: 79 [76, 81] in percentage with no decimals.
     """
-    val_str = entry['Reward']
-    rand_str = entry['Random']
-    
     if not val_str: return "-"
-
-    # 1. Parse Reward and convert to Percentage
+    
     parts = val_str.split(' ', 1)
     if len(parts) != 2: return val_str
-    rew_mean_str, rew_interval = parts[0], parts[1]
     
+    mean_str, interval = parts[0], parts[1]
+    
+    # 1. Convert Mean to Percentage (No Decimals)
     try:
-        clean_rew = rew_mean_str.replace(r'\textbf{', '').replace(r'\underline{', '').replace('}', '')
-        # MULTIPLY BY 100 HERE
-        rew_val = float(clean_rew) * 100
-        rew_mean_disp = f"{rew_val:.0f}" # Format to 1 decimal place
+        clean_mean = mean_str.replace(r'\textbf{', '').replace(r'\underline{', '').replace('}', '')
+        mean_val = float(clean_mean) * 100
+        mean_disp = f"{mean_val:.0f}"
     except:
-        rew_val = 100.0
-        rew_mean_disp = "100.0"
+        mean_val = 100.0
+        mean_disp = "100"
 
-   
-
-    # 2. Parse Interval and convert to Percentage
-    # Interval comes in as "[0.77, 0.81]". We need to parse, multiply, and rebuild.
+    # 2. Convert Interval to Percentage
     try:
-        # Remove brackets and split
-        clean_ci = rew_interval.strip('[]')
+        clean_ci = interval.strip('[]')
         low, high = clean_ci.split(',')
         low_pct = float(low) * 100
         high_pct = float(high) * 100
-        rew_interval_disp = f"[{low_pct:.0f}, {high_pct:.0f}]"
+        ci_disp = f"[{low_pct:.0f}, {high_pct:.0f}]"
     except:
-        rew_interval_disp = rew_interval # Fallback if parsing fails
+        ci_disp = interval
+
+    # 3. Mode Collapse Check (< 20%)
+    if mean_val < 20.0:
+        return f"\\textcolor{{gray}}{{{mean_disp}$^*$ \\tiny {ci_disp}}}"
+
+    # 4. Apply Highlights
+    fmt_mean = mean_disp
+    if is_best:
+        fmt_mean = f"\\textbf{{{mean_disp}}}"
+    elif is_second:
+        fmt_mean = f"\\underline{{{mean_disp}}}"
         
-     # --- Mode Collapse Check (< 20.0%) ---
-    if rew_val < 20.0:
-        return f"\\shortstack{{\\textcolor{{gray}}{{{rew_mean_disp}$^*$}} \\\\ \\small\\textcolor{{gray}}{{{rew_interval_disp}}}}}"
+    # Inline format: Mean [CI]
+    return f"{fmt_mean} \\tiny\\textcolor{{gray}}{{{ci_disp}}}"
 
-    # 3. Calculate Delta (Percentage Points)
-    delta_str = ""
-    if rand_str:
-        try:
-            r_parts = rand_str.split(' ', 1)
-            clean_rand = r_parts[0].replace(r'\textbf{', '').replace(r'\underline{', '').replace('}', '')
-            # MULTIPLY BY 100 HERE
-            rand_val = float(clean_rand) * 100
-            
-            delta_val = rew_val - rand_val
-            
-            d_text = f"({delta_val:+.0f})" 
-            
-            if delta_val > 0:
-                delta_str = f"\\textbf{{\\textcolor{{teal}}{{{d_text}}}}}"
-            elif delta_val < 0:
-                delta_str = f"\\textcolor{{purple}}{{{d_text}}}"
-            else:
-                delta_str = d_text
-        except:
-            pass
-
-    # 4. Format Mean (Bold/Underline)
-    fmt_mean = rew_mean_disp
-
-    # 5. Format Interval (Gray, Small)
-    fmt_interval = f"\\small\\color{'{gray}'}{rew_interval_disp}"
-
-    return f"\\shortstack{{{fmt_mean} {delta_str} \\\\ {fmt_interval}}}"
+def format_delta(rand_str, rew_str):
+    if not rand_str or not rew_str: return "-"
+    
+    try:
+        # Parse Random
+        r_clean = rand_str.split()[0].replace(r'\textbf{', '').replace('}', '')
+        r_val = float(r_clean) * 100
+        
+        # Parse Reward
+        rew_clean = rew_str.split()[0].replace(r'\textbf{', '').replace('}', '')
+        rew_val = float(rew_clean) * 100
+        
+        delta = rew_val - r_val
+        
+        # Format: +2
+        d_text = f"{delta:+.0f}"
+        
+        if delta > 0:
+            return f"\\textbf{{\\textcolor{{insightteal}}{{($\\uparrow$ {d_text})}}}}"
+        elif delta < 0:
+            return f"\\textcolor{{purple}}{{($\\downarrow$ {d_text})}}"
+        else:
+            return f"({d_text})"
+    except:
+        return "-"
 
 def main():
     # Data Storage
@@ -144,9 +141,7 @@ def main():
                 res = extract_reranking_p1(fpath)
                 data[model_key][algo_key][dataset] = res
 
-    # --- Step 2: Determine Highlight (Best Reward Mean per Column) ---
-    # In transposed view: "Column" = (Model, Dataset). 
-    # We compare across "Rows" (Algorithms).
+    # --- Step 2: Ranking Logic (Best Reward per Model/Dataset) ---
     for model_key, _ in MODEL_ORDER:
         for dataset in DATASETS:
             means = []
@@ -165,62 +160,70 @@ def main():
                 data[model_key][algo_key][dataset]['is_best'] = (m == best and m > -1)
                 data[model_key][algo_key][dataset]['is_second'] = (m == second and m > -1)
 
-    # --- Step 3: Generate Table ---
+    # --- Step 3: Generate LaTeX ---
     latex = []
     latex.append(r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}")
     latex.append(r"\begin{table*}[t]")
     latex.append(r"\centering")
+    latex.append(r"\scriptsize")
     latex.append(r"\resizebox{\textwidth}{!}{%")
     
-    # Structure: Algo | Qwen3B(GSM, Med) | Llama3B(GSM, Med) ...
-    # 1 label col + (4 models * 2 datasets) = 9 columns
-    latex.append(r"\begin{tabular}{l cc cc cc cc}")
+    # Cols: Backbone | Method | GSM(Rand, Rew, Delta) | Med(Rand, Rew, Delta)
+    # Total 8 columns
+    latex.append(r"\begin{tabular}{ll ccc ccc}")
     latex.append(r"\toprule")
     
-    # Header 1: Backbones
-    # \cmidrule spans the 2 columns for each model
-    # Indices: Col 1 is Algo. Qwen3B is 2-3. Llama3B is 4-5. Qwen7B is 6-7. Llama8B is 8-9.
-    header_1 = r"& \multicolumn{2}{c}{\textbf{" + MODEL_ORDER[0][1] + r"}}" + \
-               r"& \multicolumn{2}{c}{\textbf{" + MODEL_ORDER[1][1] + r"}}" + \
-               r"& \multicolumn{2}{c}{\textbf{" + MODEL_ORDER[2][1] + r"}}" + \
-               r"& \multicolumn{2}{c}{\textbf{" + MODEL_ORDER[3][1] + r"}} \\"
-    latex.append(header_1)
-    latex.append(r"\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}")
+    # Header 1: Datasets
+    latex.append(r"& & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} \\")
+    latex.append(r"\cmidrule(lr){3-5} \cmidrule(lr){6-8}")
     
-    # Header 2: Datasets
-    # Repeat GSM8K & MedReason for each model
-    ds_row_items = []
-    for _ in MODEL_ORDER:
-        ds_row_items.append(r"\textbf{\textsc{GSM8K}}")
-        ds_row_items.append(r"\textbf{\textsc{MedReason}}")
-
-    latex.append(r"\textbf{Method} & " + " & ".join(ds_row_items) + r" \\")
+    # Header 2: Metrics
+    latex.append(r"\textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\")
     latex.append(r"\midrule")
 
-    # Rows: Algorithms
-    for algo_key, algo_name in ALGO_ORDER:
-        row_cells = []
+    for model_key, model_name in MODEL_ORDER:
+        first_row = True
+        num_algos = len(ALGO_ORDER)
         
-        # Iterate Models then Datasets
-        for model_key, _ in MODEL_ORDER:
-            for dataset in DATASETS:
-                entry = data[model_key][algo_key][dataset]
-                
-                # Format
-                cell_str = format_compact_cell(entry, entry.get('is_best'), entry.get('is_second'))
-                row_cells.append(cell_str)
+        for algo_key, algo_name in ALGO_ORDER:
+            row_cells = []
+            
+            # GSM8K Data
+            gsm_entry = data[model_key][algo_key]['math']
+            gsm_rand = format_cell(gsm_entry['Random'])
+            gsm_rew = format_cell(gsm_entry['Reward'], gsm_entry.get('is_best'), gsm_entry.get('is_second'))
+            gsm_delta = format_delta(gsm_entry['Random'], gsm_entry['Reward'])
+            row_cells.extend([gsm_rand, gsm_rew, gsm_delta])
+            
+            # MedReason Data
+            med_entry = data[model_key][algo_key]['medicine']
+            med_rand = format_cell(med_entry['Random'])
+            med_rew = format_cell(med_entry['Reward'], med_entry.get('is_best'), med_entry.get('is_second'))
+            med_delta = format_delta(med_entry['Random'], med_entry['Reward'])
+            row_cells.extend([med_rand, med_rew, med_delta])
+            
+            # Backbone Label (Multirow)
+            if first_row:
+                model_col = f"\\multirow{{{num_algos}}}{{*}}{{\\textbf{{{model_name}}}}}"
+            else:
+                model_col = ""
+            
+            # Build Row
+            latex.append(f"{model_col} & {algo_name} & " + " & ".join(row_cells) + r" \\")
+            first_row = False
         
-        # Add extra vertical spacing between rows because of \shortstack
-        latex.append(f"{algo_name} & " + " & ".join(row_cells) + r" \\[0.5em]")
+        # Rule between models
+        if model_key != MODEL_ORDER[-1][0]:
+            latex.append(r"\midrule")
 
     latex.append(r"\bottomrule")
     latex.append(r"\end{tabular}%")
     latex.append(r"}")
-    latex.append(r"\caption{\textbf{Best-of-N Reranking Improvement.} Values represent Best-of-N mean (\%) and 95\% confidence interval. The values in parenthesis denote the percentage point improvement ($\Delta$) over random selection. \textcolor{teal}{Teal} indicates positive improvement, \textcolor{purple}{pink} negative.}")
-    latex.append(r"\label{tab:reranking_transposed}")
+    latex.append(r"\caption{\textbf{Best-of-N Reranking Performance (\%).} Comparison of Random selection vs. Reward Model selection. Values are percentages. \textbf{Bold} is best, \underline{underline} is second best. $\Delta$ indicates percentage-point improvement. \textcolor{insightteal}{Blue} is positive, \textcolor{purple}{purple} is negative. * symbolises an adversarial mode collapse (results grayed out).}")
+    latex.append(r"\label{tab:reranking_long}")
     latex.append(r"\end{table*}")
 
-    output_file = os.path.join(ROOT_DIR, "results_reranking_transposed.txt")
+    output_file = os.path.join(ROOT_DIR, "results_reranking_long.txt")
     with open(output_file, "w") as f:
         f.write("\n".join(latex))
     

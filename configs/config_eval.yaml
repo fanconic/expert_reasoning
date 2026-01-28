@@ -7,7 +7,7 @@ defaults:
 
 model:
   checkpoint: 500
-  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/${wandb.run_name}/checkpoint-${model.checkpoint}" 
+  name: "/mnt/pdata/caf83/tabular_reasoning/outputs/llama8b_8ga_8gens_clipped_reward/best_model" 
   policy_name: "${model.name}"
   reward_name: "Qwen/Qwen2.5-1.5B-Instruct"
   lora_rank: 128
@@ -48,4 +48,4 @@ eval:
 wandb:
   project: "expert_reasoning"
   entity: eth_dlad_team32
-  run_name: qwen3b_airl_09_bce2.5
+  run_name: debug

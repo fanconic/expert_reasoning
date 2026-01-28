@@ -16,19 +16,18 @@ set -u  # do NOT use -e; we want to continue after failures
 
 GPU_NUM="2"
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
-EVALUATE_PY="evaluate.py"
+EVALUATE_PY="evaluate_pregenerated.py"
 
 declare -A VARIANT_OVERRIDES
-VARIANT_OVERRIDES["sparse"]="model.dense_rewards=false"
-VARIANT_OVERRIDES["full"]="model.dense_rewards=full"
+VARIANT_OVERRIDES["partial_fixed"]="model.dense_rewards=partial_fixed"
 VARIANT_OVERRIDES["ovr"]=""
+VARIANT_OVERRIDES["base"]=""
 
 run_name() {
   local model="$1" variant="$2"
   case "$variant" in
-    base)   echo "${model}_8ga_8gens_clipped" ;;
-    sparse) echo "${model}_8ga_8gens_clipped_sparse" ;;
-    full)   echo "${model}_8ga_8gens_clipped_full" ;;
+    base)   echo "${model}_partial" ;;
+    partial_fixed) echo "${model}_partial_fixed" ;;
     ovr)    echo "${model}_ovr" ;;
     *)      echo "${model}_${variant}" ;;
   esac
@@ -56,15 +55,7 @@ run_bundle() {
   local dataset="$1" model="$2"
   local config_path="configs/${dataset}/${model}"
 
-  for config in eval grpo_eval sft_eval; do
-    run_cmd \
-      "dataset=${dataset} model=${model} config=${config} variant=base" \
-      bash "$RUNNER" "$EVALUATE_PY" \
-        --config-path="$config_path" \
-        --config-name="$config"
-  done
-
-  for variant in sparse full ovr; do
+  for variant in base partial_fixed ovr; do
     local override="${VARIANT_OVERRIDES[$variant]}"
     local wname="$(run_name "$model" "$variant")"
     run_cmd \
@@ -81,6 +72,9 @@ run_bundle() {
 run_bundle medreason_rebuttals qwen7b
 run_bundle gsm8k_rebuttals     qwen3b
 # =================================
+
+bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate_pregenerated.py --config-path=configs/medreason_rebuttals/switch_reward --config-name=eval_qwen7b
+bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate_pregenerated.py --config-path=configs/gsm8k_rebuttals/human_error --config-name=eval
 
 echo ""
 echo "======================"

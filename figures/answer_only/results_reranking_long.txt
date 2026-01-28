@@ -1,0 +1,36 @@
+% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}
+\begin{table*}[t]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{ll ccc ccc}
+\toprule
+& & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-8}
+\textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-3B}}} & \textit{Sparse} & 79 \tiny\textcolor{gray}{[76, 81]} & \textbf{81} \tiny\textcolor{gray}{[79, 83]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} & 50 \tiny\textcolor{gray}{[47, 52]} & \textbf{50} \tiny\textcolor{gray}{[47, 52]} & (+0) \\
+ & \textit{Step-wise} & 78 \tiny\textcolor{gray}{[75, 80]} & \underline{79} \tiny\textcolor{gray}{[77, 82]} & \textbf{\textcolor{insightteal}{($\uparrow$ +1)}} & 43 \tiny\textcolor{gray}{[40, 45]} & 40 \tiny\textcolor{gray}{[37, 42]} & \textcolor{purple}{($\downarrow$ -3)} \\
+ & \textit{Interval} & 63 \tiny\textcolor{gray}{[61, 66]} & 70 \tiny\textcolor{gray}{[67, 72]} & \textbf{\textcolor{insightteal}{($\uparrow$ +7)}} & 43 \tiny\textcolor{gray}{[41, 46]} & \underline{46} \tiny\textcolor{gray}{[44, 48]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} \\
+ & \textit{Dense} & \textcolor{gray}{3$^*$ \tiny [2, 4]} & \textcolor{gray}{0$^*$ \tiny [0, 0]} & \textcolor{purple}{($\downarrow$ -3)} & 45 \tiny\textcolor{gray}{[42, 47]} & 44 \tiny\textcolor{gray}{[41, 46]} & \textcolor{purple}{($\downarrow$ -1)} \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.2-3B}}} & \textit{Sparse} & 69 \tiny\textcolor{gray}{[67, 72]} & \textbf{75} \tiny\textcolor{gray}{[73, 77]} & \textbf{\textcolor{insightteal}{($\uparrow$ +6)}} & 64 \tiny\textcolor{gray}{[62, 67]} & \underline{64} \tiny\textcolor{gray}{[62, 66]} & (+0) \\
+ & \textit{Step-wise} & 55 \tiny\textcolor{gray}{[53, 58]} & \underline{64} \tiny\textcolor{gray}{[62, 67]} & \textbf{\textcolor{insightteal}{($\uparrow$ +9)}} & 63 \tiny\textcolor{gray}{[61, 66]} & 61 \tiny\textcolor{gray}{[59, 64]} & \textcolor{purple}{($\downarrow$ -2)} \\
+ & \textit{Interval} & 47 \tiny\textcolor{gray}{[45, 50]} & 53 \tiny\textcolor{gray}{[50, 56]} & \textbf{\textcolor{insightteal}{($\uparrow$ +6)}} & 65 \tiny\textcolor{gray}{[63, 67]} & \textbf{65} \tiny\textcolor{gray}{[63, 67]} & (+0) \\
+ & \textit{Dense} & 42 \tiny\textcolor{gray}{[39, 44]} & 54 \tiny\textcolor{gray}{[52, 57]} & \textbf{\textcolor{insightteal}{($\uparrow$ +12)}} & \textcolor{gray}{18$^*$ \tiny [16, 20]} & \textcolor{gray}{18$^*$ \tiny [16, 20]} & (+0) \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-7B}}} & \textit{Sparse} & 84 \tiny\textcolor{gray}{[82, 86]} & \textbf{87} \tiny\textcolor{gray}{[86, 89]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} & 63 \tiny\textcolor{gray}{[61, 66]} & \textbf{64} \tiny\textcolor{gray}{[62, 67]} & \textbf{\textcolor{insightteal}{($\uparrow$ +1)}} \\
+ & \textit{Step-wise} & 82 \tiny\textcolor{gray}{[80, 84]} & \underline{84} \tiny\textcolor{gray}{[82, 86]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} & 60 \tiny\textcolor{gray}{[58, 63]} & \underline{61} \tiny\textcolor{gray}{[59, 64]} & \textbf{\textcolor{insightteal}{($\uparrow$ +1)}} \\
+ & \textit{Interval} & 77 \tiny\textcolor{gray}{[75, 79]} & 80 \tiny\textcolor{gray}{[78, 82]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} & 59 \tiny\textcolor{gray}{[57, 62]} & 59 \tiny\textcolor{gray}{[56, 61]} & (+0) \\
+ & \textit{Dense} & 81 \tiny\textcolor{gray}{[79, 83]} & \underline{84} \tiny\textcolor{gray}{[82, 86]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} & 48 \tiny\textcolor{gray}{[46, 51]} & 47 \tiny\textcolor{gray}{[44, 49]} & \textcolor{purple}{($\downarrow$ -1)} \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.1-8B}}} & \textit{Sparse} & \textcolor{gray}{0$^*$ \tiny [0, 0]} & \textcolor{gray}{0$^*$ \tiny [0, 0]} & (+0) & 73 \tiny\textcolor{gray}{[71, 75]} & \textbf{76} \tiny\textcolor{gray}{[74, 78]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} \\
+ & \textit{Step-wise} & 71 \tiny\textcolor{gray}{[69, 74]} & \textbf{74} \tiny\textcolor{gray}{[72, 76]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} & 63 \tiny\textcolor{gray}{[61, 66]} & 65 \tiny\textcolor{gray}{[62, 67]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} \\
+ & \textit{Interval} & 65 \tiny\textcolor{gray}{[63, 68]} & \underline{69} \tiny\textcolor{gray}{[67, 72]} & \textbf{\textcolor{insightteal}{($\uparrow$ +4)}} & 70 \tiny\textcolor{gray}{[68, 72]} & 70 \tiny\textcolor{gray}{[68, 73]} & (+0) \\
+ & \textit{Dense} & 57 \tiny\textcolor{gray}{[54, 60]} & 66 \tiny\textcolor{gray}{[64, 69]} & \textbf{\textcolor{insightteal}{($\uparrow$ +9)}} & 64 \tiny\textcolor{gray}{[62, 67]} & \underline{71} \tiny\textcolor{gray}{[69, 73]} & \textbf{\textcolor{insightteal}{($\uparrow$ +7)}} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Best-of-N Reranking Performance (\%).} Comparison of Random selection vs. Reward Model selection. Values are percentages. \textbf{Bold} is best, \underline{underline} is second best. $\Delta$ indicates percentage-point improvement. \textcolor{insightteal}{Blue} is positive, \textcolor{purple}{purple} is negative. * symbolises an adversarial mode collapse (results grayed out).}
+\label{tab:reranking_long}
+\end{table*}

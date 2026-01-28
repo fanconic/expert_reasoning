@@ -42,70 +42,70 @@ RunName = Union[str, Mapping[str, str]]
 
 EXPERIMENTS: List[Dict[str, Any]] = [
     # Base runs
+    # {
+    #     "airl": {"math": "qwen3b_partial", "medicine": "qwen3b_partial"},
+    #     "sft": "qwen3b_sft",
+    #     "grpo": "qwen3b_grpo",
+    #     "label": "qwen3b_partial",
+    # },
+    # {
+    #     "airl": {"math": "llama3b_partial", "medicine": "llama3b_partial"},
+    #     "sft": "llama3b_sft",
+    #     "grpo": "llama3b_grpo",
+    #     "label": "llama3b_partial",
+    # },
+    # {
+    #     "airl": {"math": "qwen7b_partial", "medicine": "qwen7b_partial"},
+    #     "sft": "qwen7b_sft",
+    #     "grpo": "qwen7b_grpo",
+    #     "label": "qwen7b_partial",
+    # },
     {
-        "airl": {"math": "qwen3b_8ga_8gens", "medicine": "qwen3b_correct_corrupt_clipped"},
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "label": "qwen3b_partial",
-    },
-    {
-        "airl": {"math": "llama3b_8ga_8gens_reward_clipped", "medicine": "llama3b_correct_corrupt_clipped"},
-        "sft": "llama3b_sft",
-        "grpo": "llama3b_grpo",
-        "label": "llama3b_partial",
-    },
-    {
-        "airl": {"math": "qwen7b_8ga_8gens", "medicine": "qwen7b_correct_corrupt_clipped"},
-        "sft": "qwen7b_sft",
-        "grpo": "qwen7b_grpo",
-        "label": "qwen7b_partial",
-    },
-    {
-        "airl": {"math": "llama8b_8ga_8gens_clipped_reward", "medicine": "llama8b_correct_corrupt_clipped"},
+        "airl": {"math": "llama8b_partial", "medicine": "llama8b_partial"},
         "sft": "llama8b_sft",
         "grpo": "llama8b_grpo",
         "label": "llama8b_partial",
     },
 
-    # Sparse
-    {"airl": "qwen3b_8ga_8gens_clipped_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
-    {"airl": "llama3b_8ga_8gens_clipped_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
-    {"airl": "qwen7b_8ga_8gens_clipped_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
-    {"airl": "llama8b_8ga_8gens_clipped_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
+    # # Sparse
+    # {"airl": "qwen3b_8ga_8gens_clipped_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
+    # {"airl": "llama3b_8ga_8gens_clipped_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
+    # {"airl": "qwen7b_8ga_8gens_clipped_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
+    # {"airl": "llama8b_8ga_8gens_clipped_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
 
-    # Full
-    {"airl": "qwen3b_8ga_8gens_clipped_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
-    {"airl": "llama3b_8ga_8gens_clipped_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
-    {"airl": "qwen7b_8ga_8gens_clipped_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
-    {"airl": "llama8b_8ga_8gens_clipped_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
+    # # Full
+    # {"airl": "qwen3b_8ga_8gens_clipped_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
+    # {"airl": "llama3b_8ga_8gens_clipped_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
+    # {"airl": "qwen7b_8ga_8gens_clipped_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
+    # {"airl": "llama8b_8ga_8gens_clipped_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
 
-    # OVR
-    {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
-    {"airl": "llama3b_ovr", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_ovr"},
-    {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
-    {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
+    # # OVR
+    # {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
+    # {"airl": "llama3b_ovr", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_ovr"},
+    # {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
+    # {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
 
-    # Partial fixed
-    {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
-    {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
-    {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
-    {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
+    # # Partial fixed
+    # {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
+    # {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
+    # {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
+    # {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
     
-     # switch reward models
-    {"airl": "llama3b_switch_reward", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_switch_reward"},
-    {"airl": "llama8b_switch_reward", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_switch_reward"},
-    {"airl": "qwen3b_switch_reward", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_switch_reward"},
-    {"airl": "qwen7b_switch_reward", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_switch_reward"},
+    #  # switch reward models
+    # {"airl": "llama3b_switch_reward", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_switch_reward"},
+    # {"airl": "llama8b_switch_reward", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_switch_reward"},
+    # {"airl": "qwen3b_switch_reward", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_switch_reward"},
+    # {"airl": "qwen7b_switch_reward", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_switch_reward"},
     
-     # humar error
-    {"airl": "qwen3b_human_error", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_human_error"},
-    {"airl": "llama3b_human_error", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_human_error"},
+    #  # humar error
+    # {"airl": "qwen3b_human_error", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_human_error"},
+    # {"airl": "llama3b_human_error", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_human_error"},
     
-    # Discounted reward models
-    {"airl": "llama3b_discounted", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_discounted", "domains": ["math"]},
-    {"airl": "llama8b_discounted", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_discounted", "domains": ["math"]},
-    {"airl": "qwen3b_discounted", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_discounted", "domains": ["math"]},
-    {"airl": "qwen7b_discounted", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_discounted", "domains": ["math"]},
+    # # Discounted reward models
+    # {"airl": "llama3b_discounted", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_discounted", "domains": ["math"]},
+    # {"airl": "llama8b_discounted", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_discounted", "domains": ["math"]},
+    # {"airl": "qwen3b_discounted", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_discounted", "domains": ["math"]},
+    # {"airl": "qwen7b_discounted", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_discounted", "domains": ["math"]},
 ]
 
 
@@ -201,6 +201,8 @@ def main() -> None:
     parser.add_argument("--ckpt", type=str, default=DEFAULT_CKPT)
     parser.add_argument("--no-token-figs", action="store_true")
     parser.add_argument("--workers", type=int, default=os.cpu_count())
+    # 1. Add Debug Argument
+    parser.add_argument("--debug", action="store_true", help="Run sequentially for debugging with IPython")
     args = parser.parse_args()
 
     tasks = []
@@ -217,22 +219,35 @@ def main() -> None:
                     "answer_only": answer_only
                 })
 
-    print(f"[INFO] Starting {len(tasks)} tasks using {args.workers} workers...")
+    print(f"[INFO] Starting {len(tasks)} tasks...")
     
     failed_plots = []
 
-    with ProcessPoolExecutor(max_workers=args.workers) as executor:
-        futures = {
-            executor.submit(
-                run_one_experiment, 
+    # 2. Conditional Execution
+    if args.debug:
+        print("[INFO] Running in DEBUG mode (sequential execution).")
+        # Run sequentially in the main process
+        for t in tqdm(tasks, desc="Processing (Debug)"):
+            result = run_one_experiment(
                 t["domain"], t["base"], t["exp"], t["ckpt"], t["make_token_figs"], t["answer_only"]
-            ): t for t in tasks
-        }
-
-        for future in tqdm(as_completed(futures), total=len(futures), desc="Processing"):
-            result = future.result()
+            )
             if result is not None:
                 failed_plots.append(result)
+    else:
+        print(f"[INFO] Running in PARALLEL mode using {args.workers} workers.")
+        # Run in parallel
+        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+            futures = {
+                executor.submit(
+                    run_one_experiment, 
+                    t["domain"], t["base"], t["exp"], t["ckpt"], t["make_token_figs"], t["answer_only"]
+                ): t for t in tasks
+            }
+
+            for future in tqdm(as_completed(futures), total=len(futures), desc="Processing"):
+                result = future.result()
+                if result is not None:
+                    failed_plots.append(result)
 
     print("\n" + "="*30)
     if failed_plots:
