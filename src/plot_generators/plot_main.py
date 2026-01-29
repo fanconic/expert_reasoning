@@ -18,6 +18,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Union
 
+from pathlib import Path
+
 # Try to import tqdm for progress bar, fallback if not available
 try:
     from tqdm import tqdm
@@ -42,12 +44,12 @@ RunName = Union[str, Mapping[str, str]]
 
 EXPERIMENTS: List[Dict[str, Any]] = [
     # Base runs
-    # {
-    #     "airl": {"math": "qwen3b_partial", "medicine": "qwen3b_partial"},
-    #     "sft": "qwen3b_sft",
-    #     "grpo": "qwen3b_grpo",
-    #     "label": "qwen3b_partial",
-    # },
+    {
+        "airl": {"math": "qwen3b_partial", "medicine": "qwen3b_partial"},
+        "sft": "qwen3b_sft",
+        "grpo": "qwen3b_grpo",
+        "label": "qwen3b_partial",
+    },
     # {
     #     "airl": {"math": "llama3b_partial", "medicine": "llama3b_partial"},
     #     "sft": "llama3b_sft",
@@ -60,12 +62,12 @@ EXPERIMENTS: List[Dict[str, Any]] = [
     #     "grpo": "qwen7b_grpo",
     #     "label": "qwen7b_partial",
     # },
-    {
-        "airl": {"math": "llama8b_partial", "medicine": "llama8b_partial"},
-        "sft": "llama8b_sft",
-        "grpo": "llama8b_grpo",
-        "label": "llama8b_partial",
-    },
+    # {
+    #     "airl": {"math": "llama8b_partial", "medicine": "llama8b_partial"},
+    #     "sft": "llama8b_sft",
+    #     "grpo": "llama8b_grpo",
+    #     "label": "llama8b_partial",
+    # },
 
     # # Sparse
     # {"airl": "qwen3b_8ga_8gens_clipped_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
@@ -124,6 +126,14 @@ def resolve_run(name_or_map: RunName, domain: str) -> Optional[str]:
 
 
 def eval_jsonl(base: Path, run_name: str, ckpt: str) -> Path:
+    # define the preferred "new" path
+    new_path = base / run_name / ckpt / "eval_results_new.jsonl"
+    
+    # Check if it exists on disk
+    if new_path.exists():
+        return new_path
+        
+    # Fallback to the original filename
     return base / run_name / ckpt / "eval_results.jsonl"
 
 

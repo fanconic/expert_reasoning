@@ -46,6 +46,6 @@
 \bottomrule
 \end{tabular}%
 }
-\caption{\textbf{Pass@1 Performance (\%).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results greyed out). The values inside brackets indicate the 95\% confidence interval.}
+\caption{\textbf{Pass@1 Performance (\%).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results grayed out). The values inside brackets indicate the 95\% confidence interval.}
 \label{tab:p1_results}
 \end{table}

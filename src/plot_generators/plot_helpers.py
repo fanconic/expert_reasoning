@@ -121,51 +121,95 @@ def count_xml(text) -> float:
 # -------------------------------
 # Token visualisation utilities
 # -------------------------------
-_QWEN_SPECIAL_RE = re.compile(r"<\|[^>]*\|>")
-_BYTE_BPE_SPACEISH = {"▁", "Ġ"}
-_BYTE_BPE_NEWLINEISH = {"Ċ", "ċ", "ĉ", "č"}
+NEWLINE_CHAR = "Ċ"
+SPACE_CHAR = "Ġ"
+_QWEN_SPECIAL_RE = re.compile(r"<\|.*?\|>")
 
-
-def _restore_angle_brackets(s: str) -> str:
-    s = re.sub(r"¿\s*(.*?)\s*¿", r"<\1>", s)
-    s = re.sub(r"^¿\s*", "<", s)
-    s = re.sub(r"\s*¿$", ">", s)
-    s = s.replace("‹", "<").replace("›", ">")
-    s = s.replace("¿", "")
-    return s
-
-
-def _is_allowed_char(ch: str) -> bool:
-    cat = unicodedata.category(ch)
-    if ch in ("\n", "\r", "\t"):
-        return False
-    if cat and cat[0] == "C":
-        return False
-    return ch.isprintable()
-
-
-def clean_qwen_token(tok: str) -> str:
-    if tok is None:
+def _escape_fmt(text: str) -> str:
+    """
+    Escapes special Matplotlib characters. 
+    Mainly '$' which triggers math mode if unescaped.
+    """
+    if not text:
         return ""
-    tok = unicodedata.normalize("NFKC", tok)
-    tok = _QWEN_SPECIAL_RE.sub("", tok)
-    for marker in _BYTE_BPE_SPACEISH | _BYTE_BPE_NEWLINEISH:
-        tok = tok.replace(marker, " ")
-    tok = (
-        tok.replace("\ufffd", "")
-        .replace("\u200b", "")
-        .replace("\u200c", "")
-        .replace("\u200d", "")
-        .replace("\ufeff", "")
-    )
-    tok = _restore_angle_brackets(tok)
-    tok = tok.replace("¿", "")
-    tok = "".join(ch for ch in tok if _is_allowed_char(ch))
-    tok = re.sub(r"(?<!\\)\$", r"\\$", tok)
-    tok = re.sub(r"\s+", " ", tok).strip()
-    return tok
+    # Replace '$' with '\$' to prevent Matplotlib from expecting an equation
+    return text.replace("$", "\\$")
 
+class TextMeasurer:
+    """Helper to measure text width exactly using Matplotlib's engine."""
+    def __init__(self, font_properties, dpi):
+        self.fp = font_properties
+        self.dpi = dpi
+        self.fig = plt.figure(dpi=dpi)
+        self.fig.canvas.draw()
+        self.renderer = self.fig.canvas.get_renderer()
+        
+    def get_text_width(self, text, fontsize):
+        # We assume text is already escaped/safe when passed here
+        txt = plt.Text(0, 0, text, fontproperties=self.fp, fontsize=fontsize)
+        txt.set_figure(self.fig)
+        bbox = txt.get_window_extent(renderer=self.renderer)
+        return bbox.width
 
+    def wrap_text(self, text, fontsize, max_width_px):
+        # Normalize spaces and split
+        words = text.replace("\n", " \n ").split(" ")
+        lines = []
+        current_line = []
+        current_width = 0
+        space_w = self.get_text_width(" ", fontsize)
+
+        for word in words:
+            if word == "\n":
+                lines.append(" ".join(current_line))
+                current_line = []
+                current_width = 0
+                continue
+            if not word: continue
+            
+            w = self.get_text_width(word, fontsize)
+            
+            if current_line and (current_width + space_w + w <= max_width_px):
+                current_line.append(word)
+                current_width += space_w + w
+            elif not current_line:
+                current_line.append(word)
+                current_width = w
+            else:
+                lines.append(" ".join(current_line))
+                current_line = [word]
+                current_width = w
+                
+        if current_line: lines.append(" ".join(current_line))
+        return [l for l in lines if l.strip()]
+
+    def close(self):
+        plt.close(self.fig)
+
+def _analyze_token(raw_tok: str, score: float) -> dict:
+    if raw_tok is None:
+        return {"text": "", "score": score, "is_start_word": False, "newlines_after": 0, "is_special": False}
+    
+    if raw_tok in ["<|im_end|>", "<|endoftext|>"]:
+        return {"text": "", "score": score, "is_start_word": False, "newlines_after": 1, "is_special": True}
+    
+    is_start_word = raw_tok.startswith(SPACE_CHAR)
+    newlines_after = raw_tok.count(NEWLINE_CHAR)
+    
+    # Clean standard token artifacts
+    txt = raw_tok.replace(SPACE_CHAR, "").replace(NEWLINE_CHAR, "")
+    txt = _QWEN_SPECIAL_RE.sub("", txt).replace("\u0120", " ").strip()
+    
+    # --- FIX: Escape special characters in the token text ---
+    txt = _escape_fmt(txt)
+    
+    is_special = txt.startswith("<") and txt.endswith(">")
+
+    return {
+        "text": txt, "score": score, "is_start_word": is_start_word,
+        "newlines_after": newlines_after, "is_special": is_special
+    }
+    
 def normalise(values, mode="minmax", max_val=None, min_val=None):
     v = np.array(values, dtype=float)
     if v.size == 0:
@@ -190,268 +234,250 @@ def normalise(values, mode="minmax", max_val=None, min_val=None):
         raise ValueError("Unknown normalisation mode")
 
 
-def text_size_px(text, font_size, dpi, font_properties=None):
-    fp = font_properties or FontProperties(size=font_size, family="DejaVu Sans")
-    tp = TextPath((0, 0), text, prop=fp)
-    bb = tp.get_extents()
-    w_in = bb.width / 72.0
-    h_in = bb.height / 72.0
-    return w_in * dpi, h_in * dpi
-
-
-def _safe_text_size_px(text, font_size, dpi, font_properties):
-    try:
-        return text_size_px(text, font_size, dpi, font_properties)
-    except Exception:
-        t2 = text.encode("ascii", "ignore").decode("ascii") or "?"
-        try:
-            return text_size_px(t2, font_size, dpi, font_properties)
-        except Exception:
-            approx_w = max(1.0, 0.6 * len(t2) * font_size * dpi / 72.0)
-            approx_h = font_size * dpi / 72.0
-            return approx_w, approx_h
-
-
-def _line_height_px(font_size, dpi, font_properties):
-    _, h = _safe_text_size_px("Ag", font_size, dpi, font_properties)
-    return h
-
-
-def _wrap_text_to_width(text, font_size, dpi, font_properties, max_text_width_px):
-    words = text.split()
-    lines, cur = [], ""
-    for w in words:
-        test = (cur + " " + w).strip()
-        w_px, _ = _safe_text_size_px(test, font_size, dpi, font_properties)
-        if w_px <= max_text_width_px*0.95 or not cur:
-            cur = test
-        else:
-            lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
-    return lines
-
-
 def make_text_reward_image(
-    tokens,
-    scores,
-    out_path,
+    tokens: List[str],
+    scores: List[float],
+    out_path: str,
     prompt_text: Optional[str] = None,
     title: Optional[str] = None,
     cmap_name: str = "Blues",
-    pad_x: int = 8,
-    pad_y: int = 6,
-    gap_x: int = 8,
+    pad_x: int = 5,
+    pad_y: int = 4,
+    gap_word: int = 10,
+    gap_subword: int = 1,
     gap_y: int = 10,
-    font_size: int = 16,
-    max_width_px: int = 1400,
+    font_size: int = 12,
+    max_width_px: int = 800, 
     dpi: int = 200,
     font_properties: Optional[FontProperties] = None,
-    show_colorbar: bool = True,   # <--- NEW ARG
+    show_colorbar: bool = True,
     max_val=None,
     min_val=None
 ):
     fp = font_properties or FontProperties(size=font_size, family="DejaVu Sans")
-    assert len(tokens) == len(scores), "tokens and scores must have same length"
+    measurer = TextMeasurer(fp, dpi)
+    
+    # --- 1. SETUP COLOR NORMALIZATION ---
+    vals = np.array(scores)
+    if max_val is None:
+        abs_max = np.max(np.abs(vals)) if vals.size > 0 else 1.0
+    else:
+        abs_max = max(abs(max_val), abs(min_val)) if min_val is not None else abs(max_val)
+    if abs_max == 0: abs_max = 1.0 
+    
+    norm_obj = mcolors.Normalize(vmin=-abs_max, vmax=abs_max)
+    
+    # --- 2. PREPARE PILLS ---
+    try:
+        norm_scores = np.array(normalise(scores, mode="diverging", max_val=max_val, min_val=min_val))
+    except NameError:
+        norm_scores = vals
 
-    # Store original min/max for colourbar scaling
-    norm_scores = np.array(normalise(scores, mode="diverging", max_val=max_val, min_val=min_val))
+    processed_tokens = []
+    for t, sc in zip(tokens, norm_scores):
+        processed_tokens.append(_analyze_token(t, sc))
 
-    cleaned_tokens = [clean_qwen_token(t) for t in tokens]
-    display_tokens = [t if t else " " for t in cleaned_tokens]
+    for item in processed_tokens:
+        if item["text"]:
+            item["width"] = measurer.get_text_width(item["text"], font_size)
+        else:
+            item["width"] = 0
 
-    widths, heights = [], []
-    for tok in display_tokens:
-        w, h = _safe_text_size_px(tok, font_size, dpi, fp)
-        widths.append(w)
-        heights.append(h)
-    text_h = max(heights) if heights else font_size
-
-    pill_h = text_h + 2 * pad_y
+    pill_h = (font_size * 1.4 * dpi / 72) + 2 * pad_y 
     row_height_px = pill_h + gap_y
+    min_text_w = measurer.get_text_width("i", font_size) * 1.5 
 
-    rows, cur_row, cur_w = [], [], 0
-    for tok, sc, w_text in zip(display_tokens, norm_scores, widths):
-        min_text_w = 0.6 * font_size * dpi / 72.0
-        pill_w = max(w_text, min_text_w) + 2 * pad_x
-        w_total = pill_w + gap_x
-        if cur_row and cur_w + w_total > max_width_px*0.95:
-            rows.append(cur_row)
-            cur_row, cur_w = [], 0
-        cur_row.append((tok, sc, pill_w))
-        cur_w += w_total
-    if cur_row:
-        rows.append(cur_row)
+    rows = []
+    cur_row = []
+    cur_x = 0
+    
+    for item in processed_tokens:
+        txt = item["text"]
+        if txt:
+            if not cur_row: gap = 0
+            elif item["is_start_word"]: gap = gap_word
+            else: gap = gap_subword
 
-    left_margin = 10
-    right_margin = 10
-    top_margin = 12
-    between_title_and_question = 20
-    between_question_and_ra = 50
-    between_ra_and_pills = 120
-    line_spacing = 1.15
+            pill_w = max(item["width"], min_text_w) + 2 * pad_x
+            w_total = gap + pill_w
+            
+            if cur_row and (cur_x + w_total > max_width_px * 0.96):
+                rows.append(cur_row)
+                cur_row = []
+                cur_x = 0
+                gap = 0
+            
+            cur_row.append({
+                "text": txt, "score": item["score"], "pill_w": pill_w, 
+                "gap_before": gap, "is_special": item["is_special"]
+            })
+            cur_x += gap + pill_w
+        
+        if item["newlines_after"] > 0:
+            if cur_row: rows.append(cur_row)
+            cur_row = []
+            cur_x = 0
+            for _ in range(item["newlines_after"] - 1): rows.append([])
 
-    title_h = 0
+    if cur_row: rows.append(cur_row)
+
+    # --- 3. BUILD LAYOUT BLOCKS ---
+    layout_blocks = []
+    content_width = max_width_px - 40 
+
     if title:
-        title_h = _line_height_px(font_size + 2, dpi, fp)
+        safe_title = _escape_fmt(title)
+        t_lines = measurer.wrap_text(safe_title, font_size + 2, content_width)
+        layout_blocks.append(("text_lines", t_lines, {"size": font_size + 2, "style": "italic", "weight": "normal"}))
+        layout_blocks.append(("spacer", 20, {}))
 
-    question_lines, q_lines_h = [], 0
     if prompt_text:
-        q_text = clean_qwen_token(prompt_text)
-        max_text_w = max_width_px - left_margin - right_margin
-        question_lines = _wrap_text_to_width(q_text, font_size, dpi, fp, max_text_w)
-        base_q_line_h = _line_height_px(font_size, dpi, fp)
-        q_line_h = base_q_line_h * line_spacing
-        q_lines_h = len(question_lines) * q_line_h
+        layout_blocks.append(("text_lines", ["Question:"], {"size": font_size, "style": "normal", "weight": "bold"}))
+        clean_prompt = prompt_text.replace(SPACE_CHAR, " ").replace(NEWLINE_CHAR, "\n")
+        safe_prompt = _escape_fmt(clean_prompt)
+        p_lines = measurer.wrap_text(safe_prompt, font_size, content_width)
+        layout_blocks.append(("text_lines", p_lines, {"size": font_size, "style": "normal", "weight": "normal"}))
+        layout_blocks.append(("spacer", 60, {}))
 
-    label_h = _line_height_px(font_size, dpi, fp)
-    ra_label_h = _line_height_px(font_size + 1, dpi, fp)
+    layout_blocks.append(("text_lines", ["Reasoning + Answer:"], {"size": font_size, "style": "normal", "weight": "bold"}))
+    layout_blocks.append(("spacer", 20, {}))
+    layout_blocks.append(("pills", rows, {}))
 
-    header_block_h = 0
-    if title:
-        header_block_h += title_h + between_title_and_question
-    if prompt_text:
-        header_block_h += label_h + q_lines_h + between_question_and_ra
-    header_block_h += ra_label_h + between_ra_and_pills
+    measurer.close()
 
-    width_in = max_width_px / dpi
-    height_px = int(top_margin + header_block_h + len(rows) * row_height_px)
-    height_in = max(1.0, height_px / dpi)
+    # --- 4. CALCULATE GEOMETRY ---
+    total_text_height = 0
+    top_margin = 20
+    bottom_margin = 20
+    
+    def get_line_height(fs): return fs * 1.5 * dpi / 72
 
+    for kind, content, params in layout_blocks:
+        if kind == "text_lines":
+            lh = get_line_height(params["size"])
+            total_text_height += len(content) * lh
+        elif kind == "spacer":
+            total_text_height += content
+        elif kind == "pills":
+            total_text_height += len(content) * row_height_px
+
+    final_h_px = top_margin + total_text_height + bottom_margin
+
+    # --- 5. FIGURE DIMENSIONS (FIXED MARGINS) ---
+    cbar_width_px = 30 if show_colorbar else 0
+    cbar_pad_px = 40 if show_colorbar else 0
+    
+    # FIX: Add specific margin for the labels (numbers) on the right
+    # 80px should be plenty for standard fonts to not get cut off
+    cbar_labels_margin = 80 if show_colorbar else 20 
+
+    total_fig_width_px = max_width_px + cbar_pad_px + cbar_width_px + cbar_labels_margin
+
+    width_in = total_fig_width_px / dpi
+    height_in = max(1.0, final_h_px / dpi)
+    
     fig = plt.figure(figsize=(width_in, height_in), dpi=dpi)
+    
+    # Text Axis covers the WHOLE figure, but we only draw in the max_width_px area
     ax = plt.axes([0, 0, 1, 1])
-    ax.set_xlim(0, max_width_px)
-    ax.set_ylim(0, height_px)
+    ax.set_xlim(0, total_fig_width_px)
+    ax.set_ylim(0, final_h_px)
     ax.axis("off")
 
-    cmap = CUSTOM_COLOR_MAP
-    y = height_px - top_margin
+    try:
+        cmap = plt.get_cmap(cmap_name)
+    except:
+        cmap = plt.cm.Blues
 
-    if title:
-        ax.text(
-            left_margin,
-            y,
-            title,
-            fontsize=font_size + 2,
-            fontstyle="italic",
-            va="top",
-            ha="left",
-            fontproperties=fp,
-        )
-        y -= title_h + between_title_and_question
+    # --- 6. DRAW TEXT CONTENT ---
+    y = final_h_px - top_margin
+    left_margin = 20
 
-    if prompt_text:
-        ax.text(
-            left_margin,
-            y,
-            "Question:",
-            fontsize=font_size,
-            fontweight="bold",
-            va="top",
-            ha="left",
-            fontproperties=fp,
-        )
-        y -= label_h + between_title_and_question
-        if question_lines:
-            base_q_line_h = _line_height_px(font_size, dpi, fp) * line_spacing
-            for line in question_lines:
+    for kind, content, params in layout_blocks:
+        if kind == "text_lines":
+            lh = get_line_height(params["size"])
+            for line in content:
                 ax.text(
-                    left_margin,
-                    y,
-                    line,
-                    fontsize=font_size,
-                    va="top",
-                    ha="left",
-                    fontproperties=fp,
+                    left_margin, y, line,
+                    fontsize=params["size"],
+                    fontstyle=params["style"],
+                    fontweight=params["weight"],
+                    va="top", ha="left",
+                    fontproperties=fp
                 )
-                y -= base_q_line_h
-        y -= between_question_and_ra
-
-    ax.text(
-        left_margin,
-        y,
-        "Reasoning + Answer:",
-        fontsize=font_size,
-        fontweight="bold",
-        va="top",
-        ha="left",
-        fontproperties=fp,
-    )
-    y -= ra_label_h + between_ra_and_pills
-
-    y_top = y + pill_h
-    for row in rows:
-        x = left_margin
-        for tok, sc, pill_w in row:
-            y_pill = y_top - pill_h
-            if tok == "[PAD]":
-                face = (0.92, 0.92, 0.92, 1.0)
-                edge = (0.7, 0.7, 0.7, 1.0)
-                txt_col = "black"
-            else:
-                face = cmap(sc)
-                lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
-                txt_col = "black"
-                edge = (0.75, 0.75, 0.75, 1.0)
-
-            ax.add_patch(
-                FancyBboxPatch(
-                    (x, y_pill),
-                    pill_w,
-                    pill_h,
-                    boxstyle="round,pad=0.0,rounding_size=8",
-                    linewidth=1.0,
-                    edgecolor=edge,
-                    facecolor=face,
-                )
-            )
-
-            ax.text(
-                x + pill_w / 2,
-                y_pill + pill_h / 2,
-                tok,
-                fontsize=font_size,
-                va="center",
-                ha="center",
-                color=txt_col,
-                fontproperties=fp,
-            )
-            x += pill_w + 8
-        y_top -= row_height_px
+                y -= lh
         
+        elif kind == "spacer":
+            y -= content
+            
+        elif kind == "pills":
+            y_row_top = y
+            for row in content:
+                x = left_margin
+                if not row:
+                    y_row_top -= row_height_px
+                    continue
+                
+                for pill in row:
+                    x += pill["gap_before"]
+                    
+                    sc = pill["score"]
+                    if pill["is_special"]:
+                        face = (0.95, 0.95, 0.95, 1.0)
+                        edge = (0.8, 0.8, 0.8, 1.0)
+                        txt_col = "black"
+                    else:
+                        face = cmap(sc)
+                        lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
+                        txt_col = "white" if lum < 0.5 else "black"
+                        edge = (0.9, 0.9, 0.9, 0.0)
+
+                    # Draw Box
+                    y_pill = y_row_top - pill_h
+                    patch = FancyBboxPatch(
+                        (x, y_pill), pill["pill_w"], pill_h,
+                        boxstyle="round,pad=0.0,rounding_size=6",
+                        linewidth=1.0, edgecolor=edge, facecolor=face
+                    )
+                    ax.add_patch(patch)
+
+                    # Draw Text
+                    ax.text(
+                        x + pill["pill_w"]/2, y_pill + pill_h/2,
+                        pill["text"],
+                        fontsize=font_size,
+                        va="center", ha="center",
+                        color=txt_col, fontproperties=fp
+                    )
+                    x += pill["pill_w"]
+                
+                y_row_top -= row_height_px
+            y = y_row_top
+
+    # --- 7. DRAW COLORBAR ---
     if show_colorbar:
-        vmax = max(scores) if max_val is None else max_val
-        vmin = min(scores) if min_val is None else min_val
+        # Calculate position in normalized coordinates (0 to 1)
+        # Left edge of bar starts after text area + padding
+        cb_left = (max_width_px + cbar_pad_px) / total_fig_width_px
+        cb_width = cbar_width_px / total_fig_width_px
+        
+        # Center vertically
+        cb_height = 0.8
+        cb_bottom = (1.0 - cb_height) / 2.0
+        
+        cax = fig.add_axes([cb_left, cb_bottom, cb_width, cb_height])
+        
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm_obj)
+        sm.set_array([]) 
+        
+        cbar = fig.colorbar(sm, cax=cax, orientation='vertical')
+        cbar.outline.set_visible(False)
+        cbar.ax.tick_params(labelsize=font_size-2, size=0)
 
-        if vmin < 0 and vmax > 0:
-            # Case 1: Diverging
-            norm = TwoSlopeNorm(vcenter=0, vmin=vmin, vmax=vmax)
-            cmap_used = cmap   # diverging cmap
-
-        elif vmin >= 0:
-            # Case 2: All positive → white → positive colour
-            base_color = cmap(1.0)  # positive side
-            cmap_used = LinearSegmentedColormap.from_list("seq_pos", ["white", base_color])
-            norm = Normalize(vmin=vmin, vmax=vmax)
-
-        else:
-            # Case 3: All negative → white → negative colour (inverted)
-            base_color = cmap(0.0)  # negative side
-            cmap_used = LinearSegmentedColormap.from_list("seq_neg", [base_color, "white"])
-            norm = Normalize(vmin=vmin, vmax=vmax)
-
-        sm = mpl.cm.ScalarMappable(cmap=cmap_used, norm=norm)
-        sm.set_array([])
-
-        cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
-        cbar.set_label("Reward score", rotation=270, labelpad=15)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, bbox_inches="tight", pad_inches=0.05)
+    fig.savefig(out_path, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
-
-
 # -------------------------------
 # Metrics utilities
 # -------------------------------
@@ -574,7 +600,6 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
     df["reward_model_score_np"] = df["reward_model_score"].apply(
         lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
     )
-    import IPython; IPython.embed(); exit()
     df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
     df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
     df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
@@ -631,7 +656,7 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
         #     ),
         #     axis=1,
         # )
-        df["selector"] = df["reward_model_score_np"].apply(lambda x: discounted_mean(x, gamma=0.9))
+        df["selector"] = df["reward_model_score_np"].apply(lambda x: discounted_mean(x, gamma=0.95))
     else:
         df["selector"] = df["mean_rewards"].copy()
     return df
@@ -1211,7 +1236,7 @@ def run_all_plots(
         "SFT": extract_flags(df_sft, num_generations),
     }
 
-    # NEW: compute + print + save LaTeX table fragment
+    #NEW: compute + print + save LaTeX table fragment
     results, cis = compute_pass_results_ci(datasets, ks)
     print_latex_table(results, cis, ks)  # for direct copy/paste in your terminal
     save_latex_table_txt(results, cis, ks, Path(out_dir) / "pass_at_k_table.txt")
@@ -1268,32 +1293,46 @@ def run_all_plots(
                 correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
                 wrong_mean   = df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
                 overall_mean = df_airl[mean_name].mean()
-
                 # 2. Standardise rewards (Vectorized is faster than .apply)
+                df_airl["prompt_idx"] = np.arange(len(df_airl)) // 16
                 df_airl["reward_model_standard"] = df_airl[reward_score_name] - overall_mean
 
-                # 3. Select Indices using Strategy 1 (nsmallest)
+                # 1. Find row index of Correct answer with HIGHEST 'selector'
+                # idxmax returns the index label where the max value is found
+                pos_series = df_airl[df_airl["correctness_reward_func"] == 2].groupby('prompt_idx')['selector'].idxmax()
 
-                # --- Positive Indices ---
-                # Filter first: Correctness == 2 AND Strict Format == 0.5
-                pos_subset = df_airl[
-                    (df_airl["correctness_reward_func"] == 2) & 
-                    (df_airl["strict_format_reward_func"] == 0.5)
-                ]
-                # Find the 5 points with the smallest absolute difference from correct_mean
-                positive_indices = (pos_subset[mean_name] - correct_mean).abs().nsmallest(5).index
+                # 2. Find row index of Wrong answer with LOWEST 'selector'
+                # idxmin returns the index label where the min value is found
+                neg_series = df_airl[df_airl["correctness_reward_func"] == 0].groupby('prompt_idx')['selector'].idxmin()
+
+                # 3. Merge the two series on 'prompt_idx'
+                # This aligns them and drops groups that don't have both a correct and wrong answer
+                aligned_pairs = pd.merge(pos_series, neg_series, on='prompt_idx', suffixes=('_pos', '_neg'))
+
+                # 4. Extract the aligned lists of indices
+                positive_indices = aligned_pairs['selector_pos'].tolist()[:5]
+                negative_indices = aligned_pairs['selector_neg'].tolist()[:5]
 
 
-                # --- Negative Indices ---
-                # Filter first: Correctness != 2 AND Strict Format == 0.5
-                neg_subset = df_airl[
-                    (df_airl["correctness_reward_func"] != 2) & 
-                    (df_airl["strict_format_reward_func"] == 0.5)
-                ]
-                # Find the 5 points with the smallest absolute difference from wrong_mean
-                negative_indices = (neg_subset[mean_name] - wrong_mean).abs().nsmallest(5).index
+                # # --- Positive Indices ---
+                # # Filter first: Correctness == 2 AND Strict Format == 0.5
+                # pos_subset = df_airl[
+                #     (df_airl["correctness_reward_func"] == 2) #& 
+                #     #(df_airl["strict_format_reward_func"] == 0.5)
+                # ]
+                # # Find the 5 points with the smallest absolute difference from correct_mean
+                # positive_indices = (pos_subset[mean_name] - correct_mean).abs().nsmallest(5).index
+
+
+                # # --- Negative Indices ---
+                # # Filter first: Correctness != 2 AND Strict Format == 0.5
+                # neg_subset = df_airl[
+                #     (df_airl["correctness_reward_func"] != 2) #& 
+                #     #(df_airl["strict_format_reward_func"] == 0.5)
+                # ]
+                # # Find the 5 points with the smallest absolute difference from wrong_mean
+                # negative_indices = (neg_subset[mean_name] - wrong_mean).abs().nsmallest(5).index
                 all_indices = np.concatenate([positive_indices, negative_indices ])
-                import IPython; IPython.embed()
                 df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
                 df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))
                 max_value = df_airl.loc[all_indices, "reward_model_max"].max()

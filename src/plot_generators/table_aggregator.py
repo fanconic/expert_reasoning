@@ -4,7 +4,7 @@ import pandas as pd
 
 # ================= CONFIGURATION =================
 
-ROOT_DIR = os.path.join('figures', 'answer_only')
+ROOT_DIR = os.path.join('figures', 'full_cot')
 
 # Row Order (Algorithms)
 ALGO_ORDER = [
