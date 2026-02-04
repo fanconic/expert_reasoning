@@ -1,4 +1,4 @@
-# Learning Reasoning Reward Model from Expert Demonstration via Inverse Reinforcement Learning
+# Learning Reasoning Reward Models from Expert Demonstration via Inverse Reinforcement Learning
 
 <div align="left">
 <img src="./assets/figure_1.png" width="800" alt="Method overview diagram">
