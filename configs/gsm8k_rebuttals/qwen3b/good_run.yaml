@@ -8,7 +8,7 @@ defaults:
 model:
   policy_name: "Qwen/Qwen2.5-3B-Instruct"
   reward_name: "Qwen/Qwen2.5-3B-Instruct"
-  #warmup_reward_dir: /mnt/pdata/caf83/icml_math/warmed_up_rewards/qwen3b/partial/
+  warmup_reward_dir: #/mnt/pdata/caf83/icml_math/warmed_up_rewards/qwen3b/partial/
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true

@@ -18,6 +18,15 @@ SYSTEM_PROMPT_MEDREASON = (
     "Question ... Answer Options: \nA. answer1 \nB. answer2 \nC. answer3 \nD. \n<think> reasoning process here </think><answer> answer </answer>"
 )
 
+SYSTEM_PROMPT_SCIENCEQA = (
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
+    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> reasoning process here </think><answer> answer here </answer>"
+    "The answer only includes the final answer, without any explanation, and is one of the options provided in the question, without the letter label, i.e."
+    "Question ... Answer Options: \nA. answer1 \nB. answer2 \nC. answer3 \nD. answer4 \n<think> reasoning process here </think><answer> answer </answer>"
+)
+
 
 # UTILS
 
@@ -391,6 +400,90 @@ def get_medical_distillation(
     return ds.map(munge, remove_columns=ds.column_names)
 
 
+# Medical Dataset
+def get_science_grpo(
+    split="train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0,
+):
+    """
+    Load and preprocess the medical o1 dataset.
+
+    Args:
+        split (str): Dataset split to load ('train', 'test', etc.).
+
+    Returns:
+        Dataset: Processed dataset with prompts formatted for model input
+                and extracted answers.
+    """
+    data = load_from_disk("./data/scienceqa")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+    data = data.map(
+        lambda x: {
+            "prompt": [
+                {"role": "system", "content": SYSTEM_PROMPT_MEDREASON},
+                {"role": "user", "content": x["question"]},
+            ],
+            "answer": x["answer"],
+        }
+    )
+    return data
+
+
+def get_science_distillation(
+    split: str = "train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0,
+) -> Dataset:
+    """
+    Load o1 medical questions for KD:
+    Returns a Dataset with fields:
+      - prompt: list[dict(role,content)]  (system + user)
+      - target: str containing <think>…</think><answer>…</answer>
+    """
+    # this curated set has both the question and the full COT+boxed answer
+    ds = load_from_disk("./data/scienceqa")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        ds = ds.select(range(int(len(ds) * ratio)))
+
+    def munge(example):
+        reasoning = example["reasoning"]
+        answer = example["answer"]
+        # build prompt + target
+        prompt = [
+            {"role": "system", "content": SYSTEM_PROMPT_MEDREASON},
+            {"role": "user", "content": example["question"]},
+        ]
+        target = (
+            "<think>\n"
+            f"{reasoning}\n"
+            "</think>\n"
+            "<answer>\n"
+            f"{answer}\n"
+            "</answer>"
+        )
+        corrupted_reasonings = example["corrupted_reasonings"]
+        corrupted_answers = example["corrupted_answers"]
+        return {
+            "prompt": prompt,
+            "target": target,
+            "answer": answer,
+            "corrupted_reasonings": corrupted_reasonings,
+            "corrupted_answers": corrupted_answers,
+        }
+
+    return ds.map(munge, remove_columns=ds.column_names)
+
+
 def get_dataset(
     name: str,
     split: str = "train",
@@ -418,6 +511,17 @@ def get_dataset(
         return get_gsm8k_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "gsm8k_kd":
         return get_gsm8k_distillation(
+            split,
+            ratio,
+            no_system=no_system,
+            expert_error_rate=expert_error_rate,
+            neg_perturb_fns=neg_perturb_fns,
+            num_neg_perturbations_per_expert=num_neg_perturbations_per_expert,
+        )
+    if name.lower() == "science":
+        return get_science_grpo(split, ratio, no_system=no_system)
+    elif name.lower() == "science_kd":
+        return get_science_distillation(
             split,
             ratio,
             no_system=no_system,

@@ -20,7 +20,17 @@ def run_grpo_training(
         training_cfg: Training configuration (expects attributes like max_steps, etc.).
         val_dataset: Optional validation dataset.
     """
-    dataset_name = "gsm8k" if "gsm8k" in cfg.dataset.name else "medical"
+    
+    if "gsm8k" in cfg.dataset.name:
+        dataset_name = "gsm8k"
+    elif "medical" in cfg.dataset.name:
+        dataset_name = "medical"
+    elif "countdown" in cfg.dataset.name:
+        dataset_name = "countdown"
+    elif "science" in cfg.dataset.name:
+        dataset_name = "scienceqa"
+    else:
+        raise ValueError(f"Unknown dataset name in config: {cfg.dataset.name}")
     grpo_config = GRPOConfig(
         learning_rate=cfg.training.learning_rate,
         adam_beta1=cfg.training.adam_beta1,
@@ -52,6 +62,7 @@ def run_grpo_training(
         num_completions_to_print=2,
         save_strategy="steps",  # or "epoch" or "no"
         save_total_limit=1,  # Keep only 2 checkpoints: best + final
+        beta=getattr(cfg.training, "beta", 0.0),
     )
 
     # Instantiate the GRPOTrainer.

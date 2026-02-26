@@ -14,9 +14,11 @@ from src.rewards.reward_functions import (
     gsm8k_correctness_reward_func,
     countdown_correctness_function,
     medical_correctness_reward_func,
+    scienceqa_correctness_reward_func,
     eval_correctness_gsm8k,
     eval_correctness_countdown,
-    eval_correctness_medical
+    eval_correctness_medical,
+    eval_correctness_scienceqa
 )
 import torch
 import numpy as np
@@ -357,11 +359,16 @@ def main(cfg: DictConfig):
     elif cfg.dataset.name == "countdown" or cfg.dataset.name == "countdown_kd":
         reward_fns = [("correctness_reward_func", countdown_correctness_function)]
         eval_correctness = eval_correctness_countdown
-    else:
+    elif cfg.dataset.name == "medreason" or cfg.dataset.name == "medreason_kd":
         # Simplified for brevity - your original code had more
         reward_fns = [("correctness_reward_func", medical_correctness_reward_func)]
         eval_correctness = eval_correctness_medical
-
+    elif cfg.dataset.name == "science" or cfg.dataset.name == "science_kd":
+        # Simplified for brevity - your original code had more
+        reward_fns = [("correctness_reward_func", scienceqa_correctness_reward_func)]
+        eval_correctness = eval_correctness_scienceqa
+    else:
+        raise ValueError(f"Dataset {cfg.dataset.name} not supported")
     if cfg.eval.report_to == "wandb":
         wandb_config = OmegaConf.to_container(cfg, resolve=True)
         wandb.init(

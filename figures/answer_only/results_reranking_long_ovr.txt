@@ -1,0 +1,24 @@
+% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}
+\begin{table*}[t]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{ll ccc ccc}
+\toprule
+& & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-8}
+\textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\
+\midrule
+\multirow{1}{*}{\textbf{\texttt{Qwen2.5-3B}}} & \textit{Step-wise + OVR} & 77 \tiny\textcolor{gray}{[75, 80]} & \textbf{76} \tiny\textcolor{gray}{[74, 79]} & \textcolor{purple}{($\downarrow$ -1)} & 50 \tiny\textcolor{gray}{[47, 53]} & \textbf{48} \tiny\textcolor{gray}{[45, 50]} & \textcolor{purple}{($\downarrow$ -2)} \\
+\midrule
+\multirow{1}{*}{\textbf{\texttt{Llama3.2-3B}}} & \textit{Step-wise + OVR} & 69 \tiny\textcolor{gray}{[67, 72]} & \textbf{70} \tiny\textcolor{gray}{[68, 73]} & \textbf{\textcolor{insightteal}{($\uparrow$ +1)}} & 67 \tiny\textcolor{gray}{[64, 69]} & \textbf{67} \tiny\textcolor{gray}{[64, 69]} & (+0) \\
+\midrule
+\multirow{1}{*}{\textbf{\texttt{Qwen2.5-7B}}} & \textit{Step-wise + OVR} & 87 \tiny\textcolor{gray}{[86, 89]} & \textbf{89} \tiny\textcolor{gray}{[87, 90]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} & 63 \tiny\textcolor{gray}{[61, 66]} & \textbf{63} \tiny\textcolor{gray}{[60, 65]} & (+0) \\
+\midrule
+\multirow{1}{*}{\textbf{\texttt{Llama3.1-8B}}} & \textit{Step-wise + OVR} & 76 \tiny\textcolor{gray}{[73, 78]} & \textbf{79} \tiny\textcolor{gray}{[77, 81]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} & 71 \tiny\textcolor{gray}{[69, 73]} & \textbf{73} \tiny\textcolor{gray}{[71, 75]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Best-of-N Reranking Performance (\%).} Comparison of Random selection vs. Reward Model selection. Values are percentages. \textbf{Bold} is best, \underline{underline} is second best. $\Delta$ indicates percentage-point improvement. \textcolor{insightteal}{Blue} is positive, \textcolor{purple}{purple} is negative. * symbolises an adversarial mode collapse (results grayed out).}
+\label{tab:reranking_long}
+\end{table*}

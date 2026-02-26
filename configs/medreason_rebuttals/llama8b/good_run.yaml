@@ -8,7 +8,7 @@ defaults:
 model:
   policy_name: "meta-llama/Llama-3.1-8B-Instruct"
   reward_name: "meta-llama/Llama-3.1-8B-Instruct"
-  #warmup_reward_dir: /mnt/pdata/caf83/icml_medicine/warmed_up_rewards/llama8b/partial/
+  warmup_reward_dir: #/mnt/pdata/caf83/icml_medicine/warmed_up_rewards/llama8b/partial/
   max_prompt_length: 300
   max_completion_length: 824
   load_in_4bit: true
