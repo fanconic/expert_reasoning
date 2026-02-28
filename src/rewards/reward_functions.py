@@ -40,6 +40,13 @@ def get_reward_functions(dataset_name: str) -> List:
             strict_format_reward_func,
             scienceqa_correctness_reward_func
         ], None
+    elif dataset_name == "mmlu" or dataset_name == "mmlu_kd":
+        return [
+            xmlcount_reward_func,
+            soft_format_reward_func,
+            strict_format_reward_func,
+            mmlu_correctness_reward_func
+        ], None
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 
@@ -257,6 +264,18 @@ def scienceqa_correctness_reward_func(prompts, completions, answer, **kwargs):
     return rewards
 
 
+def mmlu_correctness_reward_func(prompts, completions, answer, **kwargs):
+    """Reward function that checks if the completion is the same as the ground truth."""
+    responses = [completion[0]["content"] for completion in completions]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    rewards = []
+    for predicted, solution in zip(extracted_responses, answer):
+            # Use robust MC comparison (returns True/False)
+            match = mc_answer_equal(predicted, solution)
+            rewards.append(1.0 if match else 0.0)
+    return rewards
+
+
 ##### Only for Evals
 def eval_correctness_gsm8k(completions, answer):
     """
@@ -300,6 +319,12 @@ def eval_correctness_medical(completions, answer):
 
 
 def eval_correctness_scienceqa(completions, answer):
+    """Reward function that checks if the completion is the same as the ground truth."""
+    responses = [completion["content"] for completion in completions]
+    extracted_responses = [extract_xml_answer(r) for r in responses]
+    return [mc_answer_equal(r, answer) for r in extracted_responses]
+
+def eval_correctness_mmlu(completions, answer):
     """Reward function that checks if the completion is the same as the ground truth."""
     responses = [completion["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]

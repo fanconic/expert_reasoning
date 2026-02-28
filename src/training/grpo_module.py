@@ -29,6 +29,8 @@ def run_grpo_training(
         dataset_name = "countdown"
     elif "science" in cfg.dataset.name:
         dataset_name = "scienceqa"
+    elif "mmlu" in cfg.dataset.name:
+        dataset_name = "mmlu"
     else:
         raise ValueError(f"Unknown dataset name in config: {cfg.dataset.name}")
     grpo_config = GRPOConfig(

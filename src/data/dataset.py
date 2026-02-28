@@ -27,6 +27,16 @@ SYSTEM_PROMPT_SCIENCEQA = (
     "Question ... Answer Options: \nA. answer1 \nB. answer2 \nC. answer3 \nD. answer4 \n<think> reasoning process here </think><answer> answer </answer>"
 )
 
+SYSTEM_PROMPT_MMLU = (
+    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
+    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
+    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
+    "<think> reasoning process here </think><answer> answer here </answer>"
+    "The answer only includes the final answer, without any explanation, and is one of the options provided in the question, without the letter label, i.e."
+    "Question ... Answer Options: \nA. answer1 \nB. answer2 \nC. answer3 \nD. answer4 ... \n<think> reasoning process here </think><answer> answer </answer>"
+)
+
+
 
 # UTILS
 
@@ -426,7 +436,7 @@ def get_science_grpo(
     data = data.map(
         lambda x: {
             "prompt": [
-                {"role": "system", "content": SYSTEM_PROMPT_MEDREASON},
+                {"role": "system", "content": SYSTEM_PROMPT_SCIENCEQA},
                 {"role": "user", "content": x["question"]},
             ],
             "answer": x["answer"],
@@ -460,7 +470,7 @@ def get_science_distillation(
         answer = example["answer"]
         # build prompt + target
         prompt = [
-            {"role": "system", "content": SYSTEM_PROMPT_MEDREASON},
+            {"role": "system", "content": SYSTEM_PROMPT_SCIENCEQA},
             {"role": "user", "content": example["question"]},
         ]
         target = (
@@ -482,6 +492,91 @@ def get_science_distillation(
         }
 
     return ds.map(munge, remove_columns=ds.column_names)
+
+
+# MMLU Dataset
+def get_mmlu_grpo(
+    split="train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0,
+):
+    """
+    Load and preprocess the MMLU dataset.
+
+    Args:
+        split (str): Dataset split to load ('train', 'test', etc.).
+
+    Returns:
+        Dataset: Processed dataset with prompts formatted for model input
+                and extracted answers.
+    """
+    data = load_from_disk("./data/mmlu_pro")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+    data = data.map(
+        lambda x: {
+            "prompt": [
+                {"role": "system", "content": SYSTEM_PROMPT_MMLU},
+                {"role": "user", "content": x["question"]},
+            ],
+            "answer": x["answer"],
+        }
+    )
+    return data
+
+
+def get_mmlu_distillation(
+    split: str = "train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0,
+) -> Dataset:
+    """
+    Load o1 medical questions for KD:
+    Returns a Dataset with fields:
+      - prompt: list[dict(role,content)]  (system + user)
+      - target: str containing <think>…</think><answer>…</answer>
+    """
+    # this curated set has both the question and the full COT+boxed answer
+    ds = load_from_disk("./data/mmlu_pro")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        ds = ds.select(range(int(len(ds) * ratio)))
+
+    def munge(example):
+        reasoning = example["reasoning"]
+        answer = example["answer"]
+        # build prompt + target
+        prompt = [
+            {"role": "system", "content": SYSTEM_PROMPT_MMLU},
+            {"role": "user", "content": example["question"]},
+        ]
+        target = (
+            "<think>\n"
+            f"{reasoning}\n"
+            "</think>\n"
+            "<answer>\n"
+            f"{answer}\n"
+            "</answer>"
+        )
+        corrupted_reasonings = example["corrupted_reasonings"]
+        corrupted_answers = example["corrupted_answers"]
+        return {
+            "prompt": prompt,
+            "target": target,
+            "answer": answer,
+            "corrupted_reasonings": corrupted_reasonings,
+            "corrupted_answers": corrupted_answers,
+        }
+
+    return ds.map(munge, remove_columns=ds.column_names)
+
 
 
 def get_dataset(
@@ -522,6 +617,17 @@ def get_dataset(
         return get_science_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "science_kd":
         return get_science_distillation(
+            split,
+            ratio,
+            no_system=no_system,
+            expert_error_rate=expert_error_rate,
+            neg_perturb_fns=neg_perturb_fns,
+            num_neg_perturbations_per_expert=num_neg_perturbations_per_expert,
+        )
+    if name.lower() == "mmlu":
+        return get_mmlu_grpo(split, ratio, no_system=no_system)
+    elif name.lower() == "mmlu_kd":
+        return get_mmlu_distillation(
             split,
             ratio,
             no_system=no_system,

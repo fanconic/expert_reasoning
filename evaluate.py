@@ -1,7 +1,7 @@
 # evaluate.py
 import os
 os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
-
+from unsloth import FastLanguageModel
 from src.models.model_module import load_model_and_tokenizer, irl_load_model_and_tokenizer
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -15,10 +15,12 @@ from src.rewards.reward_functions import (
     countdown_correctness_function,
     medical_correctness_reward_func,
     scienceqa_correctness_reward_func,
+    mmlu_correctness_reward_func,
     eval_correctness_gsm8k,
     eval_correctness_countdown,
     eval_correctness_medical,
-    eval_correctness_scienceqa
+    eval_correctness_scienceqa,
+    eval_correctness_mmlu
 )
 import torch
 import numpy as np
@@ -367,6 +369,9 @@ def main(cfg: DictConfig):
         # Simplified for brevity - your original code had more
         reward_fns = [("correctness_reward_func", scienceqa_correctness_reward_func)]
         eval_correctness = eval_correctness_scienceqa
+    elif cfg.dataset.name == "mmlu" or cfg.dataset.name == "mmlu_kd":
+        reward_fns = [("correctness_reward_func", mmlu_correctness_reward_func)]
+        eval_correctness = eval_correctness_mmlu
     else:
         raise ValueError(f"Dataset {cfg.dataset.name} not supported")
     if cfg.eval.report_to == "wandb":

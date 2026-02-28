@@ -1,7 +1,7 @@
 #!/bin/bash
 export GPU_NUM="0"
 export MODEL="qwen3b"
-export DATASET="scienceqa_rebuttals"
+export DATASET="mmlu_rebuttals"
 
 # --- Helper Function ---
 # Usage: run_task <run_name_suffix> <extra_overrides>
@@ -22,8 +22,8 @@ run_task() {
 }
 
 # --- SFT & GRPO (Unique scripts/configs) ---
-# bash runner_scripts/${GPU_NUM}_run_gpu_node.sh sft_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train
-# bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_eval
+bash runner_scripts/${GPU_NUM}_run_gpu_node.sh sft_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train
+bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_eval
 
 bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train.py --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_train
 bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_eval

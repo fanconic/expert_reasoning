@@ -14,6 +14,7 @@ from src.rewards.reward_functions import (
     gsm8k_correctness_reward_func,
     countdown_correctness_function,
     medical_correctness_reward_func,
+    mmlu_correctness_reward_func
 )
 
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
@@ -47,6 +48,13 @@ def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
             ("strict_format_reward_func", strict_format_reward_func),
             ("scienceqa_correctness_reward_func", scienceqa_correctness_reward_func),
         ]
+    elif cfg.dataset.name == "mmlu" or cfg.dataset.name == "mmlu_kd":
+            reward_fns = [
+                ("xmlcount_reward_func", xmlcount_reward_func),
+                ("soft_format_reward_func", soft_format_reward_func),
+                ("strict_format_reward_func", strict_format_reward_func),
+                ("mmlu_correctness_reward_func", mmlu_correctness_reward_func),
+            ]
     else:
         raise ValueError(f"Unknown dataset name: {cfg.dataset.name}")
 
