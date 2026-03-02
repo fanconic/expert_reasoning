@@ -43,8 +43,8 @@ model:
 
   # Clip the reward of the discriminator
   clip_reward_model: true
-  reward_lb: -5.0
-  reward_ub: 5.0
+  reward_lb: -2.0
+  reward_ub: 2.0
 
   # response only
   response_only: false
@@ -82,7 +82,7 @@ training:
   gradient_accumulation_steps: 8
   max_steps: 500
   epochs: 2
-  beta: 0.2
+  beta: 0.1
   
 sampling:
   temperature: 1.0

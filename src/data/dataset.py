@@ -68,8 +68,6 @@ def extract_think_content(input_string: str) -> str:
 
 
 # GSM8K Dataset
-
-
 def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
     """
     Load and preprocess the GSM8K dataset.
@@ -513,7 +511,7 @@ def get_mmlu_grpo(
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_from_disk("./data/mmlu_pro")[split]
+    data = load_from_disk("./data/mmlu_pr_filtered")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -521,7 +519,7 @@ def get_mmlu_grpo(
         lambda x: {
             "prompt": [
                 {"role": "system", "content": SYSTEM_PROMPT_MMLU},
-                {"role": "user", "content": x["question"]},
+                {"role": "user", "content": x["question"] + "\n"},
             ],
             "answer": x["answer"],
         }
@@ -544,7 +542,7 @@ def get_mmlu_distillation(
       - target: str containing <think>…</think><answer>…</answer>
     """
     # this curated set has both the question and the full COT+boxed answer
-    ds = load_from_disk("./data/mmlu_pro")[split]
+    ds = load_from_disk("./data/mmlu_pro_filtered")[split]
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
@@ -555,7 +553,7 @@ def get_mmlu_distillation(
         # build prompt + target
         prompt = [
             {"role": "system", "content": SYSTEM_PROMPT_MMLU},
-            {"role": "user", "content": example["question"]},
+            {"role": "user", "content": example["question"] + "\n"},
         ]
         target = (
             "<think>\n"

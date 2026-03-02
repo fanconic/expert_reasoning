@@ -9,6 +9,12 @@ run_task() {
     local SUFFIX=$1
     local EXTRA=$2
     local FULL_OVERRIDE="wandb.run_name=${MODEL}_${SUFFIX} ${EXTRA}"
+        
+    # Check if the task is "full" and append the warmup directory
+    # if [ "$SUFFIX" == "full" ]; then
+    #     local WARMUP_DIR="/mnt/pdata/caf83/icml_mmlu/warmed_up_rewards/${MODEL}/full/"
+    #     FULL_OVERRIDE="${FULL_OVERRIDE} model.warmup_reward_dir=${WARMUP_DIR}"
+    # fi
     
     echo "Starting task: ${MODEL}_${SUFFIX}"
     

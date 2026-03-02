@@ -36,7 +36,7 @@ training:
   max_grad_norm: 1.0
   output_dir: "/mnt/pdata/caf83/icml_mmlu/outputs/${wandb.run_name}"
   report_to: "wandb"
-  beta: 0.2
+  beta: 0.1
   
 
 sampling:
