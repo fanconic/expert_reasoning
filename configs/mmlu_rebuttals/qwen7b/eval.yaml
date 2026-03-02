@@ -10,7 +10,7 @@ model:
   name: "/mnt/pdata/caf83/icml_mmlu/outputs/${wandb.run_name}/${model.checkpoint}"
   policy_name: "${model.name}"
   reward_name: "Qwen/Qwen2.5-7B-Instruct"
-  max_prompt_length: 300
+  max_prompt_length: 350
   max_completion_length: 824
   load_in_4bit: true
   fast_inference: true

@@ -518,7 +518,7 @@ def main(cfg: DictConfig):
                     "prompt": prompt,
                     "generation": generation,
                     "generation_idx": gen_idx,
-                    "reward_model_score": score[~np.isnan(score)].tolist(),
+                    "reward_model_score": score[~np.isnan(score)].tolist() if isinstance(score, np.ndarray) and score.ndim > 0 else score,
                 }
                 result = result | rews
                 all_results.append(result)
