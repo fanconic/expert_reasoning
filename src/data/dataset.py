@@ -511,7 +511,7 @@ def get_mmlu_grpo(
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_from_disk("./data/mmlu_pr_filtered")[split]
+    data = load_from_disk("./data/mmlu_pro_filtered")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))

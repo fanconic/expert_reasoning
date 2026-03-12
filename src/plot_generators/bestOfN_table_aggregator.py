@@ -23,7 +23,7 @@ MODEL_ORDER = [
     ('llama8b', r'\texttt{Llama3.1-8B}')
 ]
 
-DATASETS = ['math', 'medicine']
+DATASETS = ['math', 'medicine', 'mmlu']
 VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
 
 def extract_reranking_p1(filepath):
@@ -90,10 +90,10 @@ def format_cell(val_str, is_best=False, is_second=False):
 
     # 4. Apply Highlights
     fmt_mean = mean_disp
-    if is_best:
-        fmt_mean = f"\\textbf{{{mean_disp}}}"
-    elif is_second:
-        fmt_mean = f"\\underline{{{mean_disp}}}"
+    # if is_best:
+    #     fmt_mean = f"\\textbf{{{mean_disp}}}"
+    # elif is_second:
+    #     fmt_mean = f"\\underline{{{mean_disp}}}"
         
     # Inline format: Mean [CI]
     return f"{fmt_mean} \\tiny\\textcolor{{gray}}{{{ci_disp}}}"
@@ -168,17 +168,17 @@ def main():
     latex.append(r"\scriptsize")
     latex.append(r"\resizebox{\textwidth}{!}{%")
     
-    # Cols: Backbone | Method | GSM(Rand, Rew, Delta) | Med(Rand, Rew, Delta)
-    # Total 8 columns
-    latex.append(r"\begin{tabular}{ll ccc ccc}")
+    # Cols: Backbone | Method | GSM(Rand, Rew, Delta) | Med(Rand, Rew, Delta) | MMLU(Rand, Rew, Delta)
+    # Total 10 columns
+    latex.append(r"\begin{tabular}{ll ccc ccc ccc}")
     latex.append(r"\toprule")
     
     # Header 1: Datasets
-    latex.append(r"& & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} \\")
-    latex.append(r"\cmidrule(lr){3-5} \cmidrule(lr){6-8}")
+    latex.append(r"& & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} & \multicolumn{3}{c}{\textbf{\textsc{MMLU-Pro}}} \\")
+    latex.append(r"\cmidrule(lr){3-5} \cmidrule(lr){6-8} \cmidrule(lr){9-11}")
     
     # Header 2: Metrics
-    latex.append(r"\textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\")
+    latex.append(r"\textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\")
     latex.append(r"\midrule")
 
     for model_key, model_name in MODEL_ORDER:
@@ -202,6 +202,13 @@ def main():
             med_delta = format_delta(med_entry['Random'], med_entry['Reward'])
             row_cells.extend([med_rand, med_rew, med_delta])
             
+            # MMLU-Pro Data
+            mmlu_entry = data[model_key][algo_key]['mmlu']
+            mmlu_rand = format_cell(mmlu_entry['Random'])
+            mmlu_rew = format_cell(mmlu_entry['Reward'], mmlu_entry.get('is_best'), mmlu_entry.get('is_second'))
+            mmlu_delta = format_delta(mmlu_entry['Random'], mmlu_entry['Reward'])
+            row_cells.extend([mmlu_rand, mmlu_rew, mmlu_delta])
+            
             # Backbone Label (Multirow)
             if first_row:
                 model_col = f"\\multirow{{{num_algos}}}{{*}}{{\\textbf{{{model_name}}}}}"
@@ -223,7 +230,7 @@ def main():
     latex.append(r"\label{tab:reranking_long}")
     latex.append(r"\end{table*}")
 
-    output_file = os.path.join(ROOT_DIR, "results_reranking_long.txt")
+    output_file = os.path.join(ROOT_DIR, "results_reranking_long_mmlu.txt")
     with open(output_file, "w") as f:
         f.write("\n".join(latex))
     

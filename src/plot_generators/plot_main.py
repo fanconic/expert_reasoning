@@ -34,8 +34,9 @@ from plot_helpers import ensure_dir, read_and_enhance, run_all_plots
 # -------------------------------
 
 DOMAINS: Dict[str, Path] = {
-    "math": Path("/mnt/pdata/caf83/icml_math/outputs"),
-    "medicine": Path("/mnt/pdata/caf83/icml_medicine/outputs"),
+    #"math": Path("/mnt/pdata/caf83/icml_math/outputs"),
+    #"medicine": Path("/mnt/pdata/caf83/icml_medicine/outputs"),
+    "mmlu": Path("/mnt/pdata/caf83/icml_mmlu/outputs"),
 }
 
 DEFAULT_CKPT = "best_model"
@@ -45,41 +46,41 @@ RunName = Union[str, Mapping[str, str]]
 EXPERIMENTS: List[Dict[str, Any]] = [
     # Base runs
     {
-        "airl": {"math": "qwen3b_partial", "medicine": "qwen3b_partial"},
+        "airl": "qwen3b_partial",
         "sft": "qwen3b_sft",
         "grpo": "qwen3b_grpo",
         "label": "qwen3b_partial",
     },
-    # {
-    #     "airl": {"math": "llama3b_partial", "medicine": "llama3b_partial"},
-    #     "sft": "llama3b_sft",
-    #     "grpo": "llama3b_grpo",
-    #     "label": "llama3b_partial",
-    # },
-    # {
-    #     "airl": {"math": "qwen7b_partial", "medicine": "qwen7b_partial"},
-    #     "sft": "qwen7b_sft",
-    #     "grpo": "qwen7b_grpo",
-    #     "label": "qwen7b_partial",
-    # },
-    # {
-    #     "airl": {"math": "llama8b_partial", "medicine": "llama8b_partial"},
-    #     "sft": "llama8b_sft",
-    #     "grpo": "llama8b_grpo",
-    #     "label": "llama8b_partial",
-    # },
+    {
+        "airl": "llama3b_partial",
+        "sft": "llama3b_sft",
+        "grpo": "llama3b_grpo",
+        "label": "llama3b_partial",
+    },
+    {
+        "airl": "qwen7b_partial",
+        "sft": "qwen7b_sft",
+        "grpo": "qwen7b_grpo",
+        "label": "qwen7b_partial",
+    },
+    {
+        "airl": "llama8b_partial",
+        "sft": "llama8b_sft",
+        "grpo": "llama8b_grpo",
+        "label": "llama8b_partial",
+    },
 
-    # # Sparse
-    # {"airl": "qwen3b_8ga_8gens_clipped_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
-    # {"airl": "llama3b_8ga_8gens_clipped_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
-    # {"airl": "qwen7b_8ga_8gens_clipped_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
-    # {"airl": "llama8b_8ga_8gens_clipped_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
+    # Sparse
+    {"airl": "qwen3b_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
+    {"airl": "llama3b_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
+    {"airl": "qwen7b_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
+    {"airl": "llama8b_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
 
-    # # Full
-    # {"airl": "qwen3b_8ga_8gens_clipped_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
-    # {"airl": "llama3b_8ga_8gens_clipped_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
-    # {"airl": "qwen7b_8ga_8gens_clipped_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
-    # {"airl": "llama8b_8ga_8gens_clipped_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
+    # Full
+    {"airl": "qwen3b_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
+    {"airl": "llama3b_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
+    {"airl": "qwen7b_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
+    {"airl": "llama8b_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
 
     # # OVR
     # {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
@@ -87,11 +88,11 @@ EXPERIMENTS: List[Dict[str, Any]] = [
     # {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
     # {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
 
-    # # Partial fixed
-    # {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
-    # {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
-    # {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
-    # {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
+    # Partial fixed
+    {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
+    {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
+    {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
+    {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
     
     #  # switch reward models
     # {"airl": "llama3b_switch_reward", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_switch_reward"},
@@ -127,7 +128,7 @@ def resolve_run(name_or_map: RunName, domain: str) -> Optional[str]:
 
 def eval_jsonl(base: Path, run_name: str, ckpt: str) -> Path:
     # define the preferred "new" path
-    new_path = base / run_name / ckpt / "eval_results_new.jsonl"
+    new_path = base / run_name / ckpt / "debug.jsonl"
     
     # Check if it exists on disk
     if new_path.exists():

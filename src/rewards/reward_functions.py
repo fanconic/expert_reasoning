@@ -149,7 +149,7 @@ def int_reward_func(completions, **kwargs):
     """
     responses = [completion[0]["content"] for completion in completions]
     extracted_responses = [extract_xml_answer(r) for r in responses]
-    return [0.5 if r.isdigit() else 0.0 for r in extracted_responses]
+    return [0.5 if r is not None and r.isdigit() else 0.0 for r in extracted_responses]
 
 
 def count_xml(text) -> float:

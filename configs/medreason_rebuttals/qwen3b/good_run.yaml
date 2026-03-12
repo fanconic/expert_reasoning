@@ -82,6 +82,8 @@ training:
   gradient_accumulation_steps: 8
   max_steps: 500
   epochs: 2
+  beta: 0.0
+  buffer_size: 0.0
   
 sampling:
   temperature: 1.0

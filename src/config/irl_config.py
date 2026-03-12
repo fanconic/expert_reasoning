@@ -205,6 +205,9 @@ class IRLConfig(GRPOConfig):
     dense_partial_fixed_n: int = field(
         default=10, metadata={"help": "If set to an integer n, use every n-th token for dense reward in 'partial_fixed' mode"}
     )
+    buffer_size: int = field(
+        default=0, metadata={"help": "Size of the replay buffer"}
+    )
 
     # ------------------------------------------------------------------
     # === Reward Model Warm-up ===

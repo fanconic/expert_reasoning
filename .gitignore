@@ -13,7 +13,8 @@ figures/llama8b_*
 figures/qwen3b_*
 figures/llama3b_*
 *_from_sft*
-
+data/mmlu_trace_dataset_builder_mer.py
+data/mmlu_pro_modes
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

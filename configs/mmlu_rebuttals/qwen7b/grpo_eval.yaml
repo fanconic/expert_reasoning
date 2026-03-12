@@ -15,7 +15,7 @@ model:
   policy_gpu_memory_utilization: 0.6
   reward_gpu_memory_utilization: 0.15
 
-  max_prompt_length: 300
+  max_prompt_length: 350
   max_completion_length: 824
   load_in_4bit: true
   fast_inference: true

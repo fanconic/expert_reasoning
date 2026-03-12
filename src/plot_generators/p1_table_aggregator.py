@@ -9,7 +9,7 @@ ROOT_DIR = os.path.join('figures', 'answer_only')
 # Row Order (Algorithms)
 ALGO_ORDER = [
     ('GRPO', 'Verifiable Reward'),  
-    ('SFT', 'Supervised Fine-Tuning'),
+    ('SFT', 'SFT'),
     ('sparse', 'Ours (\\textit{Sparse})'),
     ('partial', 'Ours (\\textit{Step-wise})'),
     ('partial_fixed', 'Ours (\\textit{Interval})'),
@@ -25,7 +25,7 @@ MODEL_ORDER = [
     ('llama8b', r'\texttt{Llama3.1-8B}')
 ]
 
-DATASETS = ['math', 'medicine']
+DATASETS = ['math', 'medicine', 'mmlu']
 VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
 
 def extract_all_k(filepath, method_label):
@@ -185,12 +185,12 @@ def main():
     latex.append(r"\centering")
     latex.append(r"\small")
     latex.append(r"\resizebox{\columnwidth}{!}{%") 
-    # Structure: Algo | GSM8K | MedReason (Removed Model Col, Removed Vertical Lines)
-    latex.append(r"\begin{tabular}{l c c}") 
+    # Structure: Algo | GSM8K | MedReason | MMLU (Removed Model Col, Removed Vertical Lines)
+    latex.append(r"\begin{tabular}{l c c c}") 
     latex.append(r"\toprule")
     
-    latex.append(r"& \textbf{\textsc{GSM8K}} & \textbf{\textsc{MedReason}} \\")
-    latex.append(r"\textbf{Method} & Pass@1 & Pass@1 \\")
+    latex.append(r"& \textbf{\textsc{GSM8K}} & \textbf{\textsc{MedReason}} & \textbf{\textsc{MMLU-Pro}} \\")
+    latex.append(r"\textbf{Method} & Pass@1 & Pass@1 & Pass@1 \\")
     latex.append(r"\midrule")
 
     for model_key, model_name in MODEL_ORDER:
@@ -201,9 +201,10 @@ def main():
         for algo_key, algo_name in ALGO_ORDER:
             val_math = formatted_data[model_key][algo_key]['math']
             val_med = formatted_data[model_key][algo_key]['medicine']
+            val_mmlu = formatted_data[model_key][algo_key]['mmlu']
             
             # Add horizontal spacing for hierarchy
-            latex.append(f"\\hspace{{1em}}{algo_name} & {val_math} & {val_med} \\\\")
+            latex.append(f"\\hspace{{1em}}{algo_name} & {val_math} & {val_med} & {val_mmlu} \\\\")
             
             # Grey Dashed Line after GRPO (using \cmidrule or just standard logic)
             # Since user asked for 'gray dashed line', we need ariydshln package or use standard
@@ -226,7 +227,7 @@ def main():
     latex.append(r"\label{tab:p1_results}")
     latex.append(r"\end{table}")
 
-    output_path = os.path.join(ROOT_DIR, "results_p1_highlight.txt")
+    output_path = os.path.join(ROOT_DIR, "results_p1_highlight_mmlu.txt")
     with open(output_path, "w") as f:
         f.write("\n".join(latex))
     

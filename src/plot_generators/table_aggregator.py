@@ -4,7 +4,7 @@ import pandas as pd
 
 # ================= CONFIGURATION =================
 
-ROOT_DIR = os.path.join('figures', 'z')
+ROOT_DIR = os.path.join('figures', 'answer_only')
 
 # Row Order (Algorithms)
 ALGO_ORDER = [
@@ -26,7 +26,7 @@ MODEL_ORDER = [
 ]
 
 # Datasets
-DATASETS = ['math', 'medicine']
+DATASETS = ['math', 'medicine', 'mmlu']
 VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
 
 def extract_all_k(filepath, method_label):
@@ -198,29 +198,30 @@ def main():
     latex.append(r"\begin{table*}[t]") 
     latex.append(r"\centering")
     latex.append(r"\resizebox{\textwidth}{!}{%")
-    # Layout: Method | GSM8K (4 cols) | MedReason (4 cols) -> 9 columns total
-    latex.append(r"\begin{tabular}{l cccc cccc}") 
+    # Layout: Method | GSM8K (4 cols) | MedReason (4 cols) | MMLU (4 cols) -> 13 columns total
+    latex.append(r"\begin{tabular}{l | cccc | cccc | cccc }") 
     latex.append(r"\toprule")
     
     # Header 1: Datasets
-    latex.append(r"& \multicolumn{4}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{4}{c}{\textbf{\textsc{MedReason}}} \\")
-    latex.append(r"\cmidrule(lr){2-5} \cmidrule(lr){6-9}")
+    latex.append(r"& \multicolumn{4}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{4}{c}{\textbf{\textsc{MedReason}}} & \multicolumn{4}{c}{\textbf{\textsc{MMLU-Pro}}} \\")
+    latex.append(r"\cmidrule(lr){2-5} \cmidrule(lr){6-9} \cmidrule(lr){10-13}")
     
     # Header 2: Metrics
-    latex.append(r"\textbf{Method} & pass@1 & pass@3 & pass@5 & pass@10 & pass@1 & pass@3 & pass@5 & pass@10 \\")
+    latex.append(r"\textbf{Method} & pass@1 & pass@3 & pass@5 & pass@10 & pass@1 & pass@3 & pass@5 & pass@10 & pass@1 & pass@3 & pass@5 & pass@10 \\")
     latex.append(r"\midrule")
 
     for model_key, model_name in MODEL_ORDER:
         # === SUB-HEADER ROW ===
-        latex.append(f"\\multicolumn{{9}}{{l}}{{\\textbf{{{model_name}}}}} \\\\")
+        latex.append(f"\\multicolumn{{13}}{{l}}{{\\textbf{{{model_name}}}}} \\\\")
         
         for algo_key, algo_name in ALGO_ORDER:
             # Fetch lists [p1, p3, p5, p10]
             vals_math = formatted_data[model_key][algo_key]['math']
             vals_med = formatted_data[model_key][algo_key]['medicine']
+            vals_mmlu = formatted_data[model_key][algo_key]['mmlu'] 
             
             # Combine
-            all_vals = vals_math + vals_med
+            all_vals = vals_math + vals_med + vals_mmlu 
             val_str = " & ".join(all_vals)
             
             # Indent Algo Name
@@ -236,11 +237,11 @@ def main():
     latex.append(r"\bottomrule")
     latex.append(r"\end{tabular}%")
     latex.append(r"}")
-    latex.append(r"\caption{\textbf{Pass@k Performance (k=1,3,5,10).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results greyed out). The values inside brackets indicate the 95\% confidence interval.}")
+    latex.append(r"\caption{\textbf{Pass@k Performance (k=1,3,5,10).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results grayed out). The values inside brackets indicate the 95\% confidence interval.}")
     latex.append(r"\label{tab:full_results}")
     latex.append(r"\end{table*}")
 
-    output_path = os.path.join(ROOT_DIR, "results_table.txt")
+    output_path = os.path.join(ROOT_DIR, "results_table_mmlu.txt")
     with open(output_path, "w") as f:
         f.write("\n".join(latex))
     

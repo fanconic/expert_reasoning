@@ -61,6 +61,7 @@ from trl.trainer.utils import (
 import numpy as np
 import copy
 from tqdm import tqdm
+from collections import deque
 
 # Add this import for threadpool parallelism
 
@@ -514,6 +515,12 @@ class AIRLTrainer(GRPOTrainer):
         
         self.num_generations_with_expert = self.num_generations + 1 if self.add_expert_to_policy_optim else self.num_generations 
         self.max_length = self.args.max_prompt_length + self.args.max_completion_length
+        
+        # Add a replay buffer
+        self.buffer_size = getattr(args, "buffer_size", 0)
+        if self.buffer_size > 0:
+            self.neg_replay_buffer = deque(maxlen=self.buffer_size * self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps) 
+            self.pos_replay_buffer = deque(maxlen=self.buffer_size * self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps)  # Keep enough positives for balanced sampling
 
     # -----------------------------------------------------------------------
     # Core overwrites overrides
@@ -521,7 +528,7 @@ class AIRLTrainer(GRPOTrainer):
     def train(self, *args, **kwargs):
         # Set the learning rate warm up as the same as the scheduler warmup steps
         num_policy_steps = self.args.max_steps
-        total_reward_steps = self.reward_warmup_steps + num_policy_steps // self.reward_updates_per_policy_step
+        total_reward_steps = self.reward_warmup_steps + num_policy_steps
         if self.reward_optimizer is not None:
             self.reward_scheduler = get_scheduler(
                 name=self.args.lr_scheduler_type,
@@ -551,34 +558,59 @@ class AIRLTrainer(GRPOTrainer):
     
     def _sentence_boundary_mask(self, full_batch, base_completion_mask):
         """
-        Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
-        Sentence boundaries are: '.', '\n', or '.\n' sequences.
+        Identifies step boundaries by scanning token content and IDs.
+        Ensures rewards start strictly at the Assistant completion.
         """
-        input_ids = full_batch["input_ids"]  # [bs, L]
+        input_ids = full_batch["input_ids"]
         bs, L = input_ids.shape
-        
-        # Get token IDs for sentence boundaries
-        period_ids = self.reward_tokenizer.encode(".", add_special_tokens=False)
-        newline_ids = self.reward_tokenizer.encode("\n", add_special_tokens=False)
-        period_newline_ids = self.reward_tokenizer.encode(".\n", add_special_tokens=False)
-        
-        period_id = period_ids[0] if period_ids else -1
-        newline_id = newline_ids[0] if newline_ids else -1
-        period_newline_ids = period_newline_ids[0] if period_newline_ids else -1
-        
-        # Vectorized: find all periods and newlines in completion region
-        is_period = (input_ids == period_id) & base_completion_mask  # [bs, L]
-        is_newline = (input_ids == newline_id) & base_completion_mask  # [bs, L]
-        is_period_newline = (input_ids == period_newline_ids) & base_completion_mask  # [bs, L]
-        
-        
-        # Mark boundaries: newlines OR (periods that aren't followed by newlines)
-        boundary_mask = is_newline | is_period  | is_period_newline
-        
-        # Always include last completion token
-        last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)  # [bs]
-        boundary_mask[torch.arange(bs, device=self.accelerator.device), last_indices] |= base_completion_mask.any(dim=1)
-        
+        device = input_ids.device
+
+        # 1. Define all strings that signify the end of a reasoning "step"
+        boundary_strings = [
+            ".", "!", "?", ";",      # Standard punctuation
+            "\n", "\n\n", "\r\n",    # Newlines / Paragraph breaks
+            ".\n", "!\n", "?\n",     # Punctuation + Newline (very common)
+            "</think>",              # Reasoning closure (Qwen/DeepSeek style)
+            "####",                  # GSM8K answer marker
+            "\n1.", "\n2.", "\n-",   # Start of a new list item (implies previous step ended)
+        ]
+
+        # 2. Build an extensive Stop ID set (Cached for performance)
+        if not hasattr(self, "_cached_stop_ids"):
+            print("Initializing extensive boundary token set...")
+            stop_ids = set()
+            
+            # Add special tokens directly
+            if self.reward_tokenizer.eos_token_id is not None:
+                stop_ids.add(self.reward_tokenizer.eos_token_id)
+
+            # Scan the entire vocabulary for tokens containing or ending with boundaries
+            # This catches merged tokens like "reasoning.\n" in Qwen/Llama
+            vocab = self.reward_tokenizer.get_vocab()
+            for t_str, t_id in vocab.items():
+                # Clean BPE markers (Ġ for Llama, █ for Qwen) to see raw text
+                clean_t = t_str.replace('Ġ', ' ').replace(' ', ' ')
+                
+                # Check if token ends with a boundary or is a reasoning tag
+                if any(clean_t.endswith(s) for s in boundary_strings) or clean_t.strip() in boundary_strings:
+                    stop_ids.add(t_id)
+            
+            self._cached_stop_ids = torch.tensor(list(stop_ids), device=device)
+
+        # 3. Apply vectorized ID matching
+        boundary_mask = torch.isin(input_ids, self._cached_stop_ids)
+
+        # 4. STRICT ASSISTANT START ENFORCEMENT
+        # base_completion_mask is 1 for Assistant tokens, 0 for User/System prompt tokens.
+        # By ANDing them, we guarantee the reward model NEVER rewards the prompt.
+        boundary_mask &= base_completion_mask.bool()
+
+        # 5. Always include the very last token of the completion
+        # This ensures the final answer segment gets its reward even if it doesn't end in "."
+        last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)
+        has_completion = base_completion_mask.any(dim=1)
+        boundary_mask[torch.arange(bs, device=device)[has_completion], last_indices[has_completion]] = True
+
         return boundary_mask
         
     def _every_n_tokens_mask(self, full_batch, base_completion_mask, n: int):
@@ -1065,6 +1097,30 @@ class AIRLTrainer(GRPOTrainer):
                             reward_comp[~output_mask] = float('nan')
                             if self.dense_rewards=="partial":
                                 end_of_thought_mask = self._sentence_boundary_mask(reward_inputs, reward_inputs["attention_mask"])
+                                
+                                # # --- DEBUGGING VISUALIZATION START ---
+                                # if self.accelerator.is_main_process:
+                                #     # Check only the first sample in the micro-batch
+                                #     sample_ids = reward_inputs["input_ids"][0]
+                                #     sample_tokens = self.reward_tokenizer.convert_ids_to_tokens(sample_ids)
+                                #     sample_mask = end_of_thought_mask[0]
+                                    
+                                #     print("\n" + "="*50)
+                                #     print("DEBUG: Reward Model Token Alignment")
+                                #     print(f"BOS Token: {self.reward_tokenizer.bos_token} (ID: {self.reward_tokenizer.bos_token_id})")
+                                #     print("-" * 50)
+                                    
+                                #     for idx, (token, is_boundary) in enumerate(zip(sample_tokens, sample_mask)):
+                                #         # Only print non-padding tokens for clarity
+                                #         if token == self.reward_tokenizer.pad_token:
+                                #             continue
+                                #         boundary_marker = " [STEP END] <---" if is_boundary else ""
+                                #         print(f"Token {idx:3}: '{token:15}' {boundary_marker}")
+                                #     print("="*50 + "\n")
+                                    
+                                # import IPython; IPython.embed(); exit()
+                                # # --- DEBUGGING VISUALIZATION END ---
+                                
                                 end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
                                 reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
                             elif self.dense_rewards=="partial_fixed":
@@ -1131,7 +1187,10 @@ class AIRLTrainer(GRPOTrainer):
             # Dense discounted rewards
             # Construct a matrix M where M[k, t] = gamma^(k-t) for k >= t
             dense_rewards = rewards_per_func[:, 0, :] * weights[0]  # Shape: (B, L)
-            mean_rewards_dense = dense_rewards.nanmean(1)
+            #mean_rewards_dense = dense_rewards.nanmean(1)
+            rew_mask = ~torch.isnan(dense_rewards)                  # True where valid
+            last_idx = rew_mask.sum(dim=1) - 1                # index of last valid element in each row
+            mean_rewards_dense = dense_rewards[torch.arange(dense_rewards.size(0)), last_idx]
             mean_grouped_dense_rewards = mean_rewards_dense.view(-1, self.num_generations_with_expert).mean(dim=1) 
             mean_grouped_dense_rewards = mean_grouped_dense_rewards.repeat_interleave(self.num_generations_with_expert, dim=0)
             std_rewards_dense = mean_rewards_dense.view(-1, self.num_generations_with_expert).std(dim=1)
@@ -1157,6 +1216,7 @@ class AIRLTrainer(GRPOTrainer):
             advantages = outcome_advantages.unsqueeze(1) + discounted_dense_advantages  # Shape: (B, L)
             #advantages = advantages.nan_to_num(0.0)[:, :-1]
             all_process_advantages = advantages.nanmean(dim=1)  #(B)
+            
             if weights[1:].any():
                 mean_grouped_rewards = (mean_grouped_sparse_rewards + mean_grouped_dense_rewards) / 2
                 std_rewards =  (std_rewards_sparse + std_rewards_dense) / 2
@@ -1406,7 +1466,8 @@ class AIRLTrainer(GRPOTrainer):
                 [{"role": "assistant", "content": inputs[i]["target"]}] for i in range(0, len(inputs), self.num_generations)
             ]
 
-        if mode == "train" and  self.state.global_step % self.reward_updates_per_policy_step == 0:
+
+        if mode == "train" and self.reward_updates_per_policy_step > 0:
             
             # medical corruptions (before label switch, as they are wrong guaranteed)
             if self.num_neg_perturbations_per_expert and "corrupted_reasonings" in inputs[0].keys():
@@ -1441,14 +1502,43 @@ class AIRLTrainer(GRPOTrainer):
                     perturb_fns=self.neg_perturb_fns,
                     n_perturbs=self.num_neg_perturbations_per_expert,
                 )
+            
+            # Store as list of dicts to keep pairs together
+            if self.buffer_size > 0:
+                for p, c in zip(prompts_neg, completions_neg):
+                    self.neg_replay_buffer.append({"p": p, "c": c})
+                for p, c in zip(prompts_pos, completions_pos):
+                    self.pos_replay_buffer.append({"p": p, "c": c})
+            
+            for update_idx in range(self.reward_updates_per_policy_step):
+                # Sample equally from both (e.g., 32 samples each)
+                if self.buffer_size > 0:
+                    batch_size = self.args.per_device_train_batch_size
+                    num_to_sample = min(len(self.neg_replay_buffer), len(self.pos_replay_buffer), batch_size // 2)
+                    
+                    neg_samples = random.sample(self.neg_replay_buffer, k=num_to_sample)
+                    pos_samples = random.sample(self.pos_replay_buffer, k=num_to_sample)
+                    
+                    # Reconstruct lists for the update step
+                    sampled_neg_p = [s["p"] for s in neg_samples]
+                    sampled_neg_c = [s["c"] for s in neg_samples]
+                    sampled_pos_p = [s["p"] for s in pos_samples]
+                    sampled_pos_c = [s["c"] for s in pos_samples]
+                    
+                    #import IPython; IPython.embed(); exit()
+                else:
+                    sampled_neg_p = prompts_neg
+                    sampled_neg_c = completions_neg
+                    sampled_pos_p = prompts_pos
+                    sampled_pos_c = completions_pos
                 
-            reward_metrics = self._update_reward_model_step(
-                prompts_neg, completions_neg, prompts_pos, completions_pos, 
-                do_step=True, log_prefix="reward", is_chat=is_chat
-            )
+                reward_metrics = self._update_reward_model_step(
+                    sampled_neg_p, sampled_neg_c, sampled_pos_p, sampled_pos_c, 
+                    do_step=True, log_prefix="reward", is_chat=is_chat
+                )
         
-            if (self.state.global_step + 1) % self.args.logging_steps == 0:
-                self.log(reward_metrics)
+                if (self.state.global_step + 1) % self.args.logging_steps == 0 and update_idx == self.reward_updates_per_policy_step - 1:
+                    self.log(reward_metrics)
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice

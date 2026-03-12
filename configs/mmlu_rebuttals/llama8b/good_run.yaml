@@ -9,7 +9,7 @@ model:
   policy_name: "meta-llama/Llama-3.1-8B-Instruct"
   reward_name: "meta-llama/Llama-3.1-8B-Instruct"
   warmup_reward_dir: #/mnt/pdata/caf83/icml_science/warmed_up_rewards/llama8b/partial/
-  max_prompt_length: 300
+  max_prompt_length: 350
   max_completion_length: 824
   load_in_4bit: true
   fast_inference: ${unsloth}
@@ -83,6 +83,7 @@ training:
   max_steps: 500
   epochs: 2
   beta: 0.1
+  buffer_size: 0
   
 sampling:
   temperature: 1.0
