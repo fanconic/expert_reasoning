@@ -597,12 +597,7 @@ def discounted_mean(scores, gamma=0.9):
 
 def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = False) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
-    df["reward_model_score_np"] = df["reward_model_score"].apply(
-        lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
-    )
-    df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
-    df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
-    df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
+
     # df["reward_model_score_np_discounted"] = df["reward_model_score_np"].apply(
     #     lambda r: compute_advantages(r, gamma=gamma)
     # )
@@ -613,7 +608,7 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
     from transformers import AutoTokenizer
 
     if "qwen" in str(jsonl_path) and "response_token" not in df.columns:
-        tokeniser = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
+        tokeniser = AutoTokenizer.from_pretrained("unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit")
         df = df.copy()
         df["response_token_ids"] = df.apply(
             lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)[
@@ -624,8 +619,9 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
         df["response_token"] = df.apply(
             lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
         )
+        df["reward_model_score"] = df["reward_model_score"].apply(lambda x: [x[0]] + x)
     elif "llama" in str(jsonl_path) and "response_token" not in df.columns:
-        tokeniser = AutoTokenizer.from_pretrained("meta-llama/Llama-3.2-3B-Instruct")
+        tokeniser = AutoTokenizer.from_pretrained("unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit")
         df = df.copy()
         # need to take away the first one, because llama tokeniser puts a `<|begin_of_text|>` there.
         df["response_token_ids"] = df.apply(
@@ -637,11 +633,17 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
         df["response_token"] = df.apply(
             lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
         )
+        
     else:
         raise NotImplemented(
             "`llama` or `qwen` not found in output dir, do not know which tokeniser to use."
         )
-
+    df["reward_model_score_np"] = df["reward_model_score"].apply(
+        lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
+    )
+    df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
+    df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
+    df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
     df["answer_positions"] = df["response_token"].apply(
         lambda x: (
             (x.index("answer"), -4)

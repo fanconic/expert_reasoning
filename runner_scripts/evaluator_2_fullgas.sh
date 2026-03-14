@@ -1,96 +1,72 @@
 #!/usr/bin/env bash
-# GPU1 script
-#
-# This script runs the following dataset×model bundles (6 runs each):
-#  - medreason_rebuttals × qwen7b
-#  - gsm8k_rebuttals × qwen3b
-#  - medreason_rebuttals × llama3b
-#
-# Each bundle runs:
-#  - base:     eval, grpo_eval, sft_eval
-#  - variants: eval+sparse, eval+full, eval+ovr
-#
-# Crash summary printed at end; exits non-zero if any run failed.
+# Balanced GPU Script
+set -u 
 
-set -u  # do NOT use -e; we want to continue after failures
-
-GPU_NUM="2"
+# --- Configuration ---
+export GPU_NUM="2"  # Change this for each script (0, 1, 2, 3)
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
-EVALUATE_PY="evaluate_pregenerated.py"
-
-declare -A VARIANT_OVERRIDES
-VARIANT_OVERRIDES["partial_fixed"]="model.dense_rewards=partial_fixed"
-VARIANT_OVERRIDES["ovr"]=""
-VARIANT_OVERRIDES["base"]=""
-
-run_name() {
-  local model="$1" variant="$2"
-  case "$variant" in
-    base)   echo "${model}_partial" ;;
-    partial_fixed) echo "${model}_partial_fixed" ;;
-    ovr)    echo "${model}_ovr" ;;
-    *)      echo "${model}_${variant}" ;;
-  esac
-}
+TRAIN_PARAMS="model.reward_updates_per_policy_step=3 training.beta=0.1 training.buffer_size=50 training.max_steps=400"
+COMMON_REWARD_FLAGS="model.reward_lb=-5.0 model.reward_ub=5.0"
 
 FAILED_RUNS=()
 
+# --- Helper Functions ---
 run_cmd() {
-  local label="$1"; shift
-  echo ""
-  echo "▶ $label"
-  echo "  $*"
-  "$@"
-  local rc=$?
-  if [[ $rc -ne 0 ]]; then
-    FAILED_RUNS+=("$label (exit=$rc) :: $*")
-    echo "  ✗ FAILED (exit=$rc)"
-  else
-    echo "  ✓ OK"
-  fi
-  return 0
+    local label="$1"; shift
+    echo -e "\n▶ $label\n  $*"
+    "$@"
+    local rc=$?
+    [[ $rc -ne 0 ]] && FAILED_RUNS+=("$label (exit=$rc)") && echo "  ✗ FAILED" || echo "  ✓ OK"
 }
 
-run_bundle() {
-  local dataset="$1" model="$2"
-  local config_path="configs/${dataset}/${model}"
+run_task() {
+    local DATASET="$1"
+    local MODEL="$2"
+    local SUFFIX="$3"
 
-  for variant in base partial_fixed ovr; do
-    local override="${VARIANT_OVERRIDES[$variant]}"
-    local wname="$(run_name "$model" "$variant")"
-    run_cmd \
-      "dataset=${dataset} model=${model} config=eval variant=${variant}" \
-      bash "$RUNNER" "$EVALUATE_PY" \
-        --config-path="$config_path" \
-        --config-name="eval" \
-        "wandb.run_name=${wname}" \
-        ${override}
-  done
+    # Map Dataset to Warmup Type
+    local TYPE="math"
+    [[ "$DATASET" == "medreason_rebuttals" ]] && TYPE="medicine"
+    [[ "$DATASET" == "mmlu_rebuttals" ]] && TYPE="mmlu"
+
+    # Handle Sparse naming
+    local DENSE_VAL="$SUFFIX"
+    [[ "$SUFFIX" == "sparse" ]] && DENSE_VAL="false"
+
+    local WNAME="${MODEL}_${SUFFIX}_new"
+    local OVERRIDE="wandb.run_name=${WNAME} model.dense_rewards=${DENSE_VAL} ${COMMON_REWARD_FLAGS}"
+    
+    # Append Warmup if not partial
+    if [[ "$SUFFIX" != "partial" ]]; then
+        local WARMUP_DIR="/mnt/pdata/caf83/icml_${TYPE}/warmed_up_rewards/${MODEL}/${SUFFIX}/"
+        OVERRIDE="${OVERRIDE} model.warmup_reward_dir=${WARMUP_DIR}"
+    fi
+
+    # 1. TRAIN
+    run_cmd "${WNAME}_TRAIN" bash "$RUNNER" irl_train.py \
+        --config-path="configs/${DATASET}/${MODEL}" --config-name="good_run" $OVERRIDE $TRAIN_PARAMS
+
+    # 2. EVAL
+    run_cmd "${WNAME}_EVAL" bash "$RUNNER" evaluate.py \
+        --config-path="configs/${DATASET}/${MODEL}" --config-name="eval" $OVERRIDE
 }
 
-# ======== Bundles on GPU1 ========
-run_bundle medreason_rebuttals qwen7b
-run_bundle gsm8k_rebuttals     qwen3b
-# =================================
+# =========================================================
+# WORKLOAD SECTION (Distribute these across your 4 scripts)
+# =========================================================
 
-bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate_pregenerated.py --config-path=configs/medreason_rebuttals/switch_reward --config-name=eval_qwen7b
-bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate_pregenerated.py --config-path=configs/gsm8k_rebuttals/human_error --config-name=eval
+# Example for GPU 0 (Mixing Llama 8B with Qwen 3B)
+for SFX in "partial" "full" "partial_fixed" "sparse"; do
+    run_task "gsm8k_rebuttals" "qwen7b" "$SFX"
+    run_task "medreason_rebuttals" "qwen7b" "$SFX"
+    run_task "mmlu_rebuttals" "qwen7b" "$SFX"
+done
+# =========================================================
 
-echo ""
-echo "======================"
-echo " Crash report summary "
-echo "======================"
-
-if [[ ${#FAILED_RUNS[@]} -eq 0 ]]; then
-  echo "All runs succeeded."
-  exit 0
-else
-  echo "Failures: ${#FAILED_RUNS[@]}"
-  echo ""
-  i=1
-  for item in "${FAILED_RUNS[@]}"; do
-    echo "  $i) $item"
-    ((i++))
-  done
-  exit 1
+# --- Crash Report ---
+if [[ ${#FAILED_RUNS[@]} -ne 0 ]]; then
+    echo -e "\nFAILURES: ${#FAILED_RUNS[@]}"
+    printf "  %s\n" "${FAILED_RUNS[@]}"
+    exit 1
 fi
+echo "All runs on GPU ${GPU_NUM} succeeded."

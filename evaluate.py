@@ -31,6 +31,7 @@ from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_templ
 
 # --- NEW IMPORTS FOR GUIDANCE ---
 import copy
+import re
 
 wandb.login()
 
@@ -158,36 +159,233 @@ def generate_with_chunk_guidance(
     return current_gens 
 
 
-def sentence_boundary_mask(tokenizer, full_batch, base_completion_mask, device):
-    """
-    Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
-    Sentence boundaries are: '.', '\n', or '.\n' sequences.
-    """
-    input_ids = full_batch["input_ids"]  # [bs, L]
-    bs, L = input_ids.shape
-    
-    # Get token IDs for sentence boundaries
-    period_ids = tokenizer.encode(".", add_special_tokens=False)
-    newline_ids = tokenizer.encode("\n", add_special_tokens=False)
-    period_newline_ids = tokenizer.encode(".\n", add_special_tokens=False)
+# Module-level cache
+_BOUNDARY_TOKEN_DECODE_CACHE = {}
 
-    period_id = period_ids[0] if period_ids else -1
-    newline_id = newline_ids[0] if newline_ids else -1
-    period_newline_ids = period_newline_ids[0] if period_newline_ids else -1
-    
-    # Vectorized: find all periods and newlines in completion region
-    is_period = (input_ids == period_id) & base_completion_mask  # [bs, L]
-    is_newline = (input_ids == newline_id) & base_completion_mask  # [bs, L]
-    is_period_newline = (input_ids == period_newline_ids) & base_completion_mask  # [bs, L]
-    
-    
-    # Mark boundaries: newlines OR (periods that aren't followed by newlines)
-    boundary_mask = is_newline | is_period  | is_period_newline
-    
-    # Always include last completion token
-    last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)  # [bs]
-    boundary_mask[torch.arange(bs, device=device), last_indices] |= base_completion_mask.any(dim=1)
-    
+
+def sentence_boundary_mask(reward_tokenizer, full_batch, base_completion_mask, device):
+    """
+    Robust step-boundary detector for process reward modelling.
+
+    Args:
+        full_batch: dict with key "input_ids" -> LongTensor [bs, L]
+        base_completion_mask: Bool/0-1 tensor [bs, L], True only on assistant completion tokens
+        reward_tokenizer: HuggingFace tokenizer used to decode token pieces
+
+    Returns:
+        boundary_mask: Bool tensor [bs, L]
+    """
+    global _BOUNDARY_TOKEN_DECODE_CACHE
+
+    input_ids = full_batch["input_ids"]
+    bs, L = input_ids.shape
+
+    boundary_mask = torch.zeros((bs, L), dtype=torch.bool, device=device)
+
+    explicit_boundaries = [
+        "</think>",
+        "<|im_end|>",
+        "<|endoftext|>",
+        "<|eot_id|>",
+        "####",
+        "\r\n\r\n",
+        "\n\n\n",
+        "\n\n",
+        ".\n",
+        "!\n",
+        "?\n",
+        ";\n",
+        ":\n",
+        "\n- ",
+        "\n* ",
+        "\n• ",
+        "\n1.",
+        "\n2.",
+        "\n3.",
+        "\n4.",
+        "\n5.",
+        "\n6.",
+        "\n7.",
+        "\n8.",
+        "\n9.",
+        "\n10.",
+    ]
+    explicit_boundaries = sorted(explicit_boundaries, key=len, reverse=True)
+
+    max_explicit_len = max(len(x) for x in explicit_boundaries)
+    suffix_window = max(96, max_explicit_len + 48)
+
+    _abbr = {
+        "e.g.", "i.e.", "etc.", "vs.", "cf.",
+        "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.",
+        "no.", "fig.", "eq.", "sec.", "resp.",
+    }
+
+    _wrapper_tags = {
+        "<think>", "</think>", "<answer>", "</answer>",
+        "<reasoning>", "</reasoning>",
+    }
+
+    def decode_one(tok_id: int) -> str:
+        if tok_id not in _BOUNDARY_TOKEN_DECODE_CACHE:
+            _BOUNDARY_TOKEN_DECODE_CACHE[tok_id] = reward_tokenizer.decode(
+                [tok_id],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
+        return _BOUNDARY_TOKEN_DECODE_CACHE[tok_id]
+
+    def _last_nonspace_char(s: str):
+        for ch in reversed(s):
+            if not ch.isspace():
+                return ch
+        return None
+
+    def _strip_trailing_space(s: str) -> str:
+        return s.rstrip(" \t")
+
+    def _looks_like_abbreviation(s: str) -> bool:
+        s = _strip_trailing_space(s).lower()
+
+        m = re.search(r'([a-z]{1,10}\.)$', s)
+        if m and m.group(1) in _abbr:
+            return True
+
+        m2 = re.search(r'([a-z]\.[a-z]\.)$', s)
+        if m2 and m2.group(1) in _abbr:
+            return True
+
+        return False
+
+    def _piece_is_only_layout(piece: str) -> bool:
+        return piece.strip() == ""
+
+    def _normalise_visible_text(s: str) -> str:
+        x = s
+        for tag in _wrapper_tags:
+            x = x.replace(tag, "")
+        x = re.sub(r"<\|[^>]+?\|>", "", x)
+        x = re.sub(r"\s+", "", x)
+        return x
+
+    def _starts_with_digit(piece: str) -> bool:
+        if piece is None:
+            return False
+        m = re.match(r'^[ \t\r\n]*([0-9])', piece)
+        return m is not None
+
+    def _is_explicit_boundary(s: str) -> bool:
+        return any(s.endswith(x) for x in explicit_boundaries)
+
+    def _is_sentence_punct_boundary(s: str, just_added_piece: str, next_piece: str) -> bool:
+        if just_added_piece != "" and just_added_piece.strip(" \t") == "":
+            return False
+
+        s = _strip_trailing_space(s)
+        if not s:
+            return False
+
+        last = s[-1]
+        if last not in ".!?;:":
+            return False
+
+        if last == "." and _looks_like_abbreviation(s):
+            return False
+
+        # Avoid splitting on decimal points like 90.2
+        if last == "." and _starts_with_digit(next_piece):
+            return False
+
+        if last in "!?":
+            return True
+
+        if last in ";:":
+            return True
+
+        return True
+
+    def _is_newline_boundary(s: str, just_added_piece: str) -> bool:
+        if "\n" not in just_added_piece and "\r" not in just_added_piece:
+            return False
+
+        if not s.endswith("\n"):
+            return False
+
+        if s.endswith("\n\n"):
+            return True
+
+        prefix = s[:-1]
+        ch = _last_nonspace_char(prefix)
+        if ch is None:
+            return False
+
+        if ch in ".!?;:)":
+            return True
+
+        if prefix.endswith("</think>") or prefix.endswith("####"):
+            return True
+
+        return False
+
+    def _ends_reasoning_step(s: str, just_added_piece: str, next_piece: str) -> bool:
+        if _is_explicit_boundary(s):
+            return True
+
+        if _is_newline_boundary(s, just_added_piece):
+            return True
+
+        if _is_sentence_punct_boundary(s, just_added_piece, next_piece):
+            return True
+
+        return False
+
+    for b in range(bs):
+        completion_positions = torch.nonzero(
+            base_completion_mask[b].bool(), as_tuple=False
+        ).flatten()
+
+        if completion_positions.numel() == 0:
+            continue
+
+        completion_positions_list = completion_positions.tolist()
+        decoded_pieces = [
+            decode_one(int(input_ids[b, pos].item()))
+            for pos in completion_positions_list
+        ]
+
+        suffix = ""
+        seen_meaningful_content = False
+        prev_was_boundary = False
+
+        for i, pos in enumerate(completion_positions_list):
+            piece = decoded_pieces[i]
+            next_piece = decoded_pieces[i + 1] if i + 1 < len(decoded_pieces) else None
+
+            suffix += piece
+            if len(suffix) > suffix_window:
+                suffix = suffix[-suffix_window:]
+
+            if not seen_meaningful_content and _normalise_visible_text(suffix) != "":
+                seen_meaningful_content = True
+
+            is_boundary = _ends_reasoning_step(suffix, piece, next_piece)
+
+            if is_boundary and not seen_meaningful_content:
+                is_boundary = False
+
+            if is_boundary and prev_was_boundary and _piece_is_only_layout(piece):
+                is_boundary = False
+
+            if is_boundary:
+                boundary_mask[b, pos] = True
+                prev_was_boundary = True
+            else:
+                prev_was_boundary = False
+
+        # Always include the final completion token so the last segment gets a reward
+        boundary_mask[b, int(completion_positions[-1].item())] = True
+
+    boundary_mask &= base_completion_mask.bool()
     return boundary_mask
 
 
@@ -274,13 +472,13 @@ def score_with_reward_model(
         # This makes the tensor width = length of longest sequence in THIS batch, not 512.
         batch_inputs = reward_tokenizer(
             text=batch_texts, return_tensors="pt", padding=True, add_special_tokens=False,
-            truncation=True, max_length=max_length
+            truncation=True, max_length=max_length, padding_side="right"
         ).to(device)
         
         # Tokenize completions just for length calculations
         batch_completions = reward_tokenizer(
             text=batch_completion_texts, return_tensors="pt", padding=True, add_special_tokens=False,
-            truncation=True, max_length=max_length
+            truncation=True, max_length=max_length,
         ).to(device)
 
         with torch.inference_mode():
@@ -321,6 +519,29 @@ def score_with_reward_model(
                     end_of_thought_mask = sentence_boundary_mask(
                         reward_tokenizer, batch_inputs, batch_inputs["attention_mask"], device
                     )
+                    
+                    # # --- DEBUGGING VISUALIZATION START ---
+                    # # Check only the first sample in the micro-batch
+                    # sample_ids = batch_inputs["input_ids"][0]
+                    # sample_tokens = reward_tokenizer.convert_ids_to_tokens(sample_ids)
+                    # sample_mask = end_of_thought_mask[0]
+
+                    # print("\n" + "="*50)
+                    # print("DEBUG: Reward Model Token Alignment")
+                    # print(f"BOS Token: {reward_tokenizer.bos_token} (ID: {reward_tokenizer.bos_token_id})")
+                    # print("-" * 50)
+
+                    # for idx, (token, is_boundary) in enumerate(zip(sample_tokens, sample_mask)):
+                    #     # Only print non-padding tokens for clarity
+                    #     if token == reward_tokenizer.pad_token:
+                    #         continue
+                    #     boundary_marker = " [STEP END] <---" if is_boundary else ""
+                    #     print(f"Token {idx:3}: '{token:15}' {boundary_marker}")
+                    # print("="*50 + "\n")
+                        
+                    
+                    # # --- DEBUGGING VISUALIZATION END ---
+                    
                 else:
                     end_of_thought_mask = every_n_tokens_mask(
                         batch_inputs, batch_inputs["attention_mask"], dense_partial_fixed_n
@@ -331,12 +552,15 @@ def score_with_reward_model(
                 end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices_safe)
                 reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
                 
-            # Apply NaN mask for padding/invalid tokens
+            # Apply NaN mask for padding/invalid 
+            #import IPython; IPython.embed(); exit()
             output_mask = torch.arange(seq_len, device=device)[None, :] < completion_lens[:, None]
             reward_comp[~output_mask] = float('nan')
 
             out_cpu = reward_comp.detach().float().cpu()
             new_logits.append(out_cpu)
+            
+
        
     B = len(prompts_msgs)
     all_scores = np.concatenate(new_logits, axis=0).reshape(B, -1, seq_len)
@@ -576,7 +800,7 @@ def main(cfg: DictConfig):
         )
         
     # Save results to JSONL
-    output_file = f"{cfg.model.name}/debug.jsonl"
+    output_file = f"{cfg.model.name}/eval_results_new.jsonl"
     save_results_to_jsonl(output_file, all_results)
     print(f"\nSaved evaluation results to {output_file}")
 

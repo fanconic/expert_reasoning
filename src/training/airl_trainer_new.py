@@ -30,6 +30,7 @@ import math
 from typing import Any, Dict, List, Optional, Union, Callable
 import os
 import random
+import re
 
 # Third-party imports
 from peft import set_peft_model_state_dict
@@ -528,7 +529,7 @@ class AIRLTrainer(GRPOTrainer):
     def train(self, *args, **kwargs):
         # Set the learning rate warm up as the same as the scheduler warmup steps
         num_policy_steps = self.args.max_steps
-        total_reward_steps = self.reward_warmup_steps + num_policy_steps
+        total_reward_steps = self.reward_warmup_steps + num_policy_steps * self.reward_updates_per_policy_step
         if self.reward_optimizer is not None:
             self.reward_scheduler = get_scheduler(
                 name=self.args.lr_scheduler_type,
@@ -556,63 +557,289 @@ class AIRLTrainer(GRPOTrainer):
                     metrics[final_key] = final_mean
         return metrics
     
+
     def _sentence_boundary_mask(self, full_batch, base_completion_mask):
         """
-        Identifies step boundaries by scanning token content and IDs.
-        Ensures rewards start strictly at the Assistant completion.
+        Robust step-boundary detector for process reward modelling.
+
+        Design goals:
+        - Stable across Qwen / Llama tokenisation and BPE merges
+        - Works whether boundary markers are:
+            * separate tokens
+            * merged into neighbouring tokens
+            * split across multiple tokens
+        - Uses decoded text stream, not vocab token strings
+        - More precise than splitting on every '.' blindly
+        - Suppresses empty / duplicate boundaries caused by leading formatting
+        and newline-only continuation after an already-detected boundary
+
+        Returns:
+            boundary_mask: Bool tensor of shape [bs, L]
+                True at token positions that end a reasoning step.
         """
         input_ids = full_batch["input_ids"]
         bs, L = input_ids.shape
         device = input_ids.device
 
-        # 1. Define all strings that signify the end of a reasoning "step"
-        boundary_strings = [
-            ".", "!", "?", ";",      # Standard punctuation
-            "\n", "\n\n", "\r\n",    # Newlines / Paragraph breaks
-            ".\n", "!\n", "?\n",     # Punctuation + Newline (very common)
-            "</think>",              # Reasoning closure (Qwen/DeepSeek style)
-            "####",                  # GSM8K answer marker
-            "\n1.", "\n2.", "\n-",   # Start of a new list item (implies previous step ended)
+        boundary_mask = torch.zeros((bs, L), dtype=torch.bool, device=device)
+
+        # ------------------------------------------------------------------
+        # Explicit boundary patterns. Longer patterns checked first.
+        # ------------------------------------------------------------------
+        explicit_boundaries = [
+            "</think>",
+            "<|im_end|>",
+            "<|endoftext|>",
+            "<|eot_id|>",
+            "####",
+            "\r\n\r\n",
+            "\n\n\n",
+            "\n\n",
+            ".\n",
+            "!\n",
+            "?\n",
+            ";\n",
+            ":\n",
+            "\n- ",
+            "\n* ",
+            "\n• ",
+            "\n1.",
+            "\n2.",
+            "\n3.",
+            "\n4.",
+            "\n5.",
+            "\n6.",
+            "\n7.",
+            "\n8.",
+            "\n9.",
+            "\n10.",
         ]
+        explicit_boundaries = sorted(explicit_boundaries, key=len, reverse=True)
 
-        # 2. Build an extensive Stop ID set (Cached for performance)
-        if not hasattr(self, "_cached_stop_ids"):
-            print("Initializing extensive boundary token set...")
-            stop_ids = set()
-            
-            # Add special tokens directly
-            if self.reward_tokenizer.eos_token_id is not None:
-                stop_ids.add(self.reward_tokenizer.eos_token_id)
+        max_explicit_len = max(len(x) for x in explicit_boundaries)
+        suffix_window = max(96, max_explicit_len + 48)
 
-            # Scan the entire vocabulary for tokens containing or ending with boundaries
-            # This catches merged tokens like "reasoning.\n" in Qwen/Llama
-            vocab = self.reward_tokenizer.get_vocab()
-            for t_str, t_id in vocab.items():
-                # Clean BPE markers (Ġ for Llama, █ for Qwen) to see raw text
-                clean_t = t_str.replace('Ġ', ' ').replace(' ', ' ')
-                
-                # Check if token ends with a boundary or is a reasoning tag
-                if any(clean_t.endswith(s) for s in boundary_strings) or clean_t.strip() in boundary_strings:
-                    stop_ids.add(t_id)
-            
-            self._cached_stop_ids = torch.tensor(list(stop_ids), device=device)
+        # ------------------------------------------------------------------
+        # Token decode cache
+        # ------------------------------------------------------------------
+        if not hasattr(self, "_boundary_token_decode_cache"):
+            self._boundary_token_decode_cache = {}
 
-        # 3. Apply vectorized ID matching
-        boundary_mask = torch.isin(input_ids, self._cached_stop_ids)
+        def decode_one(tok_id: int) -> str:
+            cache = self._boundary_token_decode_cache
+            if tok_id not in cache:
+                cache[tok_id] = self.reward_tokenizer.decode(
+                    [tok_id],
+                    skip_special_tokens=False,
+                    clean_up_tokenization_spaces=False,
+                )
+            return cache[tok_id]
 
-        # 4. STRICT ASSISTANT START ENFORCEMENT
-        # base_completion_mask is 1 for Assistant tokens, 0 for User/System prompt tokens.
-        # By ANDing them, we guarantee the reward model NEVER rewards the prompt.
+        # ------------------------------------------------------------------
+        # Heuristics
+        # ------------------------------------------------------------------
+        _abbr = {
+            "e.g.", "i.e.", "etc.", "vs.", "cf.",
+            "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.",
+            "no.", "fig.", "eq.", "sec.", "resp.",
+        }
+
+        _wrapper_tags = {
+            "<think>", "</think>", "<answer>", "</answer>",
+            "<reasoning>", "</reasoning>",
+        }
+
+        def _last_nonspace_char(s: str):
+            for ch in reversed(s):
+                if not ch.isspace():
+                    return ch
+            return None
+
+        def _strip_trailing_space(s: str) -> str:
+            return s.rstrip(" \t")
+
+        def _looks_like_abbreviation(s: str) -> bool:
+            s = _strip_trailing_space(s).lower()
+
+            m = re.search(r'([a-z]{1,10}\.)$', s)
+            if m and m.group(1) in _abbr:
+                return True
+
+            m2 = re.search(r'([a-z]\.[a-z]\.)$', s)
+            if m2 and m2.group(1) in _abbr:
+                return True
+
+            return False
+
+        def _piece_is_only_layout(piece: str) -> bool:
+            return piece.strip() == ""
+
+        def _normalise_visible_text(s: str) -> str:
+            """
+            Remove whitespace and common wrapper tags to decide whether
+            meaningful reasoning content has appeared yet.
+            """
+            x = s
+            for tag in _wrapper_tags:
+                x = x.replace(tag, "")
+            x = re.sub(r"<\|[^>]+?\|>", "", x)
+            x = re.sub(r"\s+", "", x)
+            return x
+
+        def _starts_with_digit(piece: str) -> bool:
+            """
+            True if the next decoded token begins with a digit after optional spaces.
+            Used to avoid splitting on decimal points like 90.2
+            when '.' and '2' are separate tokens.
+            """
+            if piece is None:
+                return False
+            m = re.match(r'^[ \t\r\n]*([0-9])', piece)
+            return m is not None
+
+        def _is_explicit_boundary(s: str) -> bool:
+            return any(s.endswith(x) for x in explicit_boundaries)
+
+        def _is_sentence_punct_boundary(s: str, just_added_piece: str, next_piece: str) -> bool:
+            """
+            Conservative punctuation-based boundary rule.
+
+            Important:
+            - Do not re-fire on whitespace-only tokens after punctuation.
+            - Do not suppress normal sentence endings just because they end in a number.
+            - Do suppress decimal points when the next token starts with a digit.
+            """
+            if just_added_piece != "" and just_added_piece.strip(" \t") == "":
+                return False
+
+            s = _strip_trailing_space(s)
+            if not s:
+                return False
+
+            last = s[-1]
+            if last not in ".!?;:":
+                return False
+
+            if last == "." and _looks_like_abbreviation(s):
+                return False
+
+            # Avoid splitting on decimal points like 90.2 when '.' and '2'
+            # are separate tokens.
+            if last == "." and _starts_with_digit(next_piece):
+                return False
+
+            if last in "!?":
+                return True
+
+            if last in ";:":
+                return True
+
+            return True
+
+        def _is_newline_boundary(s: str, just_added_piece: str) -> bool:
+            """
+            Bare newline can indicate a step boundary, but use a conservative rule.
+            """
+            if "\n" not in just_added_piece and "\r" not in just_added_piece:
+                return False
+
+            if not s.endswith("\n"):
+                return False
+
+            if s.endswith("\n\n"):
+                return True
+
+            prefix = s[:-1]
+            ch = _last_nonspace_char(prefix)
+            if ch is None:
+                return False
+
+            if ch in ".!?;:)":
+                return True
+
+            if prefix.endswith("</think>") or prefix.endswith("####"):
+                return True
+
+            return False
+
+        def _ends_reasoning_step(s: str, just_added_piece: str, next_piece: str) -> bool:
+            if _is_explicit_boundary(s):
+                return True
+
+            if _is_newline_boundary(s, just_added_piece):
+                return True
+
+            if _is_sentence_punct_boundary(s, just_added_piece, next_piece):
+                return True
+
+            return False
+
+        # ------------------------------------------------------------------
+        # Main scan over completion tokens only
+        # ------------------------------------------------------------------
+        for b in range(bs):
+            completion_positions = torch.nonzero(
+                base_completion_mask[b].bool(), as_tuple=False
+            ).flatten()
+
+            if completion_positions.numel() == 0:
+                continue
+
+            completion_positions_list = completion_positions.tolist()
+            decoded_pieces = [
+                decode_one(int(input_ids[b, pos].item()))
+                for pos in completion_positions_list
+            ]
+
+            suffix = ""
+            seen_meaningful_content = False
+            prev_was_boundary = False
+
+            for i, pos in enumerate(completion_positions_list):
+                piece = decoded_pieces[i]
+                next_piece = decoded_pieces[i + 1] if i + 1 < len(decoded_pieces) else None
+
+                suffix += piece
+                if len(suffix) > suffix_window:
+                    suffix = suffix[-suffix_window:]
+
+                if not seen_meaningful_content:
+                    if _normalise_visible_text(suffix) != "":
+                        seen_meaningful_content = True
+
+                is_boundary = _ends_reasoning_step(suffix, piece, next_piece)
+
+                # Suppress boundaries before any meaningful content
+                if is_boundary and not seen_meaningful_content:
+                    is_boundary = False
+
+                # Suppress duplicate adjacent boundaries when current token only adds layout
+                # such as ".\n\n" split as "." then "\n\n"
+                if is_boundary and prev_was_boundary and _piece_is_only_layout(piece):
+                    is_boundary = False
+
+                # Also suppress boundary on pure layout immediately after a terminal special token
+                if (
+                    is_boundary
+                    and prev_was_boundary
+                    and _piece_is_only_layout(piece)
+                ):
+                    is_boundary = False
+
+                if is_boundary:
+                    boundary_mask[b, pos] = True
+                    prev_was_boundary = True
+                else:
+                    prev_was_boundary = False
+
+            # Always include the final completion token so the last segment gets a reward
+            boundary_mask[b, int(completion_positions[-1].item())] = True
+
+        # Safety: never mark prompt / system / user tokens
         boundary_mask &= base_completion_mask.bool()
 
-        # 5. Always include the very last token of the completion
-        # This ensures the final answer segment gets its reward even if it doesn't end in "."
-        last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)
-        has_completion = base_completion_mask.any(dim=1)
-        boundary_mask[torch.arange(bs, device=device)[has_completion], last_indices[has_completion]] = True
-
         return boundary_mask
-        
+            
     def _every_n_tokens_mask(self, full_batch, base_completion_mask, n: int):
         """
         Returns mask [bs, L] that is True every n tokens within the completion
@@ -1098,7 +1325,7 @@ class AIRLTrainer(GRPOTrainer):
                             if self.dense_rewards=="partial":
                                 end_of_thought_mask = self._sentence_boundary_mask(reward_inputs, reward_inputs["attention_mask"])
                                 
-                                # # --- DEBUGGING VISUALIZATION START ---
+                                # --- DEBUGGING VISUALIZATION START ---
                                 # if self.accelerator.is_main_process:
                                 #     # Check only the first sample in the micro-batch
                                 #     sample_ids = reward_inputs["input_ids"][0]
@@ -1119,7 +1346,7 @@ class AIRLTrainer(GRPOTrainer):
                                 #     print("="*50 + "\n")
                                     
                                 # import IPython; IPython.embed(); exit()
-                                # # --- DEBUGGING VISUALIZATION END ---
+                                # # # --- DEBUGGING VISUALIZATION END ---
                                 
                                 end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
                                 reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
