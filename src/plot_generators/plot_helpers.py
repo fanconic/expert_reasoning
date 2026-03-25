@@ -23,6 +23,7 @@ from matplotlib.font_manager import FontProperties
 from matplotlib.patches import FancyBboxPatch
 from matplotlib.textpath import TextPath
 import matplotlib as mpl
+from sklearn.metrics import roc_auc_score
 
 plt.style.use("bright")
 plt.rcParams["font.family"] = "sans-serif"
@@ -1214,6 +1215,115 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
     ensure_dir(Path(out_pdf).parent)
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
+    
+def compute_ece(labels: np.ndarray, probs: np.ndarray, n_bins: int = 10) -> float:
+    """
+    Computes the Expected Calibration Error (ECE).
+    """
+    bin_boundaries = np.linspace(0, 1, n_bins + 1)
+    ece = 0.0
+    for i in range(n_bins):
+        # Find indices in the current bin
+        mask = (probs > bin_boundaries[i]) & (probs <= bin_boundaries[i + 1])
+        if np.any(mask):
+            bin_acc = np.mean(labels[mask])
+            bin_conf = np.mean(probs[mask])
+            bin_weight = np.mean(mask)
+            ece += bin_weight * np.abs(bin_acc - bin_conf)
+    return ece
+
+def compute_calibration_metrics(labels: List[int], scores: List[float]) -> Dict[str, float]:
+    """
+    Computes AUROC and ECE. Scores are converted to probabilities via sigmoid.
+    """
+    y_true = np.array(labels)
+    # Convert logits to probabilities
+    y_prob = 1 / (1 + np.exp(-np.array(scores)))
+    
+    return {
+        "AUROC": float(roc_auc_score(y_true, y_prob)),
+        "ECE": float(compute_ece(y_true, y_prob))
+    }
+
+def bootstrap_calibration_ci(
+    labels: List[int], 
+    scores: List[float], 
+    n_boot: int = 1000, 
+    alpha: int = 0.05, 
+    seed: int = 42
+):
+    rng = np.random.default_rng(seed)
+    n = len(labels)
+    boot_results = {"AUROC": [], "ECE": []}
+    
+    for _ in range(n_boot):
+        idxs = rng.integers(0, n, size=n)
+        labels_bs = [labels[i] for i in idxs]
+        scores_bs = [scores[i] for i in idxs]
+        
+        # Guard against single-class bootstrap samples which break AUROC
+        if len(set(labels_bs)) < 2:
+            continue
+            
+        metrics = compute_calibration_metrics(labels_bs, scores_bs)
+        boot_results["AUROC"].append(metrics["AUROC"])
+        boot_results["ECE"].append(metrics["ECE"])
+        
+    ci = {}
+    for metric in ["AUROC", "ECE"]:
+        lower = np.percentile(boot_results[metric], 100 * alpha / 2)
+        upper = np.percentile(boot_results[metric], 100 * (1 - alpha / 2))
+        mean = np.mean(boot_results[metric])
+        ci[metric] = (mean, lower, upper)
+    return ci
+
+def save_calibration_table_txt(
+    all_metrics: Dict[str, Dict], out_file: str | Path
+):
+    """
+    Writes a LaTeX table for AUROC and ECE.
+    all_metrics should be: { "Model Name": { "AUROC": (mean, l, u), "ECE": (mean, l, u) } }
+    """
+    lines = [
+        r"\begin{tabular}{lcc}",
+        r"\toprule",
+        r"Model & AUROC $\uparrow$ & ECE $\downarrow$ \\",
+        r"\midrule"
+    ]
+    
+    for label, metrics in all_metrics.items():
+        auroc_fmt = f"{metrics['AUROC'][0]:.3f} [{metrics['AUROC'][1]:.3f}, {metrics['AUROC'][2]:.3f}]"
+        ece_fmt = f"{metrics['ECE'][0]:.3f} [{metrics['ECE'][1]:.3f}, {metrics['ECE'][2]:.3f}]"
+        lines.append(f"{label} & {auroc_fmt} & {ece_fmt} \\\\")
+        
+    lines.append(r"\bottomrule")
+    lines.append(r"\end{tabular}")
+    
+    out_file = Path(out_file)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text("\n".join(lines))
+    print(f"Calibration table saved to {out_file}")
+    
+    
+    
+def run_calibration_analysis(df_dict: Dict[str, pd.DataFrame], out_dir: Path):
+    all_calibration_results = {}
+    
+    for name, df in df_dict.items():
+        # 1. Prepare labels (1 for correct, 0 for wrong)
+        labels = (df["correctness_reward_func"] == 2).astype(int).tolist()
+        
+        # 2. Use your 'selector' (discounted mean) as the aggregate logit
+        scores = df["selector"].tolist()
+        
+        # 3. Compute bootstrapped metrics
+        ci_results = bootstrap_calibration_ci(labels, scores)
+        all_calibration_results[name] = ci_results
+        
+    save_calibration_table_txt(
+        all_calibration_results, 
+        out_dir / "calibration_metrics_table.txt"
+    )
 
 
 # -------------------------------
@@ -1246,6 +1356,16 @@ def run_all_plots(
     plot_pass_at_k(
         datasets, ks, out_dir / "pass_at_k_all.pdf", title="pass@k comparison"
     )
+    
+    # Create a mapping for the calibration function
+    df_dict = {
+        "Outcome Sup.": df_grpo,
+        "Exp. Reas. (ours)": df_airl,
+        "SFT": df_sft
+    }
+    
+    # Run the calibration analysis (AUROC/ECE)
+    run_calibration_analysis(df_dict, out_dir)
 
     # success@k|N for AIRL (expert reasoning)
     plot_success_at_k_given(

@@ -596,6 +596,10 @@ def main(cfg: DictConfig):
     elif cfg.dataset.name == "mmlu" or cfg.dataset.name == "mmlu_kd":
         reward_fns = [("correctness_reward_func", mmlu_correctness_reward_func)]
         eval_correctness = eval_correctness_mmlu
+    elif cfg.dataset.name == "medical" or cfg.dataset.name == "medical_kd":
+        # Simplified for brevity - your original code had more
+        reward_fns = [("correctness_reward_func", medical_correctness_reward_func)]
+        eval_correctness = eval_correctness_medical
     else:
         raise ValueError(f"Dataset {cfg.dataset.name} not supported")
     if cfg.eval.report_to == "wandb":

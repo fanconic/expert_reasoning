@@ -1,0 +1,32 @@
+\begin{table*}[t]
+\centering\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{ll cc cc cc}
+\toprule
+& & \multicolumn{2}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{2}{c}{\textbf{\textsc{MedReason}}} & \multicolumn{2}{c}{\textbf{\textsc{MMLU-Pro}}} \\
+\cmidrule(lr){3-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8}
+\textbf{Backbone} & \textbf{Method}  & AUROC $\uparrow$ & ECE $\downarrow$  & AUROC $\uparrow$ & ECE $\downarrow$  & AUROC $\uparrow$ & ECE $\downarrow$  \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-3B}}} & \textit{Sparse} & 81.2 \tiny\textcolor{gray}{[80.6, 81.8]} & 10.2 \tiny\textcolor{gray}{[9.7, 10.7]} & 53.2 \tiny\textcolor{gray}{[52.4, 53.9]} & 46.7 \tiny\textcolor{gray}{[46.1, 47.3]} & 67.0 \tiny\textcolor{gray}{[66.3, 67.7]} & 33.6 \tiny\textcolor{gray}{[33.0, 34.2]} \\
+ & \textit{Step-wise} & 84.6 \tiny\textcolor{gray}{[84.0, 85.1]} & 31.2 \tiny\textcolor{gray}{[30.6, 31.8]} & 55.4 \tiny\textcolor{gray}{[54.7, 56.2]} & 42.6 \tiny\textcolor{gray}{[42.1, 43.2]} & 61.6 \tiny\textcolor{gray}{[60.9, 62.4]} & 59.6 \tiny\textcolor{gray}{[59.1, 60.2]} \\
+ & \textit{Interval} & 78.7 \tiny\textcolor{gray}{[78.1, 79.3]} & 12.0 \tiny\textcolor{gray}{[11.3, 12.5]} & 50.2 \tiny\textcolor{gray}{[49.5, 51.0]} & 46.9 \tiny\textcolor{gray}{[46.2, 47.5]} & 54.0 \tiny\textcolor{gray}{[53.1, 54.8]} & 64.0 \tiny\textcolor{gray}{[63.5, 64.6]} \\
+ & \textit{Dense} & 79.1 \tiny\textcolor{gray}{[78.5, 79.8]} & 36.0 \tiny\textcolor{gray}{[35.4, 36.6]} & 53.0 \tiny\textcolor{gray}{[52.2, 53.7]} & 30.4 \tiny\textcolor{gray}{[29.8, 31.0]} & 55.5 \tiny\textcolor{gray}{[54.7, 56.2]} & 55.4 \tiny\textcolor{gray}{[54.8, 55.9]} \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.2-3B}}} & \textit{Sparse} & 86.4 \tiny\textcolor{gray}{[85.9, 87.0]} & 11.0 \tiny\textcolor{gray}{[10.5, 11.4]} & 64.1 \tiny\textcolor{gray}{[63.4, 64.8]} & 10.3 \tiny\textcolor{gray}{[9.8, 10.9]} & 68.7 \tiny\textcolor{gray}{[67.9, 69.5]} & 13.9 \tiny\textcolor{gray}{[13.3, 14.4]} \\
+ & \textit{Step-wise} & 82.7 \tiny\textcolor{gray}{[82.1, 83.3]} & 20.3 \tiny\textcolor{gray}{[19.8, 20.8]} & 72.0 \tiny\textcolor{gray}{[71.4, 72.7]} & 4.9 \tiny\textcolor{gray}{[4.3, 5.4]} & 72.4 \tiny\textcolor{gray}{[71.7, 73.1]} & 57.9 \tiny\textcolor{gray}{[57.4, 58.4]} \\
+ & \textit{Interval} & 82.2 \tiny\textcolor{gray}{[81.7, 82.8]} & 25.7 \tiny\textcolor{gray}{[25.1, 26.3]} & 59.2 \tiny\textcolor{gray}{[58.4, 60.0]} & 2.6 \tiny\textcolor{gray}{[2.1, 3.2]} & 66.1 \tiny\textcolor{gray}{[65.1, 67.0]} & 68.1 \tiny\textcolor{gray}{[67.6, 68.5]} \\
+ & \textit{Dense} & 73.6 \tiny\textcolor{gray}{[72.9, 74.2]} & 44.7 \tiny\textcolor{gray}{[44.1, 45.3]} & 53.3 \tiny\textcolor{gray}{[52.6, 54.1]} & 39.0 \tiny\textcolor{gray}{[38.4, 39.6]} & - & - \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-7B}}} & \textit{Sparse} & 77.5 \tiny\textcolor{gray}{[76.6, 78.4]} & 8.6 \tiny\textcolor{gray}{[8.2, 9.1]} & 62.8 \tiny\textcolor{gray}{[61.9, 63.6]} & 48.9 \tiny\textcolor{gray}{[48.3, 49.5]} & 71.8 \tiny\textcolor{gray}{[71.1, 72.4]} & 17.2 \tiny\textcolor{gray}{[16.5, 17.7]} \\
+ & \textit{Step-wise} & 87.9 \tiny\textcolor{gray}{[87.4, 88.4]} & 21.5 \tiny\textcolor{gray}{[21.0, 22.0]} & 79.3 \tiny\textcolor{gray}{[78.7, 79.8]} & 44.3 \tiny\textcolor{gray}{[43.7, 44.9]} & 67.2 \tiny\textcolor{gray}{[66.5, 67.8]} & 45.4 \tiny\textcolor{gray}{[44.9, 46.0]} \\
+ & \textit{Interval} & 73.5 \tiny\textcolor{gray}{[72.8, 74.3]} & 11.4 \tiny\textcolor{gray}{[10.9, 12.0]} & 62.2 \tiny\textcolor{gray}{[61.4, 62.9]} & 22.0 \tiny\textcolor{gray}{[21.4, 22.6]} & 67.9 \tiny\textcolor{gray}{[67.3, 68.6]} & 37.5 \tiny\textcolor{gray}{[36.8, 38.1]} \\
+ & \textit{Dense} & 73.2 \tiny\textcolor{gray}{[72.5, 74.0]} & 47.2 \tiny\textcolor{gray}{[46.6, 47.8]} & 50.7 \tiny\textcolor{gray}{[49.9, 51.4]} & 33.2 \tiny\textcolor{gray}{[32.5, 33.8]} & 60.5 \tiny\textcolor{gray}{[59.8, 61.2]} & 42.7 \tiny\textcolor{gray}{[42.1, 43.4]} \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.1-8B}}} & \textit{Sparse} & 82.3 \tiny\textcolor{gray}{[81.6, 83.1]} & 4.1 \tiny\textcolor{gray}{[3.7, 4.6]} & 79.9 \tiny\textcolor{gray}{[79.3, 80.4]} & 3.5 \tiny\textcolor{gray}{[3.0, 4.0]} & 71.1 \tiny\textcolor{gray}{[70.5, 71.8]} & 6.0 \tiny\textcolor{gray}{[5.5, 6.5]} \\
+ & \textit{Step-wise} & 83.1 \tiny\textcolor{gray}{[82.5, 83.8]} & 9.2 \tiny\textcolor{gray}{[8.7, 9.6]} & 80.7 \tiny\textcolor{gray}{[80.2, 81.3]} & 2.8 \tiny\textcolor{gray}{[2.3, 3.2]} & 75.4 \tiny\textcolor{gray}{[74.7, 76.0]} & 52.1 \tiny\textcolor{gray}{[51.5, 52.7]} \\
+ & \textit{Interval} & 87.5 \tiny\textcolor{gray}{[87.1, 88.0]} & 13.9 \tiny\textcolor{gray}{[13.4, 14.4]} & 78.1 \tiny\textcolor{gray}{[77.5, 78.7]} & 21.9 \tiny\textcolor{gray}{[21.3, 22.4]} & 71.1 \tiny\textcolor{gray}{[70.3, 71.9]} & 56.4 \tiny\textcolor{gray}{[56.0, 56.9]} \\
+ & \textit{Dense} & 80.8 \tiny\textcolor{gray}{[80.2, 81.4]} & 31.6 \tiny\textcolor{gray}{[31.0, 32.2]} & 71.6 \tiny\textcolor{gray}{[71.0, 72.2]} & 16.2 \tiny\textcolor{gray}{[15.7, 16.9]} & 62.8 \tiny\textcolor{gray}{[62.1, 63.7]} & 60.7 \tiny\textcolor{gray}{[60.2, 61.3]} \\
+\bottomrule
+\end{tabular}}
+\caption{\textbf{Critic Calibration Metrics.} AUROC (\%) indicates the ability to rank correct vs. incorrect traces. ECE (\%) measures the Expected Calibration Error (lower is better).}
+\end{table*}

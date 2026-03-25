@@ -44,59 +44,36 @@ DEFAULT_CKPT = "best_model"
 RunName = Union[str, Mapping[str, str]]
 
 EXPERIMENTS: List[Dict[str, Any]] = [
-    # Base runs
-    {
-        "airl": "qwen3b_stepwise_discounted_replay",
-        "sft": "qwen3b_sft",
-        "grpo": "qwen3b_grpo",
-        "label": "qwen3b_stepwise_discounted_replay",
-        "domains": ["math"]
-    },
-    {
-        "airl": "llama3b_stepwise_discounted_replay",
-        "sft": "llama3b_sft",
-        "grpo": "llama3b_grpo",
-        "label": "llama3b_stepwise_discounted_replay",
-        "domains": ["math"]
-    },
-    # {
-    #     "airl": "qwen7b_stepwise_discounted_replay",
-    #     "sft": "qwen7b_sft",
-    #     "grpo": "qwen7b_grpo",
-    #     "label": "qwen7b_stepwise_discounted_replay",
-    #     "domains": ["math"]
-    # },
-    # {
-    #     "airl": "llama8b_partial",
-    #     "sft": "llama8b_sft",
-    #     "grpo": "llama8b_grpo",
-    #     "label": "llama8b_partial",
-    #      "domains": ["math"]
-    # },
+    # Stepwise
+    {"airl": "qwen3b_partial_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_new"},
+    {"airl": "llama3b_partial_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_new"},
+    {"airl": "qwen7b_partial_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_new"},
+    {"airl": "llama8b_partial_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_new"},
+
 
     # Sparse
-    # {"airl": "qwen3b_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse"},
-    # {"airl": "llama3b_sparse", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse"},
-    # {"airl": "qwen7b_sparse", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse"},
-    # {"airl": "llama8b_sparse", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse"},
+    {"airl": "qwen3b_sparse_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse_new"},
+    {"airl": "llama3b_sparse_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse_new"},
+    {"airl": "qwen7b_sparse_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse_new"},
+    {"airl": "llama8b_sparse_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse_new"},
 
-    # # Full
-    # {"airl": "qwen3b_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full"},
-    # {"airl": "llama3b_full", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full"},
-    # {"airl": "qwen7b_full", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full"},
-    # {"airl": "llama8b_full", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full"},
+    # Full
+    {"airl": "qwen3b_full_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full_new"},
+    {"airl": "llama3b_full_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full_new"},
+    {"airl": "qwen7b_full_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full_new"},
+    {"airl": "llama8b_full_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full_new"},
 
-    # # OVR
+    # OVR
     # {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
     # {"airl": "llama3b_ovr", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_ovr"},
     # {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
     # {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
 
     # Partial fixed
-    # {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed"},
-    # {"airl": "llama3b_partial_fixed", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed"},
-    # {"airl": "qwen7b_partial_fixed", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed"},
-    # {"airl": "llama8b_partial_fixed", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed"},
+    {"airl": "qwen3b_partial_fixed_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed_new"},
+    {"airl": "llama3b_partial_fixed_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed_new"},
+    {"airl": "qwen7b_partial_fixed_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed_new"},
+    {"airl": "llama8b_partial_fixed_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed_new"},
     
     #  # switch reward models
     # {"airl": "llama3b_switch_reward", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_switch_reward"},
@@ -137,6 +114,11 @@ def eval_jsonl(base: Path, run_name: str, ckpt: str) -> Path:
     # # Check if it exists on disk
     # if new_path.exists():
     #     return new_path
+    
+    new_path = base / run_name / ckpt / "eval_results_new.jsonl"
+    # Check if it exists on disk
+    if new_path.exists():
+        return new_path
     
     new_path = base / run_name / ckpt / "debug.jsonl"
     # Check if it exists on disk
@@ -227,7 +209,7 @@ def main() -> None:
 
     tasks = []
     
-    for answer_only in [True]:
+    for answer_only in [True, False]:
         for domain, base_path in DOMAINS.items():
             for exp in EXPERIMENTS:
                 tasks.append({

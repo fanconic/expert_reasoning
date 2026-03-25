@@ -8,10 +8,10 @@ ROOT_DIR = os.path.join('figures', 'answer_only')
 
 # Rows: The Methods
 ALGO_ORDER = [
-    ('sparse', '\\textit{Sparse}'),
-    ('partial', '\\textit{Step-wise}'),
-    ('partial_fixed', '\\textit{Interval}'),
-    ('full', '\\textit{Dense}'),
+    ('sparse_new', '\\textit{Sparse}'),
+    ('partial_new', '\\textit{Step-wise}'),
+    ('partial_fixed_new', '\\textit{Interval}'),
+    ('full_new', '\\textit{Dense}'),
     #('ovr', '\\textit{Step-wise + OVR}')
 ]
 
@@ -230,7 +230,7 @@ def main():
     latex.append(r"\label{tab:reranking_long}")
     latex.append(r"\end{table*}")
 
-    output_file = os.path.join(ROOT_DIR, "results_reranking_long_mmlu.txt")
+    output_file = os.path.join(ROOT_DIR, "results_reranking_long_new.txt")
     with open(output_file, "w") as f:
         f.write("\n".join(latex))
     

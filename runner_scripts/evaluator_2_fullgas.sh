@@ -57,8 +57,8 @@ run_task() {
 
 # Example for GPU 0 (Mixing Llama 8B with Qwen 3B)
 for SFX in "partial" "full" "partial_fixed" "sparse"; do
-    run_task "gsm8k_rebuttals" "qwen7b" "$SFX"
-    run_task "medreason_rebuttals" "qwen7b" "$SFX"
+    # run_task "gsm8k_rebuttals" "qwen7b" "$SFX"
+    # run_task "medreason_rebuttals" "qwen7b" "$SFX"
     run_task "mmlu_rebuttals" "qwen7b" "$SFX"
 done
 # =========================================================

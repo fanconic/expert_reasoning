@@ -10,10 +10,10 @@ ROOT_DIR = os.path.join('figures', 'answer_only')
 ALGO_ORDER = [
     ('GRPO', 'Verifiable Reward'),  
     ('SFT', 'SFT'),
-    ('sparse', 'Ours (\\textit{Sparse})'),
-    ('partial', 'Ours (\\textit{Step-wise})'),
-    ('partial_fixed', 'Ours (\\textit{Interval})'),
-    ('full', 'Ours (\\textit{Dense})'),
+    ('sparse_new', 'Ours (\\textit{Sparse})'),
+    ('partial_new', 'Ours (\\textit{Step-wise})'),
+    ('partial_fixed_new', 'Ours (\\textit{Interval})'),
+    ('full_new', 'Ours (\\textit{Dense})'),
     #('ovr', 'Ours (\\textit{Step-wise + OVR})')
 ]
 
@@ -227,7 +227,7 @@ def main():
     latex.append(r"\label{tab:p1_results}")
     latex.append(r"\end{table}")
 
-    output_path = os.path.join(ROOT_DIR, "results_p1_highlight_mmlu.txt")
+    output_path = os.path.join(ROOT_DIR, "results_p1_highlight_new.txt")
     with open(output_path, "w") as f:
         f.write("\n".join(latex))
     
