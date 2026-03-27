@@ -6,8 +6,8 @@ export GPU_NUM="1"
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 
 # Fixed constants for this specific ablation
-MODEL="qwen3b"
-WARMUP_DIR="/mnt/pdata/caf83/icml_math/warmed_up_rewards/qwen3b/partial/"
+MODEL="llama3b"
+WARMUP_DIR="/mnt/pdata/caf83/icml_math/warmed_up_rewards/llama3b/partial/"
 
 BASE_TRAIN_PARAMS="model.reward_updates_per_policy_step=3 training.beta=0.1 training.max_steps=400 training.buffer_size=50 model.warmup_reward_dir=${WARMUP_DIR}"
 
@@ -62,3 +62,7 @@ if [[ ${#FAILED_RUNS[@]} -ne 0 ]]; then
     exit 1
 fi
 echo "All bound ablations completed successfully."
+
+bash runner_scripts/corruption/1_ablation.sh
+
+bash runner_scripts/sft_reranking/evaluator_1_fullgas.sh

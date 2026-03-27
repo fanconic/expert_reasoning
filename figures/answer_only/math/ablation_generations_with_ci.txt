@@ -1,0 +1,15 @@
+\begin{table}[h]
+\centering\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l cccc}
+\toprule
+\textbf{Gen. ($N$)} & \textbf{Pass@1} & \textbf{$\Delta$ Rerank} & \textbf{AUROC $\uparrow$} & \textbf{ECE $\downarrow$} \\
+\midrule
+4 & 53.0 \tiny\textcolor{gray}{[52.0, 55.0]} & \textbf{+18.0} & 89.0 \tiny\textcolor{gray}{[88.6, 89.5]} & 13.3 \tiny\textcolor{gray}{[12.8, 13.8]} \\
+8 & 58.0 \tiny\textcolor{gray}{[56.0, 60.0]} & \textbf{+11.0} & 82.7 \tiny\textcolor{gray}{[82.1, 83.3]} & 20.3 \tiny\textcolor{gray}{[19.8, 20.8]} \\
+16 & 57.0 \tiny\textcolor{gray}{[56.0, 59.0]} & \textbf{+13.0} & 86.5 \tiny\textcolor{gray}{[86.0, 87.0]} & 13.6 \tiny\textcolor{gray}{[13.1, 14.1]} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Ablation on Number of Generations ($N$)} for Qwen2.5-3B (Step-wise) on GSM8K. All metrics are in percentages (\%). Intervals indicate 95\% confidence intervals.}
+\end{table}

@@ -1,0 +1,36 @@
+% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}
+\begin{table*}[t]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{ll cccc cccc cccc}
+\toprule
+& & \multicolumn{4}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{4}{c}{\textbf{\textsc{MedReason}}} & \multicolumn{4}{c}{\textbf{\textsc{MMLU-Pro}}} \\
+\cmidrule(lr){3-6} \cmidrule(lr){7-10} \cmidrule(lr){11-14}
+\textbf{Backbone} & \textbf{Method} & Random & $\Delta$ Logp. & $\Delta$ Maj. & $\Delta$ Rew. & Random & $\Delta$ Logp. & $\Delta$ Maj. & $\Delta$ Rew. & Random & $\Delta$ Logp. & $\Delta$ Maj. & $\Delta$ Rew. \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-3B}}} & \textit{Sparse} & - & - & - & - & - & - & - & - & - & - & - & - \\
+ & \textit{Step-wise} & 56 \tiny\textcolor{gray}{[53, 58]} & +0 & \textbf{\textcolor{insightteal}{+23}} & \textcolor{insightteal}{+12} & 40 \tiny\textcolor{gray}{[38, 43]} & \textcolor{insightteal}{+5} & \textbf{\textcolor{insightteal}{+18}} & \textcolor{insightteal}{+8} & 40 \tiny\textcolor{gray}{[38, 43]} & \textcolor{purple}{-3} & \textbf{\textcolor{insightteal}{+9}} & +0 \\
+ & \textit{Interval} & 56 \tiny\textcolor{gray}{[53, 58]} & +0 & \textbf{\textcolor{insightteal}{+23}} & \textcolor{insightteal}{+11} & - & - & - & - & - & - & - & - \\
+ & \textit{Dense} & 56 \tiny\textcolor{gray}{[53, 58]} & \textcolor{insightteal}{+1} & \textbf{\textcolor{insightteal}{+23}} & \textcolor{insightteal}{+16} & 40 \tiny\textcolor{gray}{[38, 43]} & \textcolor{insightteal}{+4} & \textbf{\textcolor{insightteal}{+18}} & \textcolor{insightteal}{+1} & 40 \tiny\textcolor{gray}{[38, 43]} & \textcolor{purple}{-2} & \textbf{\textcolor{insightteal}{+9}} & \textcolor{purple}{-2} \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.2-3B}}} & \textit{Sparse} & - & - & - & - & - & - & - & - & - & - & - & - \\
+ & \textit{Step-wise} & 54 \tiny\textcolor{gray}{[52, 57]} & \textcolor{insightteal}{+1} & \textbf{\textcolor{insightteal}{+23}} & \textcolor{insightteal}{+15} & 50 \tiny\textcolor{gray}{[48, 53]} & \textcolor{insightteal}{+1} & \textbf{\textcolor{insightteal}{+26}} & \textcolor{insightteal}{+21} & 32 \tiny\textcolor{gray}{[30, 34]} & +0 & \textbf{\textcolor{insightteal}{+11}} & \textcolor{insightteal}{+5} \\
+ & \textit{Interval} & - & - & - & - & 50 \tiny\textcolor{gray}{[48, 53]} & \textcolor{insightteal}{+2} & \textbf{\textcolor{insightteal}{+26}} & \textcolor{insightteal}{+19} & - & - & - & - \\
+ & \textit{Dense} & 54 \tiny\textcolor{gray}{[52, 57]} & \textcolor{insightteal}{+2} & \textbf{\textcolor{insightteal}{+23}} & \textcolor{insightteal}{+11} & 50 \tiny\textcolor{gray}{[48, 53]} & \textcolor{insightteal}{+9} & \textbf{\textcolor{insightteal}{+26}} & \textcolor{insightteal}{+14} & 32 \tiny\textcolor{gray}{[30, 34]} & +0 & \textbf{\textcolor{insightteal}{+11}} & +0 \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-7B}}} & \textit{Sparse} & - & - & - & - & - & - & - & - & - & - & - & - \\
+ & \textit{Step-wise} & 63 \tiny\textcolor{gray}{[60, 65]} & +0 & \textbf{\textcolor{insightteal}{+24}} & \textcolor{insightteal}{+16} & 41 \tiny\textcolor{gray}{[38, 43]} & \textcolor{insightteal}{+5} & \textbf{\textcolor{insightteal}{+26}} & \textcolor{insightteal}{+12} & 44 \tiny\textcolor{gray}{[41, 46]} & +0 & \textbf{\textcolor{insightteal}{+11}} & \textcolor{insightteal}{+5} \\
+ & \textit{Interval} & - & - & - & - & - & - & - & - & - & - & - & - \\
+ & \textit{Dense} & 63 \tiny\textcolor{gray}{[60, 65]} & \textcolor{insightteal}{+2} & \textbf{\textcolor{insightteal}{+24}} & \textcolor{insightteal}{+19} & 41 \tiny\textcolor{gray}{[38, 43]} & \textcolor{insightteal}{+7} & \textbf{\textcolor{insightteal}{+26}} & \textcolor{insightteal}{+14} & - & - & - & - \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.1-8B}}} & \textit{Sparse} & - & - & - & - & - & - & - & - & - & - & - & - \\
+ & \textit{Step-wise} & 66 \tiny\textcolor{gray}{[63, 68]} & +0 & \textbf{\textcolor{insightteal}{+9}} & \textcolor{insightteal}{+6} & 59 \tiny\textcolor{gray}{[57, 62]} & \textcolor{insightteal}{+7} & \textbf{\textcolor{insightteal}{+23}} & \textcolor{insightteal}{+15} & 43 \tiny\textcolor{gray}{[41, 46]} & \textcolor{insightteal}{+3} & \textbf{\textcolor{insightteal}{+12}} & \textcolor{insightteal}{+8} \\
+ & \textit{Interval} & - & - & - & - & - & - & - & - & 43 \tiny\textcolor{gray}{[41, 46]} & \textcolor{insightteal}{+2} & \textbf{\textcolor{insightteal}{+12}} & \textcolor{insightteal}{+7} \\
+ & \textit{Dense} & 66 \tiny\textcolor{gray}{[63, 68]} & +0 & \textbf{\textcolor{insightteal}{+9}} & \textcolor{insightteal}{+8} & - & - & - & - & 43 \tiny\textcolor{gray}{[41, 46]} & \textcolor{insightteal}{+3} & \textbf{\textcolor{insightteal}{+12}} & \textcolor{insightteal}{+5} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Best-of-N Reranking Performance \& Baselines (\%).} The \textit{Random} column reports the absolute percentage with 95\% CI. The $\Delta$ columns denote the percentage-point change when using Logprobs, Majority Voting, and Reward Model reranking respectively. \textbf{Bold} indicates the highest improvement for that dataset. \textcolor{insightteal}{Blue} indicates an improvement over Random, \textcolor{purple}{purple} indicates degradation. * symbolises adversarial mode collapse.}
+\label{tab:reranking_baselines}
+\end{table*}

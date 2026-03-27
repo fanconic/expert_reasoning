@@ -84,6 +84,7 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
     """
     # Policy model and tokenizer
     
+    model_name = config.model.name
     policy_model_name = config.model.policy_name
     reward_model_name = config.model.reward_name
     max_seq_length = config.model.max_prompt_length + config.model.max_completion_length
@@ -120,7 +121,7 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
         use_gradient_checkpointing="unsloth",
         random_state=random_state,
     )
-    print("Policy model loaded.")
+    print("Policy model loaded from {}.".format(policy_model_name))
     
     
     # Reward model and tokenizer
@@ -154,7 +155,7 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
     
     
     if pretrained:
-        adapter_dir = policy_model_name + "/reward_model"
+        adapter_dir = model_name + "/reward_model"
         reward_model = PeftModel.from_pretrained(
             reward_model,
             adapter_dir,
@@ -192,6 +193,6 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
         reward_model.gradient_checkpointing_disable()   # avoids version mismatches
     if hasattr(reward_model, "config"):
         reward_model.config.use_cache = False           # saves VRAM in training
-    print("Reward model loaded.")
+    print("Reward model loaded from {}.".format(adapter_dir if (pretrained or frozen_discriminator) else reward_model_name))
     
     return policy_model, reward_model, policy_tokenizer, reward_tokenizer

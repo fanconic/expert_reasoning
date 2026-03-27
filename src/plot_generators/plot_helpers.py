@@ -24,6 +24,8 @@ from matplotlib.patches import FancyBboxPatch
 from matplotlib.textpath import TextPath
 import matplotlib as mpl
 from sklearn.metrics import roc_auc_score
+from transformers import AutoTokenizer
+from collections import Counter
 
 plt.style.use("bright")
 plt.rcParams["font.family"] = "sans-serif"
@@ -596,74 +598,109 @@ def discounted_mean(scores, gamma=0.9):
     return np.sum(valid_scores * valid_weights) / np.sum(valid_weights)
 
 
+_TOKENIZER_CACHE = {}
+
+def get_tokenizer(model_path: str):
+    """Loads the tokenizer once per worker process and caches it."""
+    if model_path not in _TOKENIZER_CACHE:
+        _TOKENIZER_CACHE[model_path] = AutoTokenizer.from_pretrained(model_path)
+    return _TOKENIZER_CACHE[model_path]
+
+
 def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = False) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
 
-    # df["reward_model_score_np_discounted"] = df["reward_model_score_np"].apply(
-    #     lambda r: compute_advantages(r, gamma=gamma)
-    # )
-    # df["mean_rewards_discounted"] = df["reward_model_score_np_discounted"].apply(
-    #     lambda x: np.nanmean(x)
-    # )
+    # ==========================================
+    # 1. LOAD AND MERGE LOG PROBS
+    # ==========================================
+    logprobs_path = Path(jsonl_path).parent / "eval_results_logprobs.jsonl"
+    if logprobs_path.exists():
+        df_logprobs = pd.read_json(logprobs_path, lines=True)
+        if "policy_log_probs" in df_logprobs.columns:
+            df["policy_log_probs"] = df_logprobs["policy_log_probs"]
+        else:
+            print(f"[WARNING] 'policy_log_probs' column not found in {logprobs_path}")
+    else:
+        print(f"[WARNING] Logprobs file missing: {logprobs_path}")
 
-    from transformers import AutoTokenizer
-
+    # ==========================================
+    # 2. TOKENIZATION & ALIGNMENT
+    # ==========================================
     if "qwen" in str(jsonl_path) and "response_token" not in df.columns:
-        tokeniser = AutoTokenizer.from_pretrained("unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit")
+        tokeniser = get_tokenizer("unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit")
         df = df.copy()
         df["response_token_ids"] = df.apply(
-            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)[
-                "input_ids"
-            ],
-            axis=1,
-        )
-        df["response_token"] = df.apply(
-            lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
-        )
-        df["reward_model_score"] = df["reward_model_score"].apply(lambda x: [x[0]] + x)
-    elif "llama" in str(jsonl_path) and "response_token" not in df.columns:
-        tokeniser = AutoTokenizer.from_pretrained("unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit")
-        df = df.copy()
-        # need to take away the first one, because llama tokeniser puts a `<|begin_of_text|>` there.
-        df["response_token_ids"] = df.apply(
-            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)[
-                "input_ids"
-            ][1:],
+            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)["input_ids"],
             axis=1,
         )
         df["response_token"] = df.apply(
             lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
         )
         
-    else:
-        raise NotImplemented(
-            "`llama` or `qwen` not found in output dir, do not know which tokeniser to use."
+        # Shift both rewards and logprobs for Qwen
+        if "reward_model_score" in df.columns:
+            df["reward_model_score"] = df["reward_model_score"].apply(lambda x: [x[0]] + x if isinstance(x, list) and len(x) > 0 else x)
+        if "policy_log_probs" in df.columns:
+            df["policy_log_probs"] = df["policy_log_probs"].apply(lambda x: [x[0]] + x if isinstance(x, list) and len(x) > 0 else x)
+            
+    elif "llama" in str(jsonl_path) and "response_token" not in df.columns:
+        tokeniser = get_tokenizer("unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit")
+        df = df.copy()
+        df["response_token_ids"] = df.apply(
+            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)["input_ids"][1:],
+            axis=1,
         )
-    df["reward_model_score_np"] = df["reward_model_score"].apply(
-        lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
-    )
-    df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x))
-    df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
-    df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
-    df["answer_positions"] = df["response_token"].apply(
-        lambda x: (
-            (x.index("answer"), -4)
-            if "answer" in x and x.index("answer") < len(x) - 4
-            else (-10, -4)
+        df["response_token"] = df.apply(
+            lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
         )
-    )
-    if answer_only:
-        # df["selector"] = df.apply(
-        #     lambda x: np.nanmean(
-        #         x.reward_model_score_np[x.answer_positions[0] : x.answer_positions[1]]
-        #     ),
-        #     axis=1,
-        # )
-        df["selector"] = df["reward_model_score_np"].apply(lambda x: discounted_mean(x, gamma=0.95))
     else:
-        df["selector"] = df["mean_rewards"].copy()
-    return df
+        print(f"[WARNING] `llama` or `qwen` not found in {jsonl_path}, skipping tokenization.")
 
+    # ==========================================
+    # 3. METRIC PROCESSING (Rewards & Logprobs)
+    # ==========================================
+    
+    # Process Reward Scores
+    if "reward_model_score" in df.columns:
+        df["reward_model_score_np"] = df["reward_model_score"].apply(
+            lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))] if isinstance(x, (list, np.ndarray)) else np.array([])
+        )
+        df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x) if len(x) > 0 else np.nan)
+
+    # Process Policy Log Probs (Mirrored)
+    if "policy_log_probs" in df.columns:
+        df["policy_log_probs_np"] = df["policy_log_probs"].apply(
+            lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))] if isinstance(x, (list, np.ndarray)) else np.array([])
+        )
+        df["mean_log_probs"] = df["policy_log_probs_np"].apply(lambda x: np.nanmean(x) if len(x) > 0 else np.nan)
+        df["sum_log_probs"] = df["policy_log_probs_np"].apply(lambda x: np.nansum(x) if len(x) > 0 else np.nan)
+
+    # ==========================================
+    # 4. EXTRACTIONS & SELECTORS
+    # ==========================================
+    if "generation" in df.columns:
+        df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
+        df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
+
+    if "response_token" in df.columns:
+        df["answer_positions"] = df["response_token"].apply(
+            lambda x: (
+                (x.index("answer"), -4)
+                if "answer" in x and x.index("answer") < len(x) - 4
+                else (-10, -4)
+            )
+        )
+        
+    if answer_only and "reward_model_score_np" in df.columns:
+        # Note: Selector is still tied to rewards here. 
+        df["selector"] = df["reward_model_score_np"].apply(lambda x: discounted_mean(x, gamma=0.95))
+        if "policy_log_probs" in df.columns:
+            df["selector_logprobs"] = df["policy_log_probs_np"].apply(lambda x: discounted_mean(x, gamma=0.95))
+    elif "mean_rewards" in df.columns:
+        df["selector"] = df["mean_rewards"].copy()
+        if "policy_log_probs" in df.columns:
+            df["selector_logprobs"] = df["mean_log_probs"].copy()
+    return df
 
 def ensure_dir(p: str | Path) -> Path:
     p = Path(p)
@@ -726,6 +763,9 @@ def save_latex_table_txt_reranking(
     lines.append("Random Reranking & " + _fmt_row("random"))
     lines.append("Reasoning Reranking & " + _fmt_row("reward"))
     lines.append("Length Reranking & " + _fmt_row("heuristic"))
+    lines.append("Log Probability & " + _fmt_row("logprobs"))
+    lines.append("Majority Voting & " + _fmt_row("majority"))
+    lines.append("Weighted Majority & " + _fmt_row("majority_weighted"))
     out_file = Path(out_file)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text("\n".join(lines))
@@ -824,6 +864,82 @@ def plot_pass_at_k(
     ensure_dir(out_path.parent)
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
+    
+    
+def add_weighted_answer_confidence(
+    df: pd.DataFrame, 
+    prompt_col: str = "prompt", 
+    answer_col: str = "extracted_answer",
+    reward_col: str = "selector"  # The column containing your scalar reward
+) -> pd.DataFrame:
+    """
+    Returns the original dataframe with a 'weighted_confidence' column.
+    Uses a softmax over the reward scores per prompt to assign a positive voting weight 
+    to each generation, then sums those weights for identical answers.
+    """
+    df_out = df.copy()
+    
+    # 1. Create a hashable version of the prompt for grouping
+    df_out['_hashable_prompt'] = df_out[prompt_col].apply(
+        lambda x: str(x) if isinstance(x, (list, dict)) else x
+    )
+    
+    # Helper function to compute softmax safely (subtracting max for numerical stability)
+    def calculate_softmax(series):
+        # Drop NaNs temporarily for the math, fill with -inf so they get 0 weight
+        s_clean = series.fillna(-np.inf)
+        e_x = np.exp(s_clean - np.max(s_clean))
+        return e_x / e_x.sum()
+
+    # 2. Convert raw rewards into positive voting weights (probabilities) per prompt
+    df_out['reward_weight'] = df_out.groupby('_hashable_prompt')[reward_col].transform(calculate_softmax)
+    
+    # 3. Sum the weights for each specific answer per prompt
+    df_out['weighted_confidence'] = df_out.groupby(['_hashable_prompt', answer_col])['reward_weight'].transform('sum')
+    
+    # Fill NaNs with 0.0 (in case the answer itself was missing/un-parsable)
+    df_out['weighted_confidence'] = df_out['weighted_confidence'].fillna(0.0)
+    
+    # Clean up temporary columns
+    df_out = df_out.drop(columns=['_hashable_prompt', 'reward_weight'])
+    
+    return df_out
+    
+    
+def add_answer_confidence(
+    df: pd.DataFrame, 
+    prompt_col: str = "prompt", 
+    answer_col: str = "extracted_answer"
+) -> pd.DataFrame:
+    """
+    Returns the original dataframe with a new 'majority_confidence' column.
+    The confidence represents how often the answer in that specific row 
+    appeared among all generations for that same prompt.
+    """
+    df_out = df.copy()
+    
+    # 1. Create a hashable version of the prompt for grouping
+    df_out['_hashable_prompt'] = df_out[prompt_col].apply(
+        lambda x: str(x) if isinstance(x, (list, dict)) else x
+    )
+    
+    # 2. Count how many times each specific answer appears per prompt
+    # Grouping by both prompt AND answer gives us the frequency of that exact response
+    answer_counts = df_out.groupby(['_hashable_prompt', answer_col])[answer_col].transform('count')
+    
+    # 3. Count the total number of valid (non-null) answers per prompt
+    total_answers = df_out.groupby('_hashable_prompt')[answer_col].transform('count')
+    
+    # 4. Calculate the confidence (frequency ratio) for the row's answer
+    df_out['majority_confidence'] = (answer_counts / total_answers)
+    
+    # Fill NaNs with 0.0 (in case the answer itself was missing/un-parsable)
+    df_out['majority_confidence'] = df_out['majority_confidence'].fillna(0.0)
+    
+    # Clean up the temporary grouping column
+    df_out = df_out.drop(columns=['_hashable_prompt'])
+    
+    return df_out
 
 
 def plot_success_at_k_given(
@@ -833,114 +949,148 @@ def plot_success_at_k_given(
     out_path: str | Path,
     title: str,
 ):
-    # Extract flags + scores
-    all_correct_flags, all_scores = [], []
-    for i in range(0, len(df), num_generations):
-        sub_df = df.iloc[i : i + num_generations]
-        all_correct_flags.append(
-            np.array(sub_df.correctness_reward_func == 2, dtype=int).tolist()
-        )
-        all_scores.append(sub_df["selector"].tolist())
-
-    all_dummy_scores = [[0.0] * num_generations for _ in range(len(all_correct_flags))]
     
-    
-    all_scores_heuristic = []
-    df["length_heuristic"] = df["generation"].apply(lambda x: len(x['content']))
-    for i in range(0, len(df), num_generations):
-        sub_df = df.iloc[i : i + num_generations]
-        all_scores_heuristic.append(sub_df["length_heuristic"].tolist())
-    
+    for num_gen in num_generations:
+        df_small = df[df.generation_idx < num_gen].copy().reset_index()
+        
+        # Extract flags + scores
+        all_correct_flags, all_scores = [], []
+        for i in range(0, len(df_small), num_gen):
+            sub_df = df_small.iloc[i : i + num_gen]
+            all_correct_flags.append(
+                np.array(sub_df.correctness_reward_func == 2, dtype=int).tolist()
+            )
+            all_scores.append(sub_df["selector"].tolist())
 
-    results_given = compute_success_at_k_from_scores(all_correct_flags, all_scores, ks)
-    cis_given = bootstrap_ci(
-        compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores
-    )
+        all_dummy_scores = [[0.0] * num_gen for _ in range(len(all_correct_flags))]
+        
+        
+        all_scores_heuristic = []
+        all_scores_logprobs = []
+        all_scores_majority = []
+        all_scores_majority_weighted = []
+        
+        df_small["isolated_prompt"] = df_small["prompt"].apply(lambda x: x[1]['content'])
+        df_small["extracted_answer"] = df_small["generation"].apply(lambda x: extract_xml_answer(x['content']))
+        df_small = add_answer_confidence(df_small, prompt_col="isolated_prompt", answer_col="extracted_answer")
+        df_small = add_weighted_answer_confidence(
+            df_small, prompt_col="isolated_prompt", answer_col="extracted_answer", reward_col="selector"
+        )  # Combine confidence with reward score
+        df_small["length_heuristic"] = df_small["generation"].apply(lambda x: -len(x['content']))
 
-    results_uniform = compute_success_at_k_from_scores(
-        all_correct_flags, all_dummy_scores, ks
-    )
-    cis_uniform = bootstrap_ci(
-        compute_success_at_k_from_scores,
-        all_correct_flags,
-        ks,
-        all_scores=all_dummy_scores,
-    )
-    
-    results_heuristic = compute_success_at_k_from_scores(
-        all_correct_flags, all_scores_heuristic, ks
-    )
-    cis_heuristic = bootstrap_ci(
-        compute_success_at_k_from_scores,
-        all_correct_flags,
-        ks,
-        all_scores=all_scores_heuristic,
-    )
-    
-    results = {
-        "reward": results_given,
-        "random": results_uniform,
-        "heuristic": results_heuristic,
-    } 
-    cis = {
-        "reward": cis_given,
-        "random": cis_uniform,
-        "heuristic": cis_heuristic,
-    }
-    save_latex_table_txt_reranking(results, cis, ks, Path(out_path).parent / "pass_at_k_table_reranking.txt")
+        for i in range(0, len(df_small), num_gen):
+            sub_df = df_small.iloc[i : i + num_gen]
+            all_scores_heuristic.append(sub_df["length_heuristic"].tolist())
+            if "selector_logprobs" in df.columns:
+                all_scores_logprobs.append(sub_df["selector_logprobs"].tolist())
+            else:
+                all_scores_logprobs.append(sub_df["majority_confidence"].tolist())
+            all_scores_majority.append(sub_df["majority_confidence"].tolist())
+            all_scores_majority_weighted.append(sub_df["weighted_confidence"].tolist())
 
-    prop_cycle = plt.rcParams.get("axes.prop_cycle")
-    colors = prop_cycle.by_key()["color"] if prop_cycle else [None, None]
-    styles = {
-        "Reward Reranker": {
-            "color": colors[0] if colors else None,
-            "marker": "x",
-            "linestyle": "--",
-        },
-        "Random Ranking": {
-            "color": colors[1] if len(colors) > 1 else None,
-            "marker": "x",
-            "linestyle": "--",
-        },
-        # "Length Reranker": {
-        #     "color": colors[2] if len(colors) > 1 else None,
-        #     "marker": "x",
-        #     "linestyle": "--",
-        # },
-    }
-
-    plt.figure(figsize=(6, 3))
-    for label, (results_model, cis_model) in {
-        "Reward Reranker": (results_given, cis_given),
-        "Random Ranking": (results_uniform, cis_uniform),
-        #"Length Reranker": (results_heuristic, cis_heuristic),
-    }.items():
-        means = [results_model[k] for k in ks]
-        ci = [cis_model[k] for k in ks]
-        lower = [m - c[0] for m, c in zip(means, ci)]
-        upper = [c[1] - m for m, c in zip(means, ci)]
-        style = styles[label]
-        plt.errorbar(
-            ks,
-            means,
-            yerr=[lower, upper],
-            label=label,
-            color=style["color"],
-            marker=style["marker"],
-            linestyle=style["linestyle"],
-            capsize=4,
-            markersize=6,
+        results_given = compute_success_at_k_from_scores(all_correct_flags, all_scores, ks)
+        cis_given = bootstrap_ci(
+            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores
         )
 
-    plt.xlabel("k")
-    plt.ylabel(rf"pass@k$\mid${num_generations}")
-    plt.title(title)
-    plt.legend()
-    plt.grid()
-    out_path = Path(out_path)
-    ensure_dir(out_path.parent)
-    plt.savefig(out_path, bbox_inches="tight")
-    plt.close()
+        results_uniform = compute_success_at_k_from_scores(
+            all_correct_flags, all_dummy_scores, ks
+        )
+        cis_uniform = bootstrap_ci(
+            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_dummy_scores,
+        )
+        
+        results_heuristic = compute_success_at_k_from_scores(all_correct_flags, all_scores_heuristic, ks)
+        cis_heuristic = bootstrap_ci(
+            compute_success_at_k_from_scores, all_correct_flags,ks, all_scores=all_scores_heuristic
+        )
+        
+        results_logprobs = compute_success_at_k_from_scores(all_correct_flags, all_scores_logprobs, ks)
+        cis_logprobs = bootstrap_ci(
+            compute_success_at_k_from_scores,all_correct_flags, ks, all_scores=all_scores_logprobs,
+        )
+        
+        results_majority = compute_success_at_k_from_scores(all_correct_flags, all_scores_majority, ks)
+        cis_majority = bootstrap_ci(
+            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores_majority,
+        )
+        
+        results_majority_weighted = compute_success_at_k_from_scores(all_correct_flags, all_scores_majority_weighted, ks)
+        cis_majority_weighted = bootstrap_ci(
+            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores_majority_weighted,
+        )
+
+        results = {
+            "reward": results_given,
+            "random": results_uniform,
+            "heuristic": results_heuristic,
+            "logprobs": results_logprobs,
+            "majority": results_majority,
+            "majority_weighted": results_majority_weighted,
+
+        } 
+        cis = {
+            "reward": cis_given,
+            "random": cis_uniform,
+            "heuristic": cis_heuristic,
+            "logprobs": cis_logprobs,
+            "majority": cis_majority,
+            "majority_weighted": cis_majority_weighted,
+        }
+        save_latex_table_txt_reranking(results, cis, ks, Path(out_path) / f"pass_at_k_table_reranking_{num_gen}.txt")
+
+        prop_cycle = plt.rcParams.get("axes.prop_cycle")
+        colors = prop_cycle.by_key()["color"] if prop_cycle else [None, None]
+        styles = {
+            "Reward Reranker": {
+                "color": colors[0] if colors else None,
+                "marker": "x",
+                "linestyle": "--",
+            },
+            "Random Ranking": {
+                "color": colors[1] if len(colors) > 1 else None,
+                "marker": "x",
+                "linestyle": "--",
+            },
+            # "Length Reranker": {
+            #     "color": colors[2] if len(colors) > 1 else None,
+            #     "marker": "x",
+            #     "linestyle": "--",
+            # },
+        }
+
+        plt.figure(figsize=(6, 3))
+        for label, (results_model, cis_model) in {
+            "Reward Reranker": (results_given, cis_given),
+            "Random Ranking": (results_uniform, cis_uniform),
+            #"Length Reranker": (results_heuristic, cis_heuristic),
+        }.items():
+            means = [results_model[k] for k in ks]
+            ci = [cis_model[k] for k in ks]
+            lower = [m - c[0] for m, c in zip(means, ci)]
+            upper = [c[1] - m for m, c in zip(means, ci)]
+            style = styles[label]
+            plt.errorbar(
+                ks,
+                means,
+                yerr=[lower, upper],
+                label=label,
+                color=style["color"],
+                marker=style["marker"],
+                linestyle=style["linestyle"],
+                capsize=4,
+                markersize=6,
+            )
+
+        plt.xlabel("k")
+        plt.ylabel(rf"pass@k$\mid${num_gen}")
+        plt.title(title)
+        plt.legend()
+        plt.grid()
+        out_path = Path(out_path) 
+        ensure_dir(out_path)
+        plt.savefig(out_path / f"pass_atkN_expert_{num_gen}.pdf", bbox_inches="tight")
+        plt.close()
 
 
 def plot_reward_distributions(
@@ -1347,7 +1497,6 @@ def run_all_plots(
         "Exp. Reas. (ours)": extract_flags(df_airl, num_generations),
         "SFT": extract_flags(df_sft, num_generations),
     }
-
     #NEW: compute + print + save LaTeX table fragment
     results, cis = compute_pass_results_ci(datasets, ks)
     print_latex_table(results, cis, ks)  # for direct copy/paste in your terminal
@@ -1368,11 +1517,12 @@ def run_all_plots(
     run_calibration_analysis(df_dict, out_dir)
 
     # success@k|N for AIRL (expert reasoning)
+
     plot_success_at_k_given(
         df_airl,
         ks,
-        num_generations,
-        out_dir / "pass_atkN_expert.pdf",
+        [2,4,8,16],
+        out_dir,
         title=r"Expert Reasoning: pass@k$\mid$N comparison",
     )
 

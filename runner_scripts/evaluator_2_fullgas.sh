@@ -34,20 +34,20 @@ run_task() {
     [[ "$SUFFIX" == "sparse" ]] && DENSE_VAL="false"
 
     local WNAME="${MODEL}_${SUFFIX}_new"
-    local OVERRIDE="wandb.run_name=${WNAME} model.dense_rewards=${DENSE_VAL} ${COMMON_REWARD_FLAGS}"
+    local OVERRIDE="wandb.run_name=${WNAME} model.dense_rewards=${DENSE_VAL} ${COMMON_REWARD_FLAGS} eval.max_micro_batch=32"
     
-    # Append Warmup if not partial
-    if [[ "$SUFFIX" != "partial" ]]; then
-        local WARMUP_DIR="/mnt/pdata/caf83/icml_${TYPE}/warmed_up_rewards/${MODEL}/${SUFFIX}/"
-        OVERRIDE="${OVERRIDE} model.warmup_reward_dir=${WARMUP_DIR}"
-    fi
+    # # Append Warmup if not partial
+    # if [[ "$SUFFIX" != "partial" ]]; then
+    #     local WARMUP_DIR="/mnt/pdata/caf83/icml_${TYPE}/warmed_up_rewards/${MODEL}/${SUFFIX}/"
+    #     OVERRIDE="${OVERRIDE} model.warmup_reward_dir=${WARMUP_DIR}"
+    # fi
 
     # 1. TRAIN
-    run_cmd "${WNAME}_TRAIN" bash "$RUNNER" irl_train.py \
-        --config-path="configs/${DATASET}/${MODEL}" --config-name="good_run" $OVERRIDE $TRAIN_PARAMS
+    # run_cmd "${WNAME}_TRAIN" bash "$RUNNER" irl_train.py \
+    #     --config-path="configs/${DATASET}/${MODEL}" --config-name="good_run" $OVERRIDE $TRAIN_PARAMS
 
     # 2. EVAL
-    run_cmd "${WNAME}_EVAL" bash "$RUNNER" evaluate.py \
+    run_cmd "${WNAME}_EVAL" bash "$RUNNER" evaluate_pregenerated.py \
         --config-path="configs/${DATASET}/${MODEL}" --config-name="eval" $OVERRIDE
 }
 
@@ -57,8 +57,8 @@ run_task() {
 
 # Example for GPU 0 (Mixing Llama 8B with Qwen 3B)
 for SFX in "partial" "full" "partial_fixed" "sparse"; do
-    # run_task "gsm8k_rebuttals" "qwen7b" "$SFX"
-    # run_task "medreason_rebuttals" "qwen7b" "$SFX"
+    run_task "gsm8k_rebuttals" "qwen7b" "$SFX"
+    run_task "medreason_rebuttals" "qwen7b" "$SFX"
     run_task "mmlu_rebuttals" "qwen7b" "$SFX"
 done
 # =========================================================

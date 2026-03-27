@@ -41,3 +41,5 @@ run_ablation() {
 run_ablation "qwen3b" 16
 
 bash runner_scripts/betas/1_ablation.sh
+
+bash runner_scripts/corruption/1_ablation.sh

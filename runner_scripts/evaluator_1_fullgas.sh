@@ -3,7 +3,7 @@
 set -u 
 
 # --- Configuration ---
-export GPU_NUM="1"  # Change this for each script (0, 1, 2, 3)
+export GPU_NUM="3"  # Change this for each script (0, 1, 2, 3)
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 TRAIN_PARAMS="model.reward_updates_per_policy_step=3 training.beta=0.1 training.buffer_size=50 training.max_steps=400"
 COMMON_REWARD_FLAGS="model.reward_lb=-5.0 model.reward_ub=5.0"
@@ -34,7 +34,7 @@ run_task() {
     [[ "$SUFFIX" == "sparse" ]] && DENSE_VAL="false"
 
     local WNAME="${MODEL}_${SUFFIX}_new"
-    local OVERRIDE="wandb.run_name=${WNAME} model.dense_rewards=${DENSE_VAL} ${COMMON_REWARD_FLAGS}"
+    local OVERRIDE="wandb.run_name=${WNAME} model.dense_rewards=${DENSE_VAL} ${COMMON_REWARD_FLAGS} eval.max_micro_batch=32"
     
     # Append Warmup if not partial
     # if [[ "$SUFFIX" != "partial" ]]; then
@@ -47,7 +47,7 @@ run_task() {
     #     --config-path="configs/${DATASET}/${MODEL}" --config-name="good_run" $OVERRIDE $TRAIN_PARAMS
 
     # 2. EVAL
-    run_cmd "${WNAME}_EVAL" bash "$RUNNER" evaluate.py \
+    run_cmd "${WNAME}_EVAL" bash "$RUNNER" evaluate_pregenerated.py \
         --config-path="configs/${DATASET}/${MODEL}" --config-name="eval" $OVERRIDE
 }
 
@@ -55,11 +55,9 @@ run_task() {
 # WORKLOAD SECTION (Distribute these across your 4 scripts)
 # =========================================================
 
-for SFX in "full"; do
-    # run_task "mmlu_rebuttals" "llama8b" "$SFX"
-    # run_task "gsm8k_rebuttals" "qwen3b" "$SFX"
-    # run_task "medreason_rebuttals" "qwen3b" "$SFX"
-    run_task "medreason_rebuttals" "qwen3b" "$SFX"
+for SFX in "partial" "full" "partial_fixed" "sparse"; do
+    run_task "gsm8k_rebuttals" "llama8b" "$SFX"
+    run_task "medreason_rebuttals" "llama8b" "$SFX"
 done
 
 # =========================================================
@@ -71,3 +69,6 @@ if [[ ${#FAILED_RUNS[@]} -ne 0 ]]; then
     exit 1
 fi
 echo "All runs on GPU ${GPU_NUM} succeeded."
+
+#bash runner_scripts/corruption/3_ablation.sh
+bash runner_scripts/sft_reranking/evaluator_3_fullgas.sh

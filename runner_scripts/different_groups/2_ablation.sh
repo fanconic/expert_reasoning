@@ -41,3 +41,5 @@ run_ablation() {
 # Llama 3B Ablations
 run_ablation "llama3b" 4
 bash runner_scripts/betas/2_ablation.sh
+
+bash runner_scripts/corruption/2_ablation.sh

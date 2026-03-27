@@ -1,6 +1,7 @@
 # evaluate.py
 import os
 os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
+#os.environ["TORCHDYNAMO_DISABLE"] = "1"
 
 from src.models.model_module import load_model_and_tokenizer, irl_load_model_and_tokenizer
 import hydra
@@ -14,11 +15,13 @@ from src.rewards.reward_functions import (
     gsm8k_correctness_reward_func,
     countdown_correctness_function,
     medical_correctness_reward_func,
+    scienceqa_correctness_reward_func,
+    mmlu_correctness_reward_func,
     eval_correctness_gsm8k,
     eval_correctness_countdown,
     eval_correctness_medical,
-    strict_format_reward_func,
-    soft_format_reward_func,
+    eval_correctness_scienceqa,
+    eval_correctness_mmlu
 )
 import torch
 import numpy as np
@@ -26,11 +29,13 @@ from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_sc
 from vllm import SamplingParams
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
+
 import pandas as pd
 from unsloth import FastLanguageModel
 
 # --- NEW IMPORTS FOR GUIDANCE ---
 import copy
+import re
 
 wandb.login()
 
@@ -158,36 +163,233 @@ def generate_with_chunk_guidance(
     return current_gens 
 
 
-def sentence_boundary_mask(tokenizer, full_batch, base_completion_mask, device):
-    """
-    Returns mask [bs, L] that is True ONLY at sentence boundaries within completions.
-    Sentence boundaries are: '.', '\n', or '.\n' sequences.
-    """
-    input_ids = full_batch["input_ids"]  # [bs, L]
-    bs, L = input_ids.shape
-    
-    # Get token IDs for sentence boundaries
-    period_ids = tokenizer.encode(".", add_special_tokens=False)
-    newline_ids = tokenizer.encode("\n", add_special_tokens=False)
-    period_newline_ids = tokenizer.encode(".\n", add_special_tokens=False)
+# Module-level cache
+_BOUNDARY_TOKEN_DECODE_CACHE = {}
 
-    period_id = period_ids[0] if period_ids else -1
-    newline_id = newline_ids[0] if newline_ids else -1
-    period_newline_ids = period_newline_ids[0] if period_newline_ids else -1
-    
-    # Vectorized: find all periods and newlines in completion region
-    is_period = (input_ids == period_id) & base_completion_mask  # [bs, L]
-    is_newline = (input_ids == newline_id) & base_completion_mask  # [bs, L]
-    is_period_newline = (input_ids == period_newline_ids) & base_completion_mask  # [bs, L]
-    
-    
-    # Mark boundaries: newlines OR (periods that aren't followed by newlines)
-    boundary_mask = is_newline | is_period  | is_period_newline
-    
-    # Always include last completion token
-    last_indices = base_completion_mask.long().cumsum(dim=1).argmax(dim=1)  # [bs]
-    boundary_mask[torch.arange(bs, device=device), last_indices] |= base_completion_mask.any(dim=1)
-    
+
+def sentence_boundary_mask(reward_tokenizer, full_batch, base_completion_mask, device):
+    """
+    Robust step-boundary detector for process reward modelling.
+
+    Args:
+        full_batch: dict with key "input_ids" -> LongTensor [bs, L]
+        base_completion_mask: Bool/0-1 tensor [bs, L], True only on assistant completion tokens
+        reward_tokenizer: HuggingFace tokenizer used to decode token pieces
+
+    Returns:
+        boundary_mask: Bool tensor [bs, L]
+    """
+    global _BOUNDARY_TOKEN_DECODE_CACHE
+
+    input_ids = full_batch["input_ids"]
+    bs, L = input_ids.shape
+
+    boundary_mask = torch.zeros((bs, L), dtype=torch.bool, device=device)
+
+    explicit_boundaries = [
+        "</think>",
+        "<|im_end|>",
+        "<|endoftext|>",
+        "<|eot_id|>",
+        "####",
+        "\r\n\r\n",
+        "\n\n\n",
+        "\n\n",
+        ".\n",
+        "!\n",
+        "?\n",
+        ";\n",
+        ":\n",
+        "\n- ",
+        "\n* ",
+        "\n• ",
+        "\n1.",
+        "\n2.",
+        "\n3.",
+        "\n4.",
+        "\n5.",
+        "\n6.",
+        "\n7.",
+        "\n8.",
+        "\n9.",
+        "\n10.",
+    ]
+    explicit_boundaries = sorted(explicit_boundaries, key=len, reverse=True)
+
+    max_explicit_len = max(len(x) for x in explicit_boundaries)
+    suffix_window = max(96, max_explicit_len + 48)
+
+    _abbr = {
+        "e.g.", "i.e.", "etc.", "vs.", "cf.",
+        "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.",
+        "no.", "fig.", "eq.", "sec.", "resp.",
+    }
+
+    _wrapper_tags = {
+        "<think>", "</think>", "<answer>", "</answer>",
+        "<reasoning>", "</reasoning>",
+    }
+
+    def decode_one(tok_id: int) -> str:
+        if tok_id not in _BOUNDARY_TOKEN_DECODE_CACHE:
+            _BOUNDARY_TOKEN_DECODE_CACHE[tok_id] = reward_tokenizer.decode(
+                [tok_id],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
+        return _BOUNDARY_TOKEN_DECODE_CACHE[tok_id]
+
+    def _last_nonspace_char(s: str):
+        for ch in reversed(s):
+            if not ch.isspace():
+                return ch
+        return None
+
+    def _strip_trailing_space(s: str) -> str:
+        return s.rstrip(" \t")
+
+    def _looks_like_abbreviation(s: str) -> bool:
+        s = _strip_trailing_space(s).lower()
+
+        m = re.search(r'([a-z]{1,10}\.)$', s)
+        if m and m.group(1) in _abbr:
+            return True
+
+        m2 = re.search(r'([a-z]\.[a-z]\.)$', s)
+        if m2 and m2.group(1) in _abbr:
+            return True
+
+        return False
+
+    def _piece_is_only_layout(piece: str) -> bool:
+        return piece.strip() == ""
+
+    def _normalise_visible_text(s: str) -> str:
+        x = s
+        for tag in _wrapper_tags:
+            x = x.replace(tag, "")
+        x = re.sub(r"<\|[^>]+?\|>", "", x)
+        x = re.sub(r"\s+", "", x)
+        return x
+
+    def _starts_with_digit(piece: str) -> bool:
+        if piece is None:
+            return False
+        m = re.match(r'^[ \t\r\n]*([0-9])', piece)
+        return m is not None
+
+    def _is_explicit_boundary(s: str) -> bool:
+        return any(s.endswith(x) for x in explicit_boundaries)
+
+    def _is_sentence_punct_boundary(s: str, just_added_piece: str, next_piece: str) -> bool:
+        if just_added_piece != "" and just_added_piece.strip(" \t") == "":
+            return False
+
+        s = _strip_trailing_space(s)
+        if not s:
+            return False
+
+        last = s[-1]
+        if last not in ".!?;:":
+            return False
+
+        if last == "." and _looks_like_abbreviation(s):
+            return False
+
+        # Avoid splitting on decimal points like 90.2
+        if last == "." and _starts_with_digit(next_piece):
+            return False
+
+        if last in "!?":
+            return True
+
+        if last in ";:":
+            return True
+
+        return True
+
+    def _is_newline_boundary(s: str, just_added_piece: str) -> bool:
+        if "\n" not in just_added_piece and "\r" not in just_added_piece:
+            return False
+
+        if not s.endswith("\n"):
+            return False
+
+        if s.endswith("\n\n"):
+            return True
+
+        prefix = s[:-1]
+        ch = _last_nonspace_char(prefix)
+        if ch is None:
+            return False
+
+        if ch in ".!?;:)":
+            return True
+
+        if prefix.endswith("</think>") or prefix.endswith("####"):
+            return True
+
+        return False
+
+    def _ends_reasoning_step(s: str, just_added_piece: str, next_piece: str) -> bool:
+        if _is_explicit_boundary(s):
+            return True
+
+        if _is_newline_boundary(s, just_added_piece):
+            return True
+
+        if _is_sentence_punct_boundary(s, just_added_piece, next_piece):
+            return True
+
+        return False
+
+    for b in range(bs):
+        completion_positions = torch.nonzero(
+            base_completion_mask[b].bool(), as_tuple=False
+        ).flatten()
+
+        if completion_positions.numel() == 0:
+            continue
+
+        completion_positions_list = completion_positions.tolist()
+        decoded_pieces = [
+            decode_one(int(input_ids[b, pos].item()))
+            for pos in completion_positions_list
+        ]
+
+        suffix = ""
+        seen_meaningful_content = False
+        prev_was_boundary = False
+
+        for i, pos in enumerate(completion_positions_list):
+            piece = decoded_pieces[i]
+            next_piece = decoded_pieces[i + 1] if i + 1 < len(decoded_pieces) else None
+
+            suffix += piece
+            if len(suffix) > suffix_window:
+                suffix = suffix[-suffix_window:]
+
+            if not seen_meaningful_content and _normalise_visible_text(suffix) != "":
+                seen_meaningful_content = True
+
+            is_boundary = _ends_reasoning_step(suffix, piece, next_piece)
+
+            if is_boundary and not seen_meaningful_content:
+                is_boundary = False
+
+            if is_boundary and prev_was_boundary and _piece_is_only_layout(piece):
+                is_boundary = False
+
+            if is_boundary:
+                boundary_mask[b, pos] = True
+                prev_was_boundary = True
+            else:
+                prev_was_boundary = False
+
+        # Always include the final completion token so the last segment gets a reward
+        boundary_mask[b, int(completion_positions[-1].item())] = True
+
+    boundary_mask &= base_completion_mask.bool()
     return boundary_mask
 
 
@@ -223,6 +425,102 @@ def backfill_rewards(rewards, mask):
     result = torch.gather(rewards, 1, next_valid_index)
     
     return result
+
+
+
+@torch.no_grad()
+def score_with_policy_model(
+    policy_model, policy_tokenizer, prompts_msgs, decoded_per_prompt, max_length=512, micro_batch=16
+):
+    from unsloth import FastLanguageModel
+    FastLanguageModel.for_inference(policy_model)
+    
+    device = next(policy_model.parameters()).device
+    
+    # 1. Flatten prompts and completions into a single list of strings
+    texts = []
+    completion_texts = []
+    
+    for p_msgs, completions in zip(prompts_msgs, decoded_per_prompt):
+        for c in completions:
+            content = c if isinstance(c, str) else c.get("content", "")
+            msgs = p_msgs + [{"role": "assistant", "content": content}]
+            texts.append(apply_chat_template({"messages": msgs}, policy_tokenizer)["text"])
+            
+            comp_text = content + (policy_tokenizer.eos_token or "")
+            completion_texts.append(comp_text)
+
+    if not texts: return [[] for _ in prompts_msgs]
+
+    # Calculate global max seq_len strictly for the final output array shape
+    global_tokens = policy_tokenizer(
+        completion_texts, return_attention_mask=True, add_special_tokens=False, padding=False
+    )
+    seq_len = min(max(len(t) for t in global_tokens['input_ids']), max_length)
+
+    all_log_probs = []
+    
+    # 2. Dynamic Batching Loop
+    for i in range(0, len(texts), micro_batch):
+        batch_texts = texts[i : i + micro_batch]
+        batch_completion_texts = completion_texts[i : i + micro_batch]
+
+        batch_inputs = policy_tokenizer(
+            text=batch_texts, return_tensors="pt", padding=True, add_special_tokens=False,
+            truncation=True, max_length=max_length, padding_side="right"
+        ).to(device)
+        
+        batch_completions = policy_tokenizer(
+            text=batch_completion_texts, return_tensors="pt", padding=True, add_special_tokens=False,
+            truncation=True, max_length=max_length,
+        ).to(device)
+
+        with torch.inference_mode():
+            outputs = policy_model(**batch_inputs)
+            
+            # Find where the completions start
+            completion_lens = batch_completions["attention_mask"].sum(dim=1).long()
+            full_lens = batch_inputs["attention_mask"].sum(dim=1).long()
+            start_indices = (full_lens - completion_lens).clamp(min=0)
+            
+            current_micro_batch_size = batch_inputs["input_ids"].size(0)
+            batch_res = torch.full((current_micro_batch_size, seq_len), float('nan'), device=device)
+            
+            # --- MEMORY OPTIMIZATION: Process log probs sequence-by-sequence ---
+            # We use CrossEntropyLoss which calculates -log(p) internally and is highly optimized,
+            # avoiding the need to instantiate a massive log_softmax tensor.
+            loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+            
+            for b in range(current_micro_batch_size):
+                comp_len = completion_lens[b].item()
+                # The logit at index i predicts the token at index i+1
+                start_idx = max(start_indices[b].item() - 1, 0) 
+                
+                # Prevent out-of-bounds if the sequence hit max_length
+                end_idx = min(start_idx + comp_len, batch_inputs["input_ids"].size(1) - 1)
+                actual_len = end_idx - start_idx
+                
+                if actual_len > 0:
+                    # Slice ONLY the logits we need for this specific completion
+                    # Shape becomes: [actual_len, vocab_size] instead of [B, Seq, Vocab]
+                    seq_logits = outputs.logits[b, start_idx : end_idx, :] 
+                    seq_labels = batch_inputs["input_ids"][b, start_idx + 1 : end_idx + 1]
+                    
+                    # Cross entropy gives -log(p). We invert it to get log(p).
+                    seq_log_probs = -loss_fct(seq_logits, seq_labels)
+                    
+                    copy_len = min(actual_len, seq_len)
+                    batch_res[b, :copy_len] = seq_log_probs[:copy_len]
+            
+            all_log_probs.append(batch_res.cpu().numpy())
+            
+            # Aggressively free the massive logits tensor before the next batch loop
+            del outputs
+            torch.cuda.empty_cache()
+            
+    B = len(prompts_msgs)
+    final_log_probs = np.concatenate(all_log_probs, axis=0).reshape(B, -1, seq_len)
+    return final_log_probs
 
 
 # ==========================================
@@ -274,13 +572,13 @@ def score_with_reward_model(
         # This makes the tensor width = length of longest sequence in THIS batch, not 512.
         batch_inputs = reward_tokenizer(
             text=batch_texts, return_tensors="pt", padding=True, add_special_tokens=False,
-            truncation=True, max_length=max_length
+            truncation=True, max_length=max_length, padding_side="right"
         ).to(device)
         
         # Tokenize completions just for length calculations
         batch_completions = reward_tokenizer(
             text=batch_completion_texts, return_tensors="pt", padding=True, add_special_tokens=False,
-            truncation=True, max_length=max_length
+            truncation=True, max_length=max_length,
         ).to(device)
 
         with torch.inference_mode():
@@ -321,6 +619,8 @@ def score_with_reward_model(
                     end_of_thought_mask = sentence_boundary_mask(
                         reward_tokenizer, batch_inputs, batch_inputs["attention_mask"], device
                     )
+                    
+                    
                 else:
                     end_of_thought_mask = every_n_tokens_mask(
                         batch_inputs, batch_inputs["attention_mask"], dense_partial_fixed_n
@@ -331,7 +631,8 @@ def score_with_reward_model(
                 end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices_safe)
                 reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
                 
-            # Apply NaN mask for padding/invalid tokens
+            # Apply NaN mask for padding/invalid 
+            #import IPython; IPython.embed(); exit()
             output_mask = torch.arange(seq_len, device=device)[None, :] < completion_lens[:, None]
             reward_comp[~output_mask] = float('nan')
 
@@ -341,6 +642,7 @@ def score_with_reward_model(
     B = len(prompts_msgs)
     all_scores = np.concatenate(new_logits, axis=0).reshape(B, -1, seq_len)
     return all_scores
+
 
 
 @hydra.main(config_path="configs", config_name="config_eval", version_base="1.3")
@@ -356,21 +658,25 @@ def main(cfg: DictConfig):
     set_seed(cfg.seed)
 
     if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":
-        reward_fns = [
-            ("xmlcount_reward_func", xmlcount_reward_func), 
-            ("correctness_reward_func", gsm8k_correctness_reward_func),
-            ("strict_format_reward_func", strict_format_reward_func),
-            ("soft_format_reward_func", soft_format_reward_func),]
+        reward_fns = [("xmlcount_reward_func", xmlcount_reward_func), ("correctness_reward_func", gsm8k_correctness_reward_func)]
         eval_correctness = eval_correctness_gsm8k
     elif cfg.dataset.name == "countdown" or cfg.dataset.name == "countdown_kd":
         reward_fns = [("correctness_reward_func", countdown_correctness_function)]
         eval_correctness = eval_correctness_countdown
-    else:
-        reward_fns = [
-            ("xmlcount_reward_func", xmlcount_reward_func), 
-            ("correctness_reward_func", medical_correctness_reward_func),
-            ("strict_format_reward_func", strict_format_reward_func),
-            ("soft_format_reward_func", soft_format_reward_func),]
+    elif cfg.dataset.name == "medreason" or cfg.dataset.name == "medreason_kd":
+        # Simplified for brevity - your original code had more
+        reward_fns = [("correctness_reward_func", medical_correctness_reward_func)]
+        eval_correctness = eval_correctness_medical
+    elif cfg.dataset.name == "science" or cfg.dataset.name == "science_kd":
+        # Simplified for brevity - your original code had more
+        reward_fns = [("correctness_reward_func", scienceqa_correctness_reward_func)]
+        eval_correctness = eval_correctness_scienceqa
+    elif cfg.dataset.name == "mmlu" or cfg.dataset.name == "mmlu_kd":
+        reward_fns = [("correctness_reward_func", mmlu_correctness_reward_func)]
+        eval_correctness = eval_correctness_mmlu
+    elif cfg.dataset.name == "medical" or cfg.dataset.name == "medical_kd":
+        # Simplified for brevity - your original code had more
+        reward_fns = [("correctness_reward_func", medical_correctness_reward_func)]
         eval_correctness = eval_correctness_medical
 
     if cfg.eval.report_to == "wandb":
@@ -388,15 +694,15 @@ def main(cfg: DictConfig):
         dataset, batch_size=cfg.eval.per_device_eval_batch_size, shuffle=False,
         collate_fn=lambda examples: examples,
     )
-    jsonl_path = f"{cfg.model.name}/eval_results.jsonl"
+    jsonl_path = f"{cfg.model.name}/eval_results_new.jsonl"
     df = pd.read_json(jsonl_path, lines=True)
     
     # Load models
     if cfg.airl:
-        model, reward_model, _, reward_tokenizer = irl_load_model_and_tokenizer(cfg, pretrained=True)
-        del model
+        model, reward_model, policy_tokenizer, reward_tokenizer = irl_load_model_and_tokenizer(cfg, pretrained=True)
+        del reward_model
         torch.cuda.empty_cache()
-        reward_model.eval()
+        model.eval()
 
 
     # Metrics storage
@@ -437,34 +743,48 @@ def main(cfg: DictConfig):
             batch_rewards.append(batch_rewards_list)
         
         if cfg.airl:
-            batch_scores = score_with_reward_model(
-                reward_model=reward_model,
-                reward_tokenizer=reward_tokenizer,
+            # batch_scores = score_with_reward_model(
+            #     reward_model=reward_model,
+            #     reward_tokenizer=reward_tokenizer,
+            #     prompts_msgs=prompts,
+            #     decoded_per_prompt=completions,
+            #     dense_reward=cfg.model.dense_rewards,
+            #     max_length=cfg.model.max_prompt_length + cfg.model.max_completion_length,
+            #     micro_batch=cfg.eval.max_micro_batch,
+            #     clip_reward_model=cfg.model.clip_reward_model,
+            #     reward_lb=cfg.model.reward_lb,
+            #     reward_ub=cfg.model.reward_ub,
+            #     dense_partial_fixed_n=cfg.model.dense_partial_fixed_n
+            # )
+            
+            batch_scores = [[[0]] * len(c) for c in completions]
+            
+            batch_log_probs = score_with_policy_model(
+                policy_model=model,
+                policy_tokenizer=policy_tokenizer, # Or reward_tokenizer if they share a vocab
                 prompts_msgs=prompts,
                 decoded_per_prompt=completions,
-                dense_reward=cfg.model.dense_rewards,
                 max_length=cfg.model.max_prompt_length + cfg.model.max_completion_length,
-                micro_batch=cfg.eval.max_micro_batch,
-                clip_reward_model=cfg.model.clip_reward_model,
-                reward_lb=cfg.model.reward_lb,
-                reward_ub=cfg.model.reward_ub,
-                dense_partial_fixed_n=cfg.model.dense_partial_fixed_n
-            )  
+                micro_batch=cfg.eval.max_micro_batch
+            )
         else:
             batch_scores = [[[0]] * len(c) for c in completions]
+            batch_log_probs = [[[0]] * len(c) for c in completions]
         
         # Store results
-        for prompt, generations, scores, rewards in zip(prompts, completions, batch_scores, batch_rewards):
-            for gen_idx, (generation, score, rews) in enumerate(zip(generations, scores, rewards)):
+        for prompt, generations, scores, log_probs, rewards in zip(prompts, completions, batch_scores, batch_log_probs, batch_rewards):
+            for gen_idx, (generation, score, log_prob, rews) in enumerate(zip(generations, scores, log_probs, rewards)):
                 result = {
                     "prompt": prompt,
                     "generation": generation,
                     "generation_idx": gen_idx,
-                    "reward_model_score": score[~np.isnan(score)].tolist(),
+                    "reward_model_score": score[~np.isnan(score)].tolist() if isinstance(score, np.ndarray) and score.ndim > 0 else score,
+                    "policy_log_probs": log_prob[~np.isnan(log_prob)].tolist() if isinstance(log_prob, np.ndarray) and log_prob.ndim > 0 else log_prob,
                 }
                 result = result | rews
                 all_results.append(result)
-                all_reward_scores.append(np.nanmean(score).item())
+                
+                all_reward_scores.append(np.nanmean(scores,axis=1).tolist())
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)
             all_correct_flags.append(correct_flags)
@@ -474,6 +794,7 @@ def main(cfg: DictConfig):
                 sums[name] += batch_score   
                 sum_sqs[name] += batch_score**2
             count += 1
+            
     # --- METRICS COMPUTATION (Unchanged) ---
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
     success_at_k = compute_success_at_k_from_scores(all_correct_flags, all_reward_scores, cfg.eval.ks)
@@ -516,7 +837,7 @@ def main(cfg: DictConfig):
         )
         
     # Save results to JSONL
-    output_file = f"{cfg.model.name}/eval_results_new.jsonl"
+    output_file = f"{cfg.model.name}/eval_results_logprobs.jsonl"
     save_results_to_jsonl(output_file, all_results)
     print(f"\nSaved evaluation results to {output_file}")
 

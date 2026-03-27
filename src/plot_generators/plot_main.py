@@ -45,35 +45,66 @@ RunName = Union[str, Mapping[str, str]]
 
 EXPERIMENTS: List[Dict[str, Any]] = [
     # Stepwise
-    {"airl": "qwen3b_partial_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_new"},
-    {"airl": "llama3b_partial_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_new"},
-    {"airl": "qwen7b_partial_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_new"},
-    {"airl": "llama8b_partial_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_new"},
+    # {"airl": "qwen3b_partial_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_new_from_sft"},
+    # {"airl": "llama3b_partial_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_new_from_sft"},
+    # {"airl": "qwen7b_partial_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_new_from_sft"},
+    # {"airl": "llama8b_partial_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_new_from_sft"},
 
 
-    # Sparse
-    {"airl": "qwen3b_sparse_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse_new"},
-    {"airl": "llama3b_sparse_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse_new"},
-    {"airl": "qwen7b_sparse_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse_new"},
-    {"airl": "llama8b_sparse_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse_new"},
+    # # Sparse
+    # {"airl": "qwen3b_sparse_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse_new_from_sft"},
+    # {"airl": "llama3b_sparse_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse_new_from_sft"},
+    # {"airl": "qwen7b_sparse_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse_new_from_sft"},
+    # {"airl": "llama8b_sparse_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse_new_from_sft"},
 
-    # Full
-    {"airl": "qwen3b_full_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full_new"},
-    {"airl": "llama3b_full_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full_new"},
-    {"airl": "qwen7b_full_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full_new"},
-    {"airl": "llama8b_full_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full_new"},
+    # # Full
+    # {"airl": "qwen3b_full_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full_new_from_sft"},
+    # {"airl": "llama3b_full_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full_new_from_sft"},
+    # {"airl": "qwen7b_full_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full_new_from_sft"},
+    # {"airl": "llama8b_full_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full_new_from_sft"},
+
+    # # Partial fixed
+    # {"airl": "qwen3b_partial_fixed_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed_new_from_sft"},
+    # {"airl": "llama3b_partial_fixed_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed_new_from_sft"},
+    # {"airl": "qwen7b_partial_fixed_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed_new_from_sft"},
+    # {"airl": "llama8b_partial_fixed_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed_new_from_sft"},
+    
+    
+     # Betas
+    {"airl": "qwen3b_partial_range_-1.0_1.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_11", "domains": ["math"]},
+    {"airl": "qwen3b_partial_range_-3.0_3.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_33", "domains": ["math"]},
+    {"airl": "qwen3b_partial_range_-10.0_10.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_1010", "domains": ["math"]},
+    {"airl": "qwen3b_partial_range_0.0_2.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_02", "domains": ["math"]},
+    
+    {"airl": "llama3b_partial_range_-1.0_1.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_11", "domains": ["math"]},
+    {"airl": "llama3b_partial_range_-3.0_3.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_33", "domains": ["math"]},
+    {"airl": "llama3b_partial_range_-10.0_10.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_1010", "domains": ["math"]},
+    {"airl": "llama3b_partial_range_0.0_2.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_02", "domains": ["math"]},
+    
+    # Groups
+    {"airl": "qwen3b_partial_G4", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_G4", "domains": ["math"]},
+    {"airl": "qwen3b_partial_G16", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_G16", "domains": ["math"]},
+    {"airl": "llama3b_partial_G4", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_G4", "domains": ["math"]},
+    {"airl": "llama3b_partial_G16", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_G16", "domains": ["math"]},
+    
+    #  # Corruption
+    {"airl": "qwen3b_perturb_none", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_none", "domains": ["math"]},
+    {"airl": "qwen3b_perturb_numbers_only", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_numbers_only", "domains": ["math"]},
+    {"airl": "qwen3b_perturb_nearby_and_numbers", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_nearby_and_numbers", "domains": ["math"]},
+    {"airl": "qwen3b_perturb_no_switch", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_no_switch", "domains": ["math"]},
+    
+    {"airl": "llama3b_perturb_none", "sft": "llama3b_sft", "grpo": "qwen3b_grpo", "label": "llama3b_perturb_none", "domains": ["math"]},
+    {"airl": "llama3b_perturb_numbers_only", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_numbers_only", "domains": ["math"]},
+    {"airl": "llama3b_perturb_nearby_and_numbers", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_nearby_and_numbers", "domains": ["math"]},
+    {"airl": "llama3b_perturb_no_switch", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_no_switch", "domains": ["math"]},
+
+
 
     # OVR
     # {"airl": "qwen3b_ovr", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_ovr"},
     # {"airl": "llama3b_ovr", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_ovr"},
     # {"airl": "qwen7b_ovr", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_ovr"},
     # {"airl": "llama8b_ovr", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_ovr"},
-
-    # Partial fixed
-    {"airl": "qwen3b_partial_fixed_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed_new"},
-    {"airl": "llama3b_partial_fixed_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed_new"},
-    {"airl": "qwen7b_partial_fixed_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed_new"},
-    {"airl": "llama8b_partial_fixed_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed_new"},
     
     #  # switch reward models
     # {"airl": "llama3b_switch_reward", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_switch_reward"},
@@ -115,7 +146,9 @@ def eval_jsonl(base: Path, run_name: str, ckpt: str) -> Path:
     # if new_path.exists():
     #     return new_path
     
-    new_path = base / run_name / ckpt / "eval_results_new.jsonl"
+    
+    
+    new_path = base / run_name / ckpt / "eval_results_new.jsonl" #"eval_results_logprobs_sft.jsonl"
     # Check if it exists on disk
     if new_path.exists():
         return new_path
@@ -209,7 +242,7 @@ def main() -> None:
 
     tasks = []
     
-    for answer_only in [True, False]:
+    for answer_only in [True]:
         for domain, base_path in DOMAINS.items():
             for exp in EXPERIMENTS:
                 tasks.append({
