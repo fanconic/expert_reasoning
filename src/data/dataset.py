@@ -67,10 +67,42 @@ def extract_think_content(input_string: str) -> str:
     return match.group(1).strip() if match else input_string.strip()
 
 
-# GSM8K Dataset
-def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
+def get_aime_distillation(
+    split: str = "train",
+    ratio: float = 1.0,
+    no_system: bool = False,
+    expert_error_rate: float = 0.0,
+    neg_perturb_fns=None,
+    num_neg_perturbations_per_expert=0,
+) -> Dataset:
     """
-    Load and preprocess the GSM8K dataset.
+    Load AIME questions plus CuratedThoughts reasoning for KD:
+
+    Returns a Dataset with fields:
+      - prompt: list[dict(role,content)]  (system + user)
+      - target: str containing <think>…</think><answer>…</answer>
+      - answer: final answer string (possibly corrupted if expert_error_rate > 0)
+      - is_expert_error: bool indicating whether this example was perturbed
+    """
+    data = load_from_disk("data/aime_train")[split]
+
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+
+    data = data.map(
+    lambda x: {
+        "prompt": x["prompt"],
+        "answer": x["answer"],
+        "target": x["target"],
+    })
+  
+    return data
+
+
+def get_aime_grpo(split="train", ratio: float = 1.0, no_system=False):
+    """
+    Load and preprocess the AIME_AMC dataset.
 
     Args:
         split (str): Dataset split to load ('train', 'test', etc.).
@@ -79,7 +111,32 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_dataset("openai/gsm8k", "main")[split]
+    data = load_from_disk("data/aime_train")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+
+    data = data.map(
+        lambda x: {
+            "prompt": x["prompt"],
+            "answer": x["answer"],
+        })
+  
+    return data
+
+
+def get_aime25(split="train", ratio: float = 1.0, no_system=False):
+    """
+    Load and preprocess the AIME25 dataset.
+
+    Args:
+        split (str): Dataset split to load ('train', 'test', etc.).
+
+    Returns:
+        Dataset: Processed dataset with prompts formatted for model input
+                and extracted answers.
+    """
+    data = load_dataset("MathArena/aime_2025")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -88,9 +145,9 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
         data = data.map(
             lambda x: {
                 "prompt": [
-                    {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + x["question"]},
+                    {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + x["problem"]},
                 ],
-                "answer": extract_hash_answer(x["answer"]),
+                "answer": x["answer"],
             }
         )
     else:
@@ -98,12 +155,51 @@ def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
             lambda x: {
                 "prompt": [
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": x["question"]},
+                    {"role": "user", "content": x["problem"]},
                 ],
-                "answer": extract_hash_answer(x["answer"]),
+                "answer": x["answer"],
             }
         )
     return data
+
+
+def get_aime24(split="train", ratio: float = 1.0, no_system=False):
+    """
+    Load and preprocess the AIME24 dataset.
+
+    Args:
+        split (str): Dataset split to load ('train', 'test', etc.).
+
+    Returns:
+        Dataset: Processed dataset with prompts formatted for model input
+                and extracted answers.
+    """
+    data = load_dataset("HuggingFaceH4/aime_2024")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+
+    if no_system:
+        data = data.map(
+            lambda x: {
+                "prompt": [
+                    {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + x["problem"]},
+                ],
+                "answer": x["answer"],
+            }
+        )
+    else:
+        data = data.map(
+            lambda x: {
+                "prompt": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": x["problem"]},
+                ],
+                "answer": x["answer"],
+            }
+        )
+    return data
+
 
 
 def make_perturbed_completions(
@@ -158,6 +254,44 @@ def _extract_answer_from_target(target: str) -> str | None:
         return None
     return m.group(1).strip()
 
+
+# GSM8K Dataset
+def get_gsm8k_grpo(split="train", ratio: float = 1.0, no_system=False):
+    """
+    Load and preprocess the GSM8K dataset.
+
+    Args:
+        split (str): Dataset split to load ('train', 'test', etc.).
+
+    Returns:
+        Dataset: Processed dataset with prompts formatted for model input
+                and extracted answers.
+    """
+    data = load_dataset("openai/gsm8k", "main")[split]
+    # optionally subsample
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+
+    if no_system:
+        data = data.map(
+            lambda x: {
+                "prompt": [
+                    {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + x["question"]},
+                ],
+                "answer": extract_hash_answer(x["answer"]),
+            }
+        )
+    else:
+        data = data.map(
+            lambda x: {
+                "prompt": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": x["question"]},
+                ],
+                "answer": extract_hash_answer(x["answer"]),
+            }
+        )
+    return data
 
 def get_gsm8k_distillation(
     split: str = "train",
@@ -273,7 +407,7 @@ def get_countdown_grpo(split="train", ratio: float = 1.0):
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_from_disk("data/countdown")[split]
+    data = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/data/countdown")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -343,7 +477,7 @@ def get_medical_grpo(
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_from_disk("./data/medreason_corrupted_full")[split]
+    data = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/medreason_corrupted_full")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -374,7 +508,7 @@ def get_medical_distillation(
       - target: str containing <think>…</think><answer>…</answer>
     """
     # this curated set has both the question and the full COT+boxed answer
-    ds = load_from_disk("./data/medreason_corrupted_full")[split]
+    ds = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/medreason_corrupted_full")[split]
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
@@ -511,7 +645,7 @@ def get_mmlu_grpo(
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_from_disk("./data/mmlu_pro_filtered")[split]
+    data = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/mmlu_pro_filtered")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -542,7 +676,7 @@ def get_mmlu_distillation(
       - target: str containing <think>…</think><answer>…</answer>
     """
     # this curated set has both the question and the full COT+boxed answer
-    ds = load_from_disk("./data/mmlu_pro_filtered")[split]
+    ds = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/mmlu_pro_filtered")[split]
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))
@@ -626,6 +760,21 @@ def get_dataset(
         return get_mmlu_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "mmlu_kd":
         return get_mmlu_distillation(
+            split,
+            ratio,
+            no_system=no_system,
+            expert_error_rate=expert_error_rate,
+            neg_perturb_fns=neg_perturb_fns,
+            num_neg_perturbations_per_expert=num_neg_perturbations_per_expert,
+        )
+    elif name.lower() == "aime_2024":
+        return get_aime24("train", ratio, no_system=no_system)
+    elif name.lower() == "aime_2025":
+        return get_aime25("train", ratio, no_system=no_system)
+    elif name.lower() == "aime_train":
+        return get_aime_grpo("train", ratio, no_system=no_system)
+    elif name.lower() == "aime_train_kd":
+        return get_aime_distillation(
             split,
             ratio,
             no_system=no_system,

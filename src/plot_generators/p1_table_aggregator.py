@@ -10,19 +10,20 @@ ROOT_DIR = os.path.join('figures', 'answer_only')
 ALGO_ORDER = [
     ('GRPO', 'Verifiable Reward'),  
     ('SFT', 'SFT'),
-    ('sparse_new', 'Ours (\\textit{Sparse})'),
-    ('partial_new', 'Ours (\\textit{Step-wise})'),
-    ('partial_fixed_new', 'Ours (\\textit{Interval})'),
-    ('full_new', 'Ours (\\textit{Dense})'),
+    ('sparse', 'Ours (\\textit{Sparse})'),
+    ('partial', 'Ours (\\textit{Step-wise})'),
+    ('partial_fixed', 'Ours (\\textit{Interval})'),
+    ('full', 'Ours (\\textit{Dense})'),
     #('ovr', 'Ours (\\textit{Step-wise + OVR})')
 ]
 
 # Model Order (Now used for Sub-Headers)
 MODEL_ORDER = [
-    ('qwen3b', r'\texttt{Qwen2.5-3B}'),
-    ('llama3b', r'\texttt{Llama3.2-3B}'),
-    ('qwen7b', r'\texttt{Qwen2.5-7B}'),
-    ('llama8b', r'\texttt{Llama3.1-8B}')
+    # ('qwen3b', r'\texttt{Qwen2.5-3B}'),
+    # ('llama3b', r'\texttt{Llama3.2-3B}'),
+    # ('qwen7b', r'\texttt{Qwen2.5-7B}'),
+    # ('llama8b', r'\texttt{Llama3.1-8B}')
+    ('qwen4b', r'\texttt{Qwen3-4B}')
 ]
 
 DATASETS = ['math', 'medicine', 'mmlu']
@@ -227,7 +228,7 @@ def main():
     latex.append(r"\label{tab:p1_results}")
     latex.append(r"\end{table}")
 
-    output_path = os.path.join(ROOT_DIR, "results_p1_highlight_new.txt")
+    output_path = os.path.join(ROOT_DIR, "results_p1_highlight_qwen4b.txt")
     with open(output_path, "w") as f:
         f.write("\n".join(latex))
     

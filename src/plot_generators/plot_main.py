@@ -69,34 +69,45 @@ EXPERIMENTS: List[Dict[str, Any]] = [
     # {"airl": "qwen7b_partial_fixed_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed_new_from_sft"},
     # {"airl": "llama8b_partial_fixed_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed_new_from_sft"},
     
+    # Qwen4b
+    # {"airl": "qwen4b_sparse", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_sparse", "domains": ["math"]},
+    # {"airl": "qwen4b_partial", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial", "domains": ["math"]},
+    # {"airl": "qwen4b_partial_fixed", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_fixed", "domains": ["math"]},
+    # {"airl": "qwen4b_full", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_full", "domains": ["math"]},
+    
+    {"airl": "qwen4b_sparse", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_sparse_new"},
+    {"airl": "qwen4b_partial", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_new"},
+    {"airl": "qwen4b_partial_fixed", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_fixed_new"},
+    {"airl": "qwen4b_full", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_full_new"},
     
      # Betas
-    {"airl": "qwen3b_partial_range_-1.0_1.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_11", "domains": ["math"]},
-    {"airl": "qwen3b_partial_range_-3.0_3.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_33", "domains": ["math"]},
-    {"airl": "qwen3b_partial_range_-10.0_10.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_1010", "domains": ["math"]},
-    {"airl": "qwen3b_partial_range_0.0_2.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_02", "domains": ["math"]},
+    # {"airl": "qwen3b_partial_range_-1.0_1.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_11", "domains": ["math"]},
+    # {"airl": "qwen3b_partial_range_-3.0_3.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_33", "domains": ["math"]},
+    # {"airl": "qwen3b_partial_range_-10.0_10.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_1010", "domains": ["math"]},
+    # {"airl": "qwen3b_partial_range_0.0_2.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_02", "domains": ["math"]},
     
-    {"airl": "llama3b_partial_range_-1.0_1.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_11", "domains": ["math"]},
-    {"airl": "llama3b_partial_range_-3.0_3.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_33", "domains": ["math"]},
-    {"airl": "llama3b_partial_range_-10.0_10.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_1010", "domains": ["math"]},
-    {"airl": "llama3b_partial_range_0.0_2.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_02", "domains": ["math"]},
+    # {"airl": "llama3b_partial_range_-1.0_1.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_11", "domains": ["math"]},
+    # {"airl": "llama3b_partial_range_-3.0_3.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_33", "domains": ["math"]},
+    # {"airl": "llama3b_partial_range_-10.0_10.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_1010", "domains": ["math"]},
+    # {"airl": "llama3b_partial_range_0.0_2.0", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_02", "domains": ["math"]},
+    # {"airl": "llama3b_partial_range_-1000_1000", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_range_unlimited", "domains": ["math"]},
     
-    # Groups
-    {"airl": "qwen3b_partial_G4", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_G4", "domains": ["math"]},
-    {"airl": "qwen3b_partial_G16", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_G16", "domains": ["math"]},
-    {"airl": "llama3b_partial_G4", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_G4", "domains": ["math"]},
-    {"airl": "llama3b_partial_G16", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_G16", "domains": ["math"]},
+    # # Groups
+    # {"airl": "qwen3b_partial_G4", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_G4", "domains": ["math"]},
+    # {"airl": "qwen3b_partial_G16", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_G16", "domains": ["math"]},
+    # {"airl": "llama3b_partial_G4", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_G4", "domains": ["math"]},
+    # {"airl": "llama3b_partial_G16", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_G16", "domains": ["math"]},
     
-    #  # Corruption
-    {"airl": "qwen3b_perturb_none", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_none", "domains": ["math"]},
-    {"airl": "qwen3b_perturb_numbers_only", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_numbers_only", "domains": ["math"]},
-    {"airl": "qwen3b_perturb_nearby_and_numbers", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_nearby_and_numbers", "domains": ["math"]},
-    {"airl": "qwen3b_perturb_no_switch", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_no_switch", "domains": ["math"]},
+    # #  # Corruption
+    # {"airl": "qwen3b_perturb_none", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_none", "domains": ["math"]},
+    # {"airl": "qwen3b_perturb_numbers_only", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_numbers_only", "domains": ["math"]},
+    # {"airl": "qwen3b_perturb_nearby_and_numbers", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_nearby_and_numbers", "domains": ["math"]},
+    # {"airl": "qwen3b_perturb_no_switch", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_perturb_no_switch", "domains": ["math"]},
     
-    {"airl": "llama3b_perturb_none", "sft": "llama3b_sft", "grpo": "qwen3b_grpo", "label": "llama3b_perturb_none", "domains": ["math"]},
-    {"airl": "llama3b_perturb_numbers_only", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_numbers_only", "domains": ["math"]},
-    {"airl": "llama3b_perturb_nearby_and_numbers", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_nearby_and_numbers", "domains": ["math"]},
-    {"airl": "llama3b_perturb_no_switch", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_no_switch", "domains": ["math"]},
+    # {"airl": "llama3b_perturb_none", "sft": "llama3b_sft", "grpo": "qwen3b_grpo", "label": "llama3b_perturb_none", "domains": ["math"]},
+    # {"airl": "llama3b_perturb_numbers_only", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_numbers_only", "domains": ["math"]},
+    # {"airl": "llama3b_perturb_nearby_and_numbers", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_nearby_and_numbers", "domains": ["math"]},
+    # {"airl": "llama3b_perturb_no_switch", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_perturb_no_switch", "domains": ["math"]},
 
 
 

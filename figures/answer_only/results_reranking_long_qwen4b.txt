@@ -1,0 +1,21 @@
+% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}
+\begin{table*}[t]
+\centering
+\scriptsize
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{ll ccc ccc ccc}
+\toprule
+& & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} & \multicolumn{3}{c}{\textbf{\textsc{MMLU-Pro}}} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-8} \cmidrule(lr){9-11}
+\textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen3-4B}}} & \textit{Sparse} & 90 \tiny\textcolor{gray}{[88, 92]} & 93 \tiny\textcolor{gray}{[91, 94]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} & 65 \tiny\textcolor{gray}{[63, 67]} & 70 \tiny\textcolor{gray}{[68, 73]} & \textbf{\textcolor{insightteal}{($\uparrow$ +5)}} & 55 \tiny\textcolor{gray}{[52, 57]} & 62 \tiny\textcolor{gray}{[59, 64]} & \textbf{\textcolor{insightteal}{($\uparrow$ +7)}} \\
+ & \textit{Step-wise} & 85 \tiny\textcolor{gray}{[83, 87]} & 90 \tiny\textcolor{gray}{[88, 92]} & \textbf{\textcolor{insightteal}{($\uparrow$ +5)}} & 60 \tiny\textcolor{gray}{[58, 63]} & 60 \tiny\textcolor{gray}{[57, 62]} & (+0) & 53 \tiny\textcolor{gray}{[51, 56]} & 61 \tiny\textcolor{gray}{[58, 63]} & \textbf{\textcolor{insightteal}{($\uparrow$ +8)}} \\
+ & \textit{Interval} & 85 \tiny\textcolor{gray}{[83, 87]} & 91 \tiny\textcolor{gray}{[89, 92]} & \textbf{\textcolor{insightteal}{($\uparrow$ +6)}} & 53 \tiny\textcolor{gray}{[50, 55]} & 52 \tiny\textcolor{gray}{[49, 54]} & \textcolor{purple}{($\downarrow$ -1)} & 54 \tiny\textcolor{gray}{[52, 57]} & 62 \tiny\textcolor{gray}{[59, 64]} & \textbf{\textcolor{insightteal}{($\uparrow$ +8)}} \\
+ & \textit{Dense} & 89 \tiny\textcolor{gray}{[87, 91]} & 91 \tiny\textcolor{gray}{[89, 93]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} & 50 \tiny\textcolor{gray}{[47, 52]} & 60 \tiny\textcolor{gray}{[58, 63]} & \textbf{\textcolor{insightteal}{($\uparrow$ +10)}} & 53 \tiny\textcolor{gray}{[50, 55]} & 59 \tiny\textcolor{gray}{[57, 62]} & \textbf{\textcolor{insightteal}{($\uparrow$ +6)}} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Best-of-N Reranking Performance (\%).} Comparison of Random selection vs. Reward Model selection. Values are percentages. \textbf{Bold} is best, \underline{underline} is second best. $\Delta$ indicates percentage-point improvement. \textcolor{insightteal}{Blue} is positive, \textcolor{purple}{purple} is negative. * symbolises an adversarial mode collapse (results grayed out).}
+\label{tab:reranking_long}
+\end{table*}

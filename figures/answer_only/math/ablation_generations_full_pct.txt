@@ -1,0 +1,15 @@
+\begin{table}[h]
+\centering
+{%
+\begin{tabular}{l cccc}
+\toprule
+\textbf{Gen. ($N$)} & \textbf{Pass@1} & \textbf{$\Delta$ Rerank} & \textbf{AUROC $\uparrow$} & \textbf{ECE $\downarrow$} \\
+\midrule
+4 & 53 \tiny\textcolor{gray}{[52, 55]} & \textbf{+18} & 89 \tiny\textcolor{gray}{[89, 90]} & 13 \tiny\textcolor{gray}{[13, 14]} \\
+8 & 58 \tiny\textcolor{gray}{[56, 60]} & \textbf{+11} & 83 \tiny\textcolor{gray}{[82, 83]} & 20 \tiny\textcolor{gray}{[20, 21]} \\
+16 & 57 \tiny\textcolor{gray}{[56, 59]} & \textbf{+13} & 86 \tiny\textcolor{gray}{[86, 87]} & 14 \tiny\textcolor{gray}{[13, 14]} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Ablation on Number of Generations ($N$)} for \texttt{Llama3.2-3B} (Step-wise) on GSM8K. All metrics are in full percentages (\%). Intervals indicate 95\% confidence intervals.}
+\end{table}

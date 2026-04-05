@@ -4,7 +4,7 @@ set -u
 export GPU_NUM="3" 
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 
-MODEL="llama3b"
+MODEL="qwen7b"
 # Base training parameters that only go to irl_train.py
 BASE_TRAIN_PARAMS="model.reward_updates_per_policy_step=3 training.beta=0.1 training.max_steps=400 training.buffer_size=50"
 # Common flags that both train and eval can handle

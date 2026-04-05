@@ -21,6 +21,8 @@ MODEL_ORDER = [
     ('llama3b', r'\texttt{Llama3.2-3B}'),
     ('qwen7b', r'\texttt{Qwen2.5-7B}'),
     ('llama8b', r'\texttt{Llama3.1-8B}')
+     ('qwen4b', r'\texttt{Qwen3-4B}')
+    
 ]
 
 DATASETS = ['math', 'medicine', 'mmlu']
@@ -85,7 +87,7 @@ def format_cell(val_str, is_best=False, is_second=False):
         ci_disp = interval
 
     # 3. Mode Collapse Check (< 20%)
-    if mean_val < 20.0:
+    if mean_val < 15.0:
         return f"\\textcolor{{gray}}{{{mean_disp}$^*$ \\tiny {ci_disp}}}"
 
     # 4. Apply Highlights
@@ -136,7 +138,7 @@ def main():
         for model_key, _ in MODEL_ORDER:
             for algo_key, _ in ALGO_ORDER:
                 folder = f"{model_key}_{algo_key}"
-                fpath = os.path.join(ds_path, folder, 'pass_at_k_table_reranking.txt')
+                fpath = os.path.join(ds_path, folder, 'pass_at_k_table_reranking_16.txt')
                 
                 res = extract_reranking_p1(fpath)
                 data[model_key][algo_key][dataset] = res
@@ -230,7 +232,7 @@ def main():
     latex.append(r"\label{tab:reranking_long}")
     latex.append(r"\end{table*}")
 
-    output_file = os.path.join(ROOT_DIR, "results_reranking_long_new.txt")
+    output_file = os.path.join(ROOT_DIR, "results_reranking_long_qwen4b.txt")
     with open(output_file, "w") as f:
         f.write("\n".join(latex))
     

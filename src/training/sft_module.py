@@ -19,7 +19,7 @@ from src.rewards.reward_functions import (
 
 def run_sft_training(model, tokenizer, train_dataset, cfg, val_dataset=None):
 
-    if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":
+    if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd" or "aime" in cfg.dataset.name:
         reward_fns = [
             ("xmlcount_reward_func", xmlcount_reward_func),
             ("soft_format_reward_func", soft_format_reward_func),

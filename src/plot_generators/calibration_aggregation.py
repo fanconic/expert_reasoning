@@ -3,37 +3,34 @@ import re
 from pathlib import Path
 
 # ================= CONFIGURATION =================
-ROOT_DIR = os.path.join('figures', 'answer_only')
+ROOT_DIR = Path('figures/answer_only')
 
 ALGO_ORDER = [
-    ('sparse_new', '\\textit{Sparse}'),
-    ('partial_new', '\\textit{Step-wise}'),
-    ('partial_fixed_new', '\\textit{Interval}'),
-    ('full_new', '\\textit{Dense}'),
+    ('sparse_new', r'\textit{Sparse}'),
+    ('partial_new', r'\textit{Step-wise}'),
+    ('partial_fixed_new', r'\textit{Interval}'),
+    ('full_new', r'\textit{Dense}'),
 ]
 
 MODEL_ORDER = [
     ('qwen3b', r'\texttt{Qwen2.5-3B}'),
     ('llama3b', r'\texttt{Llama3.2-3B}'),
     ('qwen7b', r'\texttt{Qwen2.5-7B}'),
-    ('llama8b', r'\texttt{Llama3.1-8B}')
+    ('llama8b', r'\texttt{Llama3.1-8B}'),
+    ('qwen4b', r'\texttt{Qwen3-4B}')
 ]
 
 DATASETS = [('math', 'GSM8K'), ('medicine', 'MedReason'), ('mmlu', 'MMLU-Pro')]
-VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
+VALUE_PATTERN = r"(\d*\.?\d+\s*\[\s*\d*\.?\d+,\s*\d*\.?\d+\s*\])"
 
 def extract_calibration_metrics(filepath):
-    """
-    Extracts AUROC and ECE for the 'Exp. Reas. (ours)' row.
-    """
     results = {'AUROC': None, 'ECE': None}
-    if not os.path.exists(filepath):
+    if not filepath.exists():
         return results
 
     with open(filepath, 'r') as f:
         content = f.read()
     
-    # Look for the row containing our primary method
     for line in content.split('\\\\'):
         if "Exp. Reas. (ours)" in line:
             matches = re.findall(VALUE_PATTERN, line)
@@ -42,34 +39,32 @@ def extract_calibration_metrics(filepath):
                 results['ECE'] = matches[1]
     return results
 
-def format_calib_cell(val_str, multiply_by_100=True):
+def format_calib_cell(val_str):
     """
-    Formats the metric. AUROC and ECE are often cleaner as 0.XX, 
-    but we can convert to XX.X if you prefer percentage style.
+    Converts 0.XXXX [0.YYYY, 0.ZZZZ] to XX [YY, ZZ].
+    Uses integer rounding for 'full' percentages.
     """
     if not val_str: return "-"
     
-    parts = val_str.split(' ', 1)
-    mean_val = float(parts[0])
-    ci = parts[1]
-    
-    if multiply_by_100:
-        mean_disp = f"{mean_val * 100:.1f}"
-        # Parse CI to multiply by 100
-        ci_vals = re.findall(r"\d+\.\d+", ci)
-        ci_disp = f"[{float(ci_vals[0])*100:.1f}, {float(ci_vals[1])*100:.1f}]"
-    else:
-        mean_disp = f"{mean_val:.3f}"
-        ci_disp = ci
-
-    return f"{mean_disp} \\tiny\\textcolor{{gray}}{{{ci_disp}}}"
+    try:
+        # Extract all numbers from the string
+        nums = [float(n) for n in re.findall(r"\d*\.?\d+", val_str)]
+        if len(nums) < 3: return "-"
+        
+        # Multiply by 100 and round to nearest integer
+        mean_p = int(round(nums[0] * 100))
+        low_p  = int(round(nums[1] * 100))
+        high_p = int(round(nums[2] * 100))
+        
+        return f"{mean_p} \\tiny\\textcolor{{gray}}{{[{low_p}, {high_p}]}}"
+    except (ValueError, IndexError):
+        return "-"
 
 def main():
     latex = []
     latex.append(r"\begin{table*}[t]")
     latex.append(r"\centering\scriptsize")
     latex.append(r"\resizebox{\textwidth}{!}{%")
-    # 2 (labels) + 3 datasets * 2 metrics = 8 columns
     latex.append(r"\begin{tabular}{ll cc cc cc}")
     latex.append(r"\toprule")
     
@@ -79,42 +74,40 @@ def main():
         header1 += f" & \multicolumn{{2}}{{c}}{{\\textbf{{\\textsc{{{ds_name}}}}}}}"
     latex.append(header1 + r" \\")
     
-    # cmidrules
     latex.append(r"\cmidrule(lr){3-4} \cmidrule(lr){5-6} \cmidrule(lr){7-8}")
     
     # Header 2
     header2 = r"\textbf{Backbone} & \textbf{Method} "
     for _ in DATASETS:
-        header2 += r" & AUROC $\uparrow$ & ECE $\downarrow$ "
+        header2 += r" & AUROC (\%) $\uparrow$ & ECE (\%) $\downarrow$ "
     latex.append(header2 + r" \\")
     latex.append(r"\midrule")
 
     for model_key, model_name in MODEL_ORDER:
-        first_row = True
-        for algo_key, algo_name in ALGO_ORDER:
+        for i, (algo_key, algo_name) in enumerate(ALGO_ORDER):
             row_cells = []
             for ds_key, _ in DATASETS:
-                fpath = os.path.join(ROOT_DIR, ds_key, f"{model_key}_{algo_key}", 'calibration_metrics_table.txt')
+                fpath = ROOT_DIR / ds_key / f"{model_key}_{algo_key}" / 'calibration_metrics_table.txt'
                 metrics = extract_calibration_metrics(fpath)
                 
-                # We use multiply_by_100=True to match your pass@k table style
-                auroc = format_calib_cell(metrics['AUROC'], multiply_by_100=True)
-                ece = format_calib_cell(metrics['ECE'], multiply_by_100=True)
+                auroc = format_calib_cell(metrics['AUROC'])
+                ece = format_calib_cell(metrics['ECE'])
                 row_cells.extend([auroc, ece])
             
-            m_label = f"\\multirow{{{len(ALGO_ORDER)}}}{{*}}{{\\textbf{{{model_name}}}}}" if first_row else ""
+            m_label = f"\\multirow{{{len(ALGO_ORDER)}}}{{*}}{{\\textbf{{{model_name}}}}}" if i == 0 else ""
             latex.append(f"{m_label} & {algo_name} & " + " & ".join(row_cells) + r" \\")
-            first_row = False
         
         if model_key != MODEL_ORDER[-1][0]:
             latex.append(r"\midrule")
 
     latex.append(r"\bottomrule")
     latex.append(r"\end{tabular}}")
-    latex.append(r"\caption{\textbf{Critic Calibration Metrics.} AUROC (\%) indicates the ability to rank correct vs. incorrect traces. ECE (\%) measures the Expected Calibration Error (lower is better).}")
+    latex.append(r"\caption{\textbf{Critic Calibration Metrics.} All values are reported as percentages (\%). AUROC indicates ranking ability; ECE measures calibration error (lower is better).}")
     latex.append(r"\end{table*}")
 
-    output_path = os.path.join(ROOT_DIR, "results_calibration_table.txt")
+    output_path = ROOT_DIR / "results_calibration_table.txt"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
     with open(output_path, "w") as f:
         f.write("\n".join(latex))
     print(f"Created {output_path}")

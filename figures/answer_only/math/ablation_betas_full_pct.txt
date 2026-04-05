@@ -1,0 +1,19 @@
+\begin{table}[h]
+\centering
+{%
+\begin{tabular}{l cccc}
+\toprule
+\textbf{$\beta$ (LB, UB)} & \textbf{Pass@1} & \textbf{$\Delta$ Rerank} & \textbf{AUROC $\uparrow$} & \textbf{ECE $\downarrow$} \\
+\midrule
+(0, 2) & 54 \tiny\textcolor{gray}{[52, 56]} & \textbf{+14} & 86 \tiny\textcolor{gray}{[85, 86]} & 21 \tiny\textcolor{gray}{[20, 22]} \\
+(-1, 1) & 57 \tiny\textcolor{gray}{[55, 59]} & \textbf{+11} & 84 \tiny\textcolor{gray}{[83, 84]} & 15 \tiny\textcolor{gray}{[14, 15]} \\
+(-3, 3) & 54 \tiny\textcolor{gray}{[52, 56]} & \textbf{+14} & 89 \tiny\textcolor{gray}{[88, 89]} & 13 \tiny\textcolor{gray}{[12, 13]} \\
+(-5, 5) & 58 \tiny\textcolor{gray}{[56, 60]} & - & 83 \tiny\textcolor{gray}{[82, 83]} & 20 \tiny\textcolor{gray}{[20, 21]} \\
+(-10, 10) & 52 \tiny\textcolor{gray}{[51, 54]} & \textbf{+17} & 87 \tiny\textcolor{gray}{[87, 88]} & 18 \tiny\textcolor{gray}{[17, 18]} \\
+(-\infty, \infty) & 58 \tiny\textcolor{gray}{[56, 60]} & \textbf{+12} & 87 \tiny\textcolor{gray}{[87, 88]} & 12 \tiny\textcolor{gray}{[12, 13]} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Ablation on Reward Clipping ($\beta$)} for \texttt{Llama3.2-3B} (Step-wise) on GSM8K. All metrics are shown in full percentages (\%). Intervals indicate 95\% confidence intervals.}
+\label{tab:beta_ablation}
+\end{table}

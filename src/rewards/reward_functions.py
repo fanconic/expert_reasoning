@@ -11,7 +11,7 @@ def get_reward_functions(dataset_name: str) -> List:
     Returns:
         list: A list of reward functions in the order they should be applied.
     """
-    if dataset_name == "gsm8k" or dataset_name == "gsm8k_kd":
+    if dataset_name == "gsm8k" or dataset_name == "gsm8k_kd" or "aime" in dataset_name:
         return [
             xmlcount_reward_func,
             soft_format_reward_func,

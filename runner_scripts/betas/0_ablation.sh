@@ -29,7 +29,7 @@ run_bounds_ablation() {
     local WNAME="${MODEL}_partial_range_${LB}_${UB}"
     
     # Overrides for this specific run
-    local BOUND_FLAGS="model.reward_lb=${LB} model.reward_ub=${UB}"
+    local BOUND_FLAGS="model.reward_lb=${LB} model.reward_ub=${UB} model.clip_reward_model=false"
     local OVERRIDE="wandb.run_name=${WNAME} model.dense_rewards=partial ${BOUND_FLAGS}"
 
     echo "------------------------------------------------"
@@ -53,7 +53,7 @@ run_bounds_ablation() {
 # You can add or remove pairs here as needed.
 # Format: run_bounds_ablation <Lower_Bound> <Upper_Bound>
 
-run_bounds_ablation "-1.0" "1.0"
+run_bounds_ablation "-1000" "1000"
 
 # --- Final Report ---
 if [[ ${#FAILED_RUNS[@]} -ne 0 ]]; then
@@ -62,8 +62,3 @@ if [[ ${#FAILED_RUNS[@]} -ne 0 ]]; then
     exit 1
 fi
 echo "All bound ablations completed successfully."
-
-
-bash runner_scripts/corruption/0_ablation.sh
-
-bash runner_scripts/sft_reranking/evaluator_0_fullgas.sh

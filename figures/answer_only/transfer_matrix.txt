@@ -1,0 +1,15 @@
+\begin{table*}[h!]
+\centering
+\scriptsize
+\begin{tabular}{l rrr rrr rrr}
+\toprule
+\multicolumn{1}{c}{\texttt{Qwen2.5-7B} } & \multicolumn{3}{c}{ \texttt{Llama 3.2-3B} } & \multicolumn{3}{c}{ \texttt{Qwen 2.5-3B} } & \multicolumn{3}{c}{ \texttt{Llama 3.1-8B} } \\
+\textit{(step-wise)} & \tiny \textsc{GSM8K} & \tiny \textsc{MedReason} & \tiny \textsc{MMLU-Pro} & \tiny \textsc{GSM8K} & \tiny \textsc{MedReason} & \tiny \textsc{MMLU-Pro} & \tiny \textsc{GSM8K} & \tiny \textsc{MedReason} & \tiny \textsc{MMLU-Pro} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+\textsc{GSM8K} & \textbf{\textcolor{insightteal}{$\uparrow$ 0.0}} & \textcolor{insightteal}{$\uparrow$ 0.0} & \textcolor{insightteal}{$\uparrow$ 0.0} & \textbf{\textcolor{insightteal}{$\uparrow$ 0.0}} & \textcolor{insightteal}{$\uparrow$ 0.0} & \textcolor{insightteal}{$\uparrow$ 0.0} & \textbf{\textcolor{insightteal}{$\uparrow$ 0.0}} & \textcolor{insightteal}{$\uparrow$ 0.0} & \textcolor{insightteal}{$\uparrow$ 0.0} \\
+\textsc{MedReason} & - & - & - & - & - & - & - & - & - \\
+\textsc{MMLU-Pro} & - & - & - & - & - & - & - & - & - \\
+\bottomrule
+\end{tabular}
+\caption[{Reward Model Transferability (Best-of-16 $\Delta$ over Random)}]{\textbf{Reward Model Transferability (Best-of-16 $\Delta$ over Random).} Generations are sourced from \texttt{Qwen2.5-7B} SFT models. We score them using Reward Models trained on different task distributions. Diagonal entries (bold) represent in-distribution performance.}
+\end{table*}

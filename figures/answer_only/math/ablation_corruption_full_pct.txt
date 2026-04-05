@@ -1,0 +1,19 @@
+% Requires \usepackage{booktabs}, \usepackage{array}
+\begin{table}[h]
+\centering
+{%
+\begin{tabular}{>{\raggedright\arraybackslash}p{5cm} cccc}
+\toprule
+\textbf{Corruption Type} & \textbf{Pass@1} & \textbf{$\Delta$ Rerank} & \textbf{AUROC $\uparrow$} & \textbf{ECE $\downarrow$} \\
+\midrule
+No label switching & 31 \tiny\textcolor{gray}{[29, 32]} & \textbf{+4} & 62 \tiny\textcolor{gray}{[61, 62]} & 8 \tiny\textcolor{gray}{[7, 8]} \\
+Label switching & 56 \tiny\textcolor{gray}{[55, 58]} & \textbf{+8} & 77 \tiny\textcolor{gray}{[76, 78]} & 22 \tiny\textcolor{gray}{[22, 23]} \\
+ + Number corruption & 58 \tiny\textcolor{gray}{[56, 59]} & \textbf{+10} & 78 \tiny\textcolor{gray}{[77, 78]} & 34 \tiny\textcolor{gray}{[34, 35]} \\
+ + Number swapping & 56 \tiny\textcolor{gray}{[54, 58]} & \textbf{+15} & 84 \tiny\textcolor{gray}{[83, 84]} & 27 \tiny\textcolor{gray}{[27, 28]} \\
+ + Symbol corruption & 56 \tiny\textcolor{gray}{[55, 58]} & - & 85 \tiny\textcolor{gray}{[84, 85]} & 31 \tiny\textcolor{gray}{[31, 32]} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Ablation on Reasoning Corruption} for \texttt{Qwen2.5-3B} (Step-wise) on GSM8K. All metrics are in full percentages (\%). Intervals indicate 95\% confidence intervals.}
+\label{tab:corruption_ablation}
+\end{table}

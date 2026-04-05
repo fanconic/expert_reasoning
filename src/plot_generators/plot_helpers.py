@@ -1052,11 +1052,6 @@ def plot_success_at_k_given(
                 "marker": "x",
                 "linestyle": "--",
             },
-            # "Length Reranker": {
-            #     "color": colors[2] if len(colors) > 1 else None,
-            #     "marker": "x",
-            #     "linestyle": "--",
-            # },
         }
 
         plt.figure(figsize=(6, 3))
@@ -1147,53 +1142,6 @@ def plot_reward_distributions(
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
 
-    # correct = df[df.correctness_reward_func == 2].mean_rewards_discounted
-    # wrong = df[df.correctness_reward_func == 0].mean_rewards_discounted
-    # t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
-
-    # plt.figure(figsize=(6, 3))
-    # sns.histplot(
-    #     wrong,
-    #     label="Wrong Answer",
-    #     kde=True,
-    #     stat="probability",
-    #     bins=50,
-    #     color="C1",
-    #     alpha=0.5,
-    #     edgecolor=None,
-    #     shrink=0.85,
-    #     linewidth=0,
-    # )
-    # sns.histplot(
-    #     correct,
-    #     label="Correct Answer",
-    #     kde=True,
-    #     stat="probability",
-    #     bins=50,
-    #     color="C0",
-    #     alpha=0.5,
-    #     edgecolor=None,
-    #     shrink=0.85,
-    #     linewidth=0,
-    # )
-    # plt.legend()
-    # plt.xlabel("Mean Discounted Rewards")
-    # plt.ylabel("Probability")
-    # # plt.title("Distribution of Discounted Rewards based on Correctness")
-    # p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
-    # text = f"t = {t_stat:.2f}, {p_text}"
-    # plt.text(
-    #     0.03,
-    #     0.78,
-    #     text,
-    #     transform=plt.gca().transAxes,
-    #     fontsize=10,
-    #     va="top",
-    #     bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
-    # )
-    # plt.savefig(out_pdf_discounted, bbox_inches="tight")
-    # plt.close()
-
 
 def plot_rewards_vs_discounted(df: pd.DataFrame, out_pdf: str | Path):
     # Pick a reasonable example: near-zero mean but correct
@@ -1279,52 +1227,6 @@ def plot_formatting_distributions(
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
 
-    # plt.figure(figsize=(10, 5))
-    # sns.histplot(
-    #     df[df.strict_format_reward_func == 0].selector_discounted,
-    #     label="Wrong Format",
-    #     kde=True,
-    #     stat="probability",
-    #     bins=50,
-    #     color="C1",
-    #     alpha=0.5,
-    #     edgecolor=None,
-    #     shrink=0.85,
-    #     linewidth=0,
-    # )
-    # sns.histplot(
-    #     df[df.strict_format_reward_func == 0.5].selector_discounted,
-    #     label="Correct Format",
-    #     kde=True,
-    #     stat="probability",
-    #     bins=50,
-    #     color="C0",
-    #     alpha=0.5,
-    #     edgecolor=None,
-    #     shrink=0.85,
-    #     linewidth=0,
-    # )
-
-    # correct = df[df.strict_format_reward_func == 0.5].selector_discounted
-    # wrong = df[df.strict_format_reward_func == 0.0].selector_discounted
-    # t_stat, p_value = stats.ttest_ind(correct, wrong, equal_var=False)
-    # plt.legend()
-    # plt.xlabel("Mean Discounted Rewards")
-    # plt.ylabel("Probability")
-    # # plt.title("Distribution of Discounted Rewards based on Formatting")
-    # p_text = "$p < 0.001$" if p_value < 0.001 else f"p = {p_value:.3f}"
-    # text = f"t = {t_stat:.2f}, {p_text}"
-    # plt.text(
-    #     0.02,
-    #     0.95,
-    #     text,
-    #     transform=plt.gca().transAxes,
-    #     fontsize=10,
-    #     va="top",
-    #     bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
-    # )
-    # plt.savefig(out_pdf_discounted, bbox_inches="tight")
-    # plt.close()
 
 
 def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
@@ -1521,7 +1423,8 @@ def run_all_plots(
     plot_success_at_k_given(
         df_airl,
         ks,
-        [2,4,8,16],
+        #[2,3,5,8,16],
+        [16],
         out_dir,
         title=r"Expert Reasoning: pass@k$\mid$N comparison",
     )

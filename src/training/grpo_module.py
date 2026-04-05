@@ -21,7 +21,7 @@ def run_grpo_training(
         val_dataset: Optional validation dataset.
     """
     
-    if "gsm8k" in cfg.dataset.name:
+    if "gsm8k" in cfg.dataset.name or "aime" in cfg.dataset.name:
         dataset_name = "gsm8k"
     elif "medical" in cfg.dataset.name:
         dataset_name = "medical"

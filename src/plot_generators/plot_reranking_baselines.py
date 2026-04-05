@@ -24,7 +24,7 @@ MODEL_ORDER = [
 
 DATASETS = ['math', 'medicine', 'mmlu']
 VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
-NUM_GENERATIONS = [2, 4, 8, 16]
+NUM_GENERATIONS = [2, 3, 5, 8, 16]
 
 def extract_reranking_p1(filepath):
     results = {'Random': None, 'Reward': None, 'Logprobs': None, 'Majority': None, 'Weighted_Majority': None}

@@ -55,9 +55,9 @@ def extract_calibration(filepath):
             if len(matches) >= 2: return matches[0], matches[1]
     return None, None
 
-def format_full_cell(val_str, decimals=1):
+def format_full_cell(val_str, decimals=0):
     """
-    Converts '0.792 [0.771, 0.813]' -> '79.2 \tiny\textcolor{gray}{[77.1, 81.3]}'
+    Converts '0.792 [0.771, 0.813]' -> '79 \tiny\textcolor{gray}{[77, 81]}'
     """
     if not val_str: return "-"
     
@@ -79,8 +79,8 @@ def format_full_cell(val_str, decimals=1):
 def main():
     latex = []
     latex.append(r"\begin{table}[h]")
-    latex.append(r"\centering\small")
-    latex.append(r"\resizebox{\columnwidth}{!}{%")
+    latex.append(r"\centering")
+    latex.append(r"{%")
     latex.append(r"\begin{tabular}{l cccc}")
     latex.append(r"\toprule")
     latex.append(r"\textbf{Gen. ($N$)} & \textbf{Pass@1} & \textbf{$\Delta$ Rerank} & \textbf{AUROC $\uparrow$} & \textbf{ECE $\downarrow$} \\")
@@ -90,36 +90,36 @@ def main():
         for algo_key, n_label in ALGO_ORDER:
             folder_path = os.path.join(ROOT_DIR, DATASET, f"{model_key}_{algo_key}")
             
-            # 1. Pass@1 (with CI)
+            # 1. Pass@1 (with CI, full percentage)
             p1_raw = extract_p1(os.path.join(folder_path, 'pass_at_k_table.txt'))
-            p1_disp = format_full_cell(p1_raw)
+            p1_disp = format_full_cell(p1_raw, decimals=0)
 
-            # 2. Reranking Delta (pp difference)
+            # 2. Reranking Delta (rounded to full percentage)
             rand_val, rew_val = extract_reranking_metrics(os.path.join(folder_path, 'pass_at_k_table_reranking.txt'))
             if rand_val is not None and rew_val is not None:
                 delta = (rew_val - rand_val) * 100
-                delta_disp = f"\\textbf{{{delta:+.1f}}}" if delta > 0 else f"{delta:+.1f}"
+                delta_disp = f"\\textbf{{{delta:+.0f}}}" if delta > 0 else f"{delta:+.0f}"
             else:
                 delta_disp = "-"
 
-            # 3. Calibration (AUROC and ECE with CIs)
+            # 3. Calibration (AUROC and ECE with CIs, full percentage)
             auroc_raw, ece_raw = extract_calibration(os.path.join(folder_path, 'calibration_metrics_table.txt'))
-            auroc_disp = format_full_cell(auroc_raw)
-            ece_disp = format_full_cell(ece_raw)
+            auroc_disp = format_full_cell(auroc_raw, decimals=0)
+            ece_disp = format_full_cell(ece_raw, decimals=0)
 
             latex.append(f"{n_label} & {p1_disp} & {delta_disp} & {auroc_disp} & {ece_disp} \\\\")
 
     latex.append(r"\bottomrule")
     latex.append(r"\end{tabular}%")
     latex.append(r"}")
-    latex.append(r"\caption{\textbf{Ablation on Number of Generations ($N$)} for Qwen2.5-3B (Step-wise) on GSM8K. All metrics are in percentages (\%). Intervals indicate 95\% confidence intervals.}")
+    latex.append(r"\caption{\textbf{Ablation on Number of Generations ($N$)} for \texttt{Llama3.2-3B} (Step-wise) on GSM8K. All metrics are in full percentages (\%). Intervals indicate 95\% confidence intervals.}")
     latex.append(r"\end{table}")
 
-    output_file = os.path.join(ROOT_DIR, DATASET, "ablation_generations_with_ci.txt")
+    output_file = os.path.join(ROOT_DIR, DATASET, "ablation_generations_full_pct.txt")
     with open(output_file, "w") as f:
         f.write("\n".join(latex))
     
-    print(f"Success! Ablation table with CIs created at {output_file}")
+    print(f"Success! Ablation table with full percentages and CIs created at {output_file}")
 
 if __name__ == "__main__":
     main()

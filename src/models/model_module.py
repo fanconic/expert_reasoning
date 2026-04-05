@@ -84,7 +84,7 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
     """
     # Policy model and tokenizer
     
-    model_name = config.model.name
+    model_name = getattr(config.model, "name", "no-name-model")
     policy_model_name = config.model.policy_name
     reward_model_name = config.model.reward_name
     max_seq_length = config.model.max_prompt_length + config.model.max_completion_length

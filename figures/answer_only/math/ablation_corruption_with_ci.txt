@@ -5,13 +5,13 @@
 \toprule
 \textbf{Corruption Type} & \textbf{Pass@1} & \textbf{$\Delta$ Rerank} & \textbf{AUROC $\uparrow$} & \textbf{ECE $\downarrow$} \\
 \midrule
-No label switching & 31.0 \tiny\textcolor{gray}{[29.0, 32.0]} & \textbf{+4.0} & 61.8 \tiny\textcolor{gray}{[60.9, 62.5]} & 7.7 \tiny\textcolor{gray}{[7.1, 8.3]} \\
-Label switching & 56.0 \tiny\textcolor{gray}{[55.0, 58.0]} & \textbf{+8.0} & 77.1 \tiny\textcolor{gray}{[76.4, 77.8]} & 22.3 \tiny\textcolor{gray}{[21.7, 23.0]} \\
-+ Number corruption & 58.0 \tiny\textcolor{gray}{[56.0, 59.0]} & \textbf{+10.0} & 77.6 \tiny\textcolor{gray}{[76.9, 78.2]} & 34.3 \tiny\textcolor{gray}{[33.7, 34.9]} \\
-+ Number swapping & 56.0 \tiny\textcolor{gray}{[54.0, 58.0]} & \textbf{+15.0} & 83.9 \tiny\textcolor{gray}{[83.3, 84.4]} & 27.4 \tiny\textcolor{gray}{[26.8, 28.0]} \\
- + Symbol corruption & 56.0 \tiny\textcolor{gray}{[55.0, 58.0]} & \textbf{+18.0} & 84.6 \tiny\textcolor{gray}{[84.0, 85.1]} & 31.2 \tiny\textcolor{gray}{[30.6, 31.8]} \\
+No label switching & - & - & - & - \\
+Label switching & 0.5 & \textbf{+4.0} & 71.6 \tiny\textcolor{gray}{[71.0, 72.3]} & 40.9 \tiny\textcolor{gray}{[40.3, 41.5]} \\
++ Number corruption & 0.52 & \textbf{+10.0} & 80.6 \tiny\textcolor{gray}{[80.0, 81.2]} & 30.7 \tiny\textcolor{gray}{[30.1, 31.3]} \\
++ Number swapping & 0.65 & \textbf{+5.0} & 64.9 \tiny\textcolor{gray}{[64.2, 65.7]} & 25.8 \tiny\textcolor{gray}{[25.2, 26.4]} \\
+ + Symbol corruption & 58.0 \tiny\textcolor{gray}{[56.0, 60.0]} & - & 82.7 \tiny\textcolor{gray}{[82.1, 83.3]} & 20.3 \tiny\textcolor{gray}{[19.8, 20.8]} \\
 \bottomrule
 \end{tabular}%
 }
-\caption{\textbf{Ablation on Reasoning Corruption} for Qwen2.5-3B (Step-wise) on GSM8K. All metrics are in percentages (\%). Intervals indicate 95\% confidence intervals.}
+\caption{\textbf{Ablation on Reasoning Corruption} for Llama3.2-3B (Step-wise) on GSM8K. All metrics are in percentages (\%). Intervals indicate 95\% confidence intervals.}
 \end{table}

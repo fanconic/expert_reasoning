@@ -657,7 +657,7 @@ def main(cfg: DictConfig):
     
     set_seed(cfg.seed)
 
-    if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd":
+    if cfg.dataset.name == "gsm8k" or cfg.dataset.name == "gsm8k_kd" or "aime" in cfg.dataset.name:
         reward_fns = [("xmlcount_reward_func", xmlcount_reward_func), ("correctness_reward_func", gsm8k_correctness_reward_func)]
         eval_correctness = eval_correctness_gsm8k
     elif cfg.dataset.name == "countdown" or cfg.dataset.name == "countdown_kd":

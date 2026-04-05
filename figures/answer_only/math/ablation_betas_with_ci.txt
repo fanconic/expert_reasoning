@@ -5,13 +5,14 @@
 \toprule
 \textbf{$\beta$ (LB, UB)} & \textbf{Pass@1} & \textbf{$\Delta$ Rerank} & \textbf{AUROC $\uparrow$} & \textbf{ECE $\downarrow$} \\
 \midrule
-(-1, 1) & 46.0 \tiny\textcolor{gray}{[44.0, 47.0]} & \textbf{+6.0} & 74.8 \tiny\textcolor{gray}{[74.1, 75.5]} & 12.2 \tiny\textcolor{gray}{[11.5, 12.8]} \\
-(-3, 3) & 38.0 \tiny\textcolor{gray}{[37.0, 40.0]} & \textbf{+18.0} & 76.7 \tiny\textcolor{gray}{[76.1, 77.3]} & 20.8 \tiny\textcolor{gray}{[20.2, 21.5]} \\
-(-5, 5) & 56.0 \tiny\textcolor{gray}{[55.0, 58.0]} & \textbf{+18.0} & 84.6 \tiny\textcolor{gray}{[84.0, 85.1]} & 31.2 \tiny\textcolor{gray}{[30.6, 31.8]} \\
-(-10, 10) & 45.0 \tiny\textcolor{gray}{[43.0, 46.0]} & \textbf{+19.0} & 77.2 \tiny\textcolor{gray}{[76.5, 77.9]} & 9.3 \tiny\textcolor{gray}{[8.7, 9.9]} \\
-(0, 2) & 40.0 \tiny\textcolor{gray}{[39.0, 42.0]} & \textbf{+26.0} & 79.6 \tiny\textcolor{gray}{[79.0, 80.2]} & 27.5 \tiny\textcolor{gray}{[26.8, 28.1]} \\
+(0, 2) & 54.0 \tiny\textcolor{gray}{[52.0, 56.0]} & \textbf{+14.0} & 85.9 \tiny\textcolor{gray}{[85.3, 86.4]} & 20.9 \tiny\textcolor{gray}{[20.4, 21.5]} \\
+(-1, 1) & 57.0 \tiny\textcolor{gray}{[55.0, 59.0]} & \textbf{+11.0} & 83.6 \tiny\textcolor{gray}{[83.0, 84.1]} & 14.8 \tiny\textcolor{gray}{[14.2, 15.3]} \\
+(-3, 3) & 54.0 \tiny\textcolor{gray}{[52.0, 56.0]} & \textbf{+14.0} & 88.6 \tiny\textcolor{gray}{[88.1, 89.1]} & 12.8 \tiny\textcolor{gray}{[12.3, 13.3]} \\
+(-5, 5) & 58.0 \tiny\textcolor{gray}{[56.0, 60.0]} & - & 82.7 \tiny\textcolor{gray}{[82.1, 83.3]} & 20.3 \tiny\textcolor{gray}{[19.8, 20.8]} \\
+(-10, 10) & 52.0 \tiny\textcolor{gray}{[51.0, 54.0]} & \textbf{+17.0} & 87.1 \tiny\textcolor{gray}{[86.6, 87.6]} & 17.5 \tiny\textcolor{gray}{[17.0, 18.0]} \\
+(-\infty, \infty) & 58.0 \tiny\textcolor{gray}{[56.0, 60.0]} & \textbf{+12.0} & 87.2 \tiny\textcolor{gray}{[86.7, 87.7]} & 12.1 \tiny\textcolor{gray}{[11.6, 12.6]} \\
 \bottomrule
 \end{tabular}%
 }
-\caption{\textbf{Ablation on Reward Clipping ($\beta$)} for Qwen2.5-3B (Step-wise) on GSM8K. All metrics are in percentages (\%). Intervals indicate 95\% confidence intervals.}
+\caption{\textbf{Ablation on Reward Clipping ($\beta$)} for \texttt{Llama3.2-3B} (Step-wise) on GSM8K. All metrics are in percentages (\%). Intervals indicate 95\% confidence intervals.}
 \end{table}

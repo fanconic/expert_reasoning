@@ -10,11 +10,11 @@ ROOT_DIR = os.path.join('figures', 'answer_only')
 ALGO_ORDER = [
     ('GRPO', 'Verifiable Reward'),
     ('SFT', 'Supervised Fine-Tuning'),
-    ('sparse', r'Ours (\textit{Sparse})'),
-    ('partial', r'Ours (\textit{Step-wise})'),
-    ('partial_fixed', r'Ours (\textit{Interval})'),
-    ('full', r'Ours (\textit{Dense})'),
-    #('ovr', r'Ours (\textit{Step-wise + OVR})')
+    ('sparse_new', r'Ours (\textit{Sparse})'),
+    ('partial_new', r'Ours (\textit{Step-wise})'),
+    ('partial_fixed_new', r'Ours (\textit{Interval})'),
+    ('full_new', r'Ours (\textit{Dense})'),
+    #('ovr_new', r'Ours (\textit{Step-wise + OVR})')
 ]
 
 # Model Order (Sub-headers)
@@ -22,7 +22,8 @@ MODEL_ORDER = [
     ('qwen3b', r'\texttt{Qwen2.5-3B}'),
     ('llama3b', r'\texttt{Llama3.2-3B}'),
     ('qwen7b', r'\texttt{Qwen2.5-7B}'),
-    ('llama8b', r'\texttt{Llama3.1-8B}')
+    ('llama8b', r'\texttt{Llama3.1-8B}'),
+    ('qwen4b', r'\texttt{Qwen3-4B}')
 ]
 
 # Datasets

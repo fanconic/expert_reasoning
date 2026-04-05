@@ -1,0 +1,24 @@
+% Requires \usepackage{booktabs}, \usepackage{xcolor}
+\begin{table}[t]
+\centering
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l c c c}
+\toprule
+& \textbf{\textsc{GSM8K}} & \textbf{\textsc{MedReason}} & \textbf{\textsc{MMLU-Pro}} \\
+\textbf{Method} & Pass@1 & Pass@1 & Pass@1 \\
+\midrule
+\multicolumn{3}{l}{\textbf{\texttt{Qwen3-4B}}} \\
+\hspace{1em}Verifiable Reward & 91 {\scriptsize\color{gray}[90, 93]} & 56 {\scriptsize\color{gray}[54, 59]} & 57 {\scriptsize\color{gray}[54, 59]} \\
+\arrayrulecolor{gray!60}\cdashline{1-3}\arrayrulecolor{black}
+\hspace{1em}SFT & 66 {\scriptsize\color{gray}[65, 68]} & 52 {\scriptsize\color{gray}[50, 53]} & 45 {\scriptsize\color{gray}[43, 47]} \\
+\hspace{1em}Ours (\textit{Sparse}) & \textbf{90} {\scriptsize\color{gray}[89, 92]} & \textbf{65} {\scriptsize\color{gray}[63, 67]} & \textbf{54} {\scriptsize\color{gray}[52, 57]} \\
+\hspace{1em}Ours (\textit{Step-wise}) & 86 {\scriptsize\color{gray}[85, 88]} & \underline{60} {\scriptsize\color{gray}[58, 63]} & \underline{53} {\scriptsize\color{gray}[51, 55]} \\
+\hspace{1em}Ours (\textit{Interval}) & 87 {\scriptsize\color{gray}[85, 88]} & 52 {\scriptsize\color{gray}[50, 55]} & \underline{53} {\scriptsize\color{gray}[50, 55]} \\
+\hspace{1em}Ours (\textit{Dense}) & \underline{89} {\scriptsize\color{gray}[88, 91]} & 49 {\scriptsize\color{gray}[47, 51]} & \underline{53} {\scriptsize\color{gray}[51, 55]} \\
+\bottomrule
+\end{tabular}%
+}
+\caption{\textbf{Pass@1 Performance (\%).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results grayed out). The values inside brackets indicate the 95\% confidence interval.}
+\label{tab:p1_results}
+\end{table}
