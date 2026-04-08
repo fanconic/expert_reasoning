@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -u 
 
 # --- Change these for each GPU ---
@@ -20,6 +19,14 @@ get_type() {
     esac
 }
 
+get_dataset() {
+    case "$1" in
+        "gsm8k_rebuttals")     echo "gsm8k_kd" ;;
+        "medreason_rebuttals") echo "medical_kd" ;;
+        "mmlu_rebuttals")      echo "mmlu_kd" ;;
+    esac
+}
+
 run_cmd() {
     local label="$1"; shift
     echo -e "\n▶ $label\n  $*"
@@ -37,6 +44,10 @@ run_transfer_eval() {
     local TYPE_P=$(get_type "$DATASET_P")
     local TYPE_R=$(get_type "$DATASET_R")
 
+    local DS_LOAD=$(get_dataset "$DATASET_P")
+
+
+
     # Handle Sparse naming for Hydra
     local DENSE_VAL="$SUFFIX"
     [[ "$SUFFIX" == "sparse" ]] && DENSE_VAL="false"
@@ -44,29 +55,29 @@ run_transfer_eval() {
     # 1. Policy: Fixed Qwen 7B SFT from the Policy Dataset
     local POLICY_PATH="/mnt/pdata/caf83/icml_${TYPE_P}/outputs/qwen7b_sft/best_model"
     
-    # 2. Reward: Specific architecture trained on the Reward Dataset
-    local REWARD_PATH="/mnt/pdata/caf83/icml_${TYPE_R}/outputs/${REWARD_ARCH}_${SUFFIX}_new/best_model"
 
     # WandB Name: e.g., transfer_qwen3b_full_P-math_R-mmlu
     local WNAME="${REWARD_ARCH}_${SUFFIX}_new"
     local OUTNAME="transfer_${REWARD_ARCH}_${SUFFIX}_P_${TYPE_P}_R_${TYPE_R}"
     
-    local OVERRIDE="wandb.run_name=${WNAME} \
+     local OVERRIDE="wandb.run_name=${WNAME} \
                    model.dense_rewards=${DENSE_VAL} \
                    ${COMMON_REWARD_FLAGS} \
+                   dataset.name=${DS_LOAD} \
                    model.policy_name=${POLICY_PATH}"
     
     # We use the config-path of the Policy Dataset to ensure generation loading matches
     run_cmd "${WNAME}" bash "$RUNNER" evaluate_pregenerated_transfer.py \
-        --config-path="configs/${DATASET_P}/${REWARD_ARCH}" --config-name="eval" --out-name=${OUTNAME} $OVERRIDE
+        --config-path="configs/${DATASET_R}/${REWARD_ARCH}" --config-name="eval" --out-name=${OUTNAME} $OVERRIDE
 }
 
 # --- Execution Matrix ---
-DATASETS=("gsm8k_rebuttals" "medreason_rebuttals" "mmlu_rebuttals")
+DATASETS_r=("mmlu_rebuttals")
+DATASETS_p=("gsm8k_rebuttals" "medreason_rebuttals" "mmlu_rebuttals")
 ARCHS=("qwen3b" "llama3b" "llama8b")
 
-for DS_POLICY in "${DATASETS[@]}"; do
-    for DS_REWARD in "${DATASETS[@]}"; do
+for DS_POLICY in "${DATASETS_p[@]}"; do
+    for DS_REWARD in "${DATASETS_r[@]}"; do
         for ARCH in "${ARCHS[@]}"; do
             run_transfer_eval "$DS_POLICY" "$DS_REWARD" "$ARCH" "$DENSITY"
         done

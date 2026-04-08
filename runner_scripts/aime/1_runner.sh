@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -u
 export GPU_NUM="1"
-export MODEL="qwen3b"
+export MODEL="qwen4b"
 export DATASET="aime" # Change this if running on Med or MMLU
 
 # --- Constants ---
@@ -38,21 +38,15 @@ run_triple_eval() {
     # 3. AIME 2025
     run_cmd "${variant}_AIME25" bash "$RUNNER" evaluate.py \
         --config-path="configs/aime/${MODEL}" --config-name="$config_name" \
-        wandb.run_name="${wname}" dataset.name="aime_2025" $extra_flags
+        dataset.name="aime_2025" $extra_flags
 }
 
 # --- Execution ---
 
-
-# 2. GRPO
-#run_cmd "GRPO_TRAIN" bash "$RUNNER" train.py --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_train $STEP_LIMIT
-#run_triple_eval "grpo" "grpo_eval"
-
-run_cmd "PARTIAL_TRAIN" bash "$RUNNER" irl_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
-    wandb.run_name="${MODEL}_partial" model.dense_rewards=partial $REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
-run_triple_eval "partial" "eval" "model.dense_rewards=partial wandb.run_name=${MODEL}_partial $REWARD_FLAGS"
+# Full IRL
+run_cmd "FULL_TRAIN" bash "$RUNNER" irl_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
+    wandb.run_name="${MODEL}_full" model.dense_rewards=full $REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
+run_triple_eval "full" "eval" "model.dense_rewards=full wandb.run_name=${MODEL}_full $REWARD_FLAGS"
 
 echo -e "\nSummary GPU 1: Failures: ${#FAILED_RUNS[@]}"
 printf "  %s\n" "${FAILED_RUNS[@]}"
-
-bash runner_scripts/transferability/1_runner.sh

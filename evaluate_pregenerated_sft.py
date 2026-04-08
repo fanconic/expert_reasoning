@@ -25,7 +25,12 @@ from src.rewards.reward_functions import (
 )
 import torch
 import numpy as np
-from src.eval.eval_module import compute_pass_at_k, compute_success_at_k_from_scores, compute_oracle_at_1_from_N
+from src.eval.eval_module import (
+    compute_pass_at_k,
+    compute_reward_weighted_pass_at_k_from_scores,
+    compute_success_at_k_from_scores,
+    compute_oracle_at_1_from_N,
+)
 from vllm import SamplingParams
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
@@ -803,6 +808,9 @@ def main(cfg: DictConfig):
             
     # --- METRICS COMPUTATION (Unchanged) ---
     pass_at_k = compute_pass_at_k(all_correct_flags, cfg.eval.ks)
+    reward_weighted_pass_at_k = compute_reward_weighted_pass_at_k_from_scores(
+        all_correct_flags, all_reward_scores, cfg.eval.ks
+    )
     success_at_k = compute_success_at_k_from_scores(all_correct_flags, all_reward_scores, cfg.eval.ks)
     oracle_at_1 = compute_oracle_at_1_from_N(all_correct_flags)
 
@@ -811,6 +819,11 @@ def main(cfg: DictConfig):
         if cfg.eval.report_to == "wandb":
             wandb.log({f"test/pass@{k}": v})
         print(f"pass@{k}: {v:.4f}")
+
+    for k, v in reward_weighted_pass_at_k.items():
+        if cfg.eval.report_to == "wandb":
+            wandb.log({f"test/reward_weighted_pass@{k}|N={n}": v})
+        print(f"reward_weighted_pass@{k}|N={n}: {v:.4f}")
         
     for k, v in success_at_k.items():
         if cfg.eval.report_to == "wandb":

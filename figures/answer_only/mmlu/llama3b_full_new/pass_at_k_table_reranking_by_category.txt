@@ -1,0 +1,103 @@
+\begin{tabular}{llcccc}
+\toprule
+Category & Reranking Method & pass@1 & pass@3 & pass@5 & pass@10 \\
+\midrule
+biology & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+biology & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+biology & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+biology & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+biology & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+biology & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+business & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+business & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+business & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+business & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+business & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+business & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+chemistry & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+chemistry & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+chemistry & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+chemistry & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+chemistry & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+chemistry & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+computer science & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+computer science & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+computer science & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+computer science & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+computer science & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+computer science & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+economics & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+economics & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+economics & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+economics & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+economics & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+economics & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+engineering & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+engineering & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+engineering & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+engineering & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+engineering & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+engineering & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+health & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+health & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+health & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+health & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+health & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+health & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+history & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+history & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+history & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+history & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+history & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+history & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+law & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+law & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+law & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+law & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+law & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+law & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+math & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+math & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+math & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+math & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+math & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+math & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+other & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+other & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+other & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+other & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+other & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+other & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+philosophy & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+philosophy & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+philosophy & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+philosophy & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+philosophy & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+philosophy & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+physics & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+physics & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+physics & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+physics & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+physics & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+physics & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\midrule
+psychology & Random Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+psychology & Reasoning Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+psychology & Length Reranking & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+psychology & Log Probability & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+psychology & Majority Voting & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+psychology & Weighted Majority & 0.0000 & 0.0000 & 0.0000 & 0.0000 \\
+\bottomrule
+\end{tabular}

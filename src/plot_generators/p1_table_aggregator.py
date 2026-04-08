@@ -26,7 +26,14 @@ MODEL_ORDER = [
     ('qwen4b', r'\texttt{Qwen3-4B}')
 ]
 
-DATASETS = ['math', 'medicine', 'mmlu']
+DATASET_COLUMNS = [
+    ('math', r'\textbf{\textsc{GSM8K}}'),
+    ('aime_2024', r'\textbf{\textsc{AIME 2024}}'),
+    ('aime_2025', r'\textbf{\textsc{AIME 2025}}'),
+    ('mmlu', r'\textbf{\textsc{MMLU-Pro}}'),
+    ('medicine', r'\textbf{\textsc{MedReason}}'),
+]
+DATASETS = [d for d, _ in DATASET_COLUMNS]
 VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
 
 def extract_all_k(filepath, method_label):
@@ -113,7 +120,13 @@ def format_cell(val_str, is_best=False, is_second=False, is_collapsed=False):
     return f"{fmt_mean} {fmt_interval}"
 
 def main():
-    data = {m: {a: {} for a, _ in ALGO_ORDER} for m, _ in MODEL_ORDER}
+    data = {
+        m: {
+            a: {dataset: [None] * 4 for dataset in DATASETS}
+            for a, _ in ALGO_ORDER
+        }
+        for m, _ in MODEL_ORDER
+    }
 
     # --- Step 1: Extraction ---
     for dataset in DATASETS:
@@ -150,7 +163,13 @@ def main():
 
     # --- Step 2: Analyze Rankings & Formatting ---
     # We do this before generating latex to handle percentages cleanly
-    formatted_data = {m: {a: {} for a, _ in ALGO_ORDER} for m, _ in MODEL_ORDER}
+    formatted_data = {
+        m: {
+            a: {dataset: "-" for dataset in DATASETS}
+            for a, _ in ALGO_ORDER
+        }
+        for m, _ in MODEL_ORDER
+    }
     
     for model_key, _ in MODEL_ORDER:
         for dataset in DATASETS:
@@ -160,7 +179,7 @@ def main():
             means = []
             for algo_key, _ in ALGO_ORDER:
                 if algo_key == 'GRPO': continue
-                val_str = data[model_key][algo_key][dataset][k_idx]
+                val_str = data[model_key][algo_key].get(dataset, [None] * 4)[k_idx]
                 mean = get_mean(val_str)
                 if mean >= 0: means.append(mean)
             
@@ -170,7 +189,7 @@ def main():
             
             # Format
             for algo_key, _ in ALGO_ORDER:
-                val_str = data[model_key][algo_key][dataset][k_idx]
+                val_str = data[model_key][algo_key].get(dataset, [None] * 4)[k_idx]
                 raw_mean = get_mean(val_str)
                 
                 is_best = (raw_mean == best_val and raw_mean > -1 and algo_key != 'GRPO')
@@ -186,26 +205,23 @@ def main():
     latex.append(r"\centering")
     latex.append(r"\small")
     latex.append(r"\resizebox{\columnwidth}{!}{%") 
-    # Structure: Algo | GSM8K | MedReason | MMLU (Removed Model Col, Removed Vertical Lines)
-    latex.append(r"\begin{tabular}{l c c c}") 
+    latex.append(r"\begin{tabular}{l c c c c c}") 
     latex.append(r"\toprule")
     
-    latex.append(r"& \textbf{\textsc{GSM8K}} & \textbf{\textsc{MedReason}} & \textbf{\textsc{MMLU-Pro}} \\")
-    latex.append(r"\textbf{Method} & Pass@1 & Pass@1 & Pass@1 \\")
+    dataset_header = " & ".join([label for _, label in DATASET_COLUMNS])
+    latex.append(f"& {dataset_header} \\\\")
+    latex.append(r"\textbf{Method} & Pass@1 & Pass@1 & Pass@1 & Pass@1 & Pass@1 \\")
     latex.append(r"\midrule")
 
     for model_key, model_name in MODEL_ORDER:
         # === SUB-HEADER ROW ===
-        # Spans all 3 columns
-        latex.append(f"\\multicolumn{{3}}{{l}}{{\\textbf{{{model_name}}}}} \\\\")
+        latex.append(f"\\multicolumn{{6}}{{l}}{{\\textbf{{{model_name}}}}} \\\\")
         
         for algo_key, algo_name in ALGO_ORDER:
-            val_math = formatted_data[model_key][algo_key]['math']
-            val_med = formatted_data[model_key][algo_key]['medicine']
-            val_mmlu = formatted_data[model_key][algo_key]['mmlu']
+            dataset_vals = [formatted_data[model_key][algo_key][dataset] for dataset, _ in DATASET_COLUMNS]
             
             # Add horizontal spacing for hierarchy
-            latex.append(f"\\hspace{{1em}}{algo_name} & {val_math} & {val_med} & {val_mmlu} \\\\")
+            latex.append(f"\\hspace{{1em}}{algo_name} & {' & '.join(dataset_vals)} \\\\")
             
             # Grey Dashed Line after GRPO (using \cmidrule or just standard logic)
             # Since user asked for 'gray dashed line', we need ariydshln package or use standard
@@ -215,7 +231,7 @@ def main():
                # Using a light gray rule if xcolor/colortbl is loaded
                # latex.append(r"\arrayrulecolor{gray!50}\cmidrule(lr){1-3}\arrayrulecolor{black}")
                # Or just a standard spacing? Let's stick to the dashed line requested earlier but cleaner
-               latex.append(r"\arrayrulecolor{gray!60}\cdashline{1-3}\arrayrulecolor{black}")
+               latex.append(r"\arrayrulecolor{gray!60}\cdashline{1-6}\arrayrulecolor{black}")
 
         # Midrule between models
         if model_key != MODEL_ORDER[-1][0]:

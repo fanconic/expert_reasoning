@@ -22,7 +22,7 @@ run_aime() {
     esac
 
     echo "▶ Eval: ${WNAME}"
-    bash "$RUNNER" evaluate_aime.py \
+    bash "$RUNNER" evaluate.py \
         --config-path="configs/aime/${MODEL}" \
         --config-name="$CONFIG" \
         wandb.run_name="$WNAME" \
@@ -33,9 +33,9 @@ run_aime() {
 }
 
 # --- Execution Loop ---
-for M in "qwen7b"; do
-    for YEAR in "aime_2024" "aime_2025"; do
-        for V in "sft" "grpo" "full_new" "sparse_new" "partial_new" "partial_fixed_new"; do
+for M in "qwen4b"; do
+    for YEAR in "aime_2025"; do
+        for V in "sft" "grpo" "full" "sparse" "partial" "partial_fixed"; do
             run_aime "$M" "$YEAR" "$V"
         done
     done

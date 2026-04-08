@@ -47,20 +47,51 @@ EXPERIMENTS: List[Dict[str, Any]] = [
     # Stepwise
     
     # On P GSM8K - Rew: llama3b 
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_math_R_math"},
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_math_R_medicine"},
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_math_R_mmlu"},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_math_R_math", "domains": ["math"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_math_R_medicine", "domains": ["math"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_math_R_mmlu", "domains": ["math"]},
     
     # On P GSM8K - Rew: llama3b 
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_math_R_math"},
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_math_R_medicine"},
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_math_R_mmlu"},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_math_R_math", "domains": ["math"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_math_R_medicine", "domains": ["math"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_math_R_mmlu", "domains": ["math"]},
     
     # On P GSM8K - Rew: llama3b 
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_math_R_math"},
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_math_R_medicine"},
-    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_math_R_mmlu"},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_math_R_math", "domains": ["math"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_math_R_medicine", "domains": ["math"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_math_R_mmlu", "domains": ["math"]},
+    
+    
+        # On P GSM8K - Rew: llama3b 
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_medicine_R_math", "domains": ["medicine"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_medicine_R_medicine", "domains": ["medicine"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_medicine_R_mmlu", "domains": ["medicine"]},
+    
+    # On P GSM8K - Rew: llama3b 
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_medicine_R_math", "domains": ["medicine"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_medicine_R_medicine", "domains": ["medicine"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_medicine_R_mmlu", "domains": ["medicine"]},
+    
+    # On P GSM8K - Rew: llama3b 
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_medicine_R_math", "domains": ["medicine"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_medicine_R_medicine", "domains": ["medicine"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_medicine_R_mmlu", "domains": ["medicine"]},
    
+   
+   
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_mmlu_R_math", "domains": ["mmlu"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_mmlu_R_medicine", "domains": ["mmlu"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama3b_partial_P_mmlu_R_mmlu", "domains": ["mmlu"]},
+    
+    # On P GSM8K - Rew: llama3b 
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_mmlu_R_math", "domains": ["mmlu"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_mmlu_R_medicine", "domains": ["mmlu"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_qwen3b_partial_P_mmlu_R_mmlu", "domains": ["mmlu"]},
+    
+    # On P GSM8K - Rew: mmlu
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_mmlu_R_math", "domains": ["mmlu"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_mmlu_R_medicine", "domains": ["mmlu"]},
+    {"airl": "qwen7b_sft", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "transfer_llama8b_partial_P_mmlu_R_mmlu", "domains": ["mmlu"]},
 ]
 
 
@@ -84,6 +115,8 @@ def eval_jsonl(base: Path, run_name: str, ckpt: str, filename: str = None) -> Pa
         new_path = base / run_name / ckpt / f"{filename}.jsonl" #"eval_results_logprobs_sft.jsonl"
         if new_path.exists():
             return new_path
+        else:
+            raise FileNotFoundError(f"Expected file {new_path} does not exist.")
     
     new_path = base / run_name / ckpt / "eval_results_new.jsonl" #"eval_results_logprobs_sft.jsonl"
     # Check if it exists on disk

@@ -1,9 +1,8 @@
-#!/usr/bin/env bash
 set -u 
 
 # --- Change these for each GPU ---
 export GPU_NUM="2"       # 0, 1, 2, 3
-DENSITY="partial_fixed"         # sparse, full, partial, partial_fixed
+DENSITY="partial"         # sparse, full, partial, partial_fixed
 # ---------------------------------
 
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
@@ -17,6 +16,14 @@ get_type() {
         "gsm8k_rebuttals")     echo "math" ;;
         "medreason_rebuttals") echo "medicine" ;;
         "mmlu_rebuttals")      echo "mmlu" ;;
+    esac
+}
+
+get_dataset() {
+    case "$1" in
+        "gsm8k_rebuttals")     echo "gsm8k_kd" ;;
+        "medreason_rebuttals") echo "medical_kd" ;;
+        "mmlu_rebuttals")      echo "mmlu_kd" ;;
     esac
 }
 
@@ -37,12 +44,17 @@ run_transfer_eval() {
     local TYPE_P=$(get_type "$DATASET_P")
     local TYPE_R=$(get_type "$DATASET_R")
 
+    local DS_LOAD=$(get_dataset "$DATASET_P")
+
+
+
     # Handle Sparse naming for Hydra
     local DENSE_VAL="$SUFFIX"
     [[ "$SUFFIX" == "sparse" ]] && DENSE_VAL="false"
 
     # 1. Policy: Fixed Qwen 7B SFT from the Policy Dataset
     local POLICY_PATH="/mnt/pdata/caf83/icml_${TYPE_P}/outputs/qwen7b_sft/best_model"
+    
 
     # WandB Name: e.g., transfer_qwen3b_full_P-math_R-mmlu
     local WNAME="${REWARD_ARCH}_${SUFFIX}_new"
@@ -51,16 +63,17 @@ run_transfer_eval() {
      local OVERRIDE="wandb.run_name=${WNAME} \
                    model.dense_rewards=${DENSE_VAL} \
                    ${COMMON_REWARD_FLAGS} \
+                   dataset.name=${DS_LOAD} \
                    model.policy_name=${POLICY_PATH}"
     
     # We use the config-path of the Policy Dataset to ensure generation loading matches
     run_cmd "${WNAME}" bash "$RUNNER" evaluate_pregenerated_transfer.py \
-        --config-path="configs/${DATASET_P}/${REWARD_ARCH}" --config-name="eval" --out-name=${OUTNAME} $OVERRIDE
+        --config-path="configs/${DATASET_R}/${REWARD_ARCH}" --config-name="eval" --out-name=${OUTNAME} $OVERRIDE
 }
 
 # --- Execution Matrix ---
-DATASETS_p=("mmlu_rebuttals")
-DATASETS_r=("gsm8k_rebuttals" "medreason_rebuttals" "mmlu_rebuttals")
+DATASETS_r=("mmlu_rebuttals")
+DATASETS_p=("gsm8k_rebuttals" "medreason_rebuttals" "mmlu_rebuttals")
 ARCHS=("qwen3b" "llama3b" "llama8b")
 
 for DS_POLICY in "${DATASETS_p[@]}"; do
@@ -79,3 +92,5 @@ else
     printf "Failures (%d):\n  %s\n" "${#FAILED_RUNS[@]}" "${FAILED_RUNS[@]}"
     exit 1
 fi
+
+bash runner_scripts/aime/2_runner.sh

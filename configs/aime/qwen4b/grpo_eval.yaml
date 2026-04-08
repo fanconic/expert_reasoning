@@ -6,8 +6,8 @@ defaults:
    - override hydra/hydra_logging: default
 
 model:
-  checkpoint: 500
-  name: "/mnt/pdata/caf83/icml_math/outputs/${wandb.run_name}/best_model" 
+  checkpoint: best_model
+  name: "/mnt/pdata/caf83/icml_aime/outputs/${wandb.run_name}/best_model" 
   policy_name: null
   reward_name: null
   lora_rank: 256
@@ -31,8 +31,8 @@ model:
 
   
 dataset:
-  name: "aime2024"   # Change to "gsm8k_kd" (or other) to switch datasets
-  split: "train"
+  name: "aime_train"   # Change to "gsm8k_kd" (or other) to switch datasets
+  split: "test"
 
 sampling:
   n_samples: 16
@@ -46,6 +46,6 @@ eval:
   report_to: "none"
 
 wandb:
-  project: "expert_reasoning_math_icml"
+  project: "expert_reasoning_aime_icml"
   entity: eth_dlad_team32
   run_name: qwen4b_grpo

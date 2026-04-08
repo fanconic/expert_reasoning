@@ -26,9 +26,9 @@ run_triple_eval() {
     local extra_flags="${3:-}"
 
     # 1. Standard Eval
-    run_cmd "${variant}_STD_EVAL" bash "$RUNNER" evaluate.py \
-        --config-path="configs/${DATASET}/${MODEL}" --config-name="$config_name" \
-        wandb.run_name="${wname}" $extra_flags
+    # run_cmd "${variant}_STD_EVAL" bash "$RUNNER" evaluate.py \
+    #     --config-path="configs/${DATASET}/${MODEL}" --config-name="$config_name" \
+    #     wandb.run_name="${wname}" $extra_flags
 
     # 2. AIME 2024
     run_cmd "${variant}_AIME24" bash "$RUNNER" evaluate.py \
@@ -47,7 +47,5 @@ run_triple_eval() {
 #     wandb.run_name="${MODEL}_partial_fixed" model.dense_rewards=partial_fixed $REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
 run_triple_eval "grpo" "grpo_eval"
 
-# echo -e "\nSummary GPU 2: Failures: ${#FAILED_RUNS[@]}"
-# printf "  %s\n" "${FAILED_RUNS[@]}"
-
-bash runner_scripts/transferability/2_runner.sh
+#run_cmd "SFT_TRAIN" bash "$RUNNER" sft_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
+# run_triple_eval "sft" "sft_eval"

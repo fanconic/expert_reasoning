@@ -7,13 +7,14 @@ script and made reusable.
 """
 
 from __future__ import annotations
+import json
 import scienceplots
 import os
 import math
 import re
 import unicodedata
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 from matplotlib.colors import TwoSlopeNorm, Normalize, LinearSegmentedColormap
 import matplotlib.pyplot as plt
 import numpy as np
@@ -519,6 +520,94 @@ def compute_success_at_k_from_scores(all_correct_flags, all_scores, ks):
     return {k: totals[k] / num_problems for k in ks}
 
 
+def _softmax_scores(scores, temperature: float = 1.0):
+    scores = np.asarray(scores, dtype=float)
+    n = len(scores)
+    if n == 0:
+        return np.asarray([], dtype=float)
+
+    finite_mask = np.isfinite(scores)
+    if not finite_mask.any():
+        return np.ones(n, dtype=float) / n
+
+    temp = max(float(temperature), 1e-8)
+    shifted = scores[finite_mask] / temp
+    shifted -= np.max(shifted)
+    exp_vals = np.exp(shifted)
+    denom = np.sum(exp_vals)
+
+    probs = np.zeros(n, dtype=float)
+    if not np.isfinite(denom) or denom <= 0:
+        probs[finite_mask] = 1.0 / finite_mask.sum()
+        return probs
+
+    probs[finite_mask] = exp_vals / denom
+    return probs
+
+
+def _pass_at_k_from_effective_mass(
+    effective_num_correct: float, num_samples: int, k: int
+) -> float:
+    """
+    Generalized pass@k using an effective (possibly fractional) number of correct samples.
+    Reduces to exact Chen et al. pass@k when effective_num_correct is an integer.
+    """
+    if effective_num_correct <= 0.0 or k <= 0 or k > num_samples:
+        return 0.0
+    if effective_num_correct >= num_samples:
+        return 1.0
+
+    remaining = num_samples - effective_num_correct
+    if remaining <= 0.0:
+        return 1.0
+
+    fail_prob = 1.0
+    for j in range(k):
+        fail_prob *= (remaining - j) / (num_samples - j)
+    fail_prob = float(np.clip(fail_prob, 0.0, 1.0))
+    return 1.0 - fail_prob
+
+
+def compute_reward_weighted_pass_at_k_from_scores(
+    all_correct_flags, all_scores, ks, temperature: float = 1.0
+):
+    """
+    Reward-weighted pass@k with uniform-reward consistency:
+      if all rewards are equal, this equals classical pass@k.
+
+    We softmax scores to get probability mass on correct candidates, convert that
+    mass to an effective number of correct samples, then apply generalized pass@k.
+    """
+    totals = {k: 0.0 for k in ks}
+    num_problems = len(all_correct_flags)
+    if num_problems == 0:
+        return {k: 0.0 for k in ks}
+
+    for flags, scores in zip(all_correct_flags, all_scores):
+        flags = np.asarray(flags, dtype=bool)
+        scores = np.asarray(scores, dtype=float)
+
+        if len(flags) != len(scores):
+            n = min(len(flags), len(scores))
+            flags = flags[:n]
+            scores = scores[:n]
+        if len(flags) == 0:
+            continue
+
+        probs = _softmax_scores(scores, temperature=temperature)
+        p_correct = float(np.sum(probs[flags])) if flags.any() else 0.0
+        p_correct = float(np.clip(p_correct, 0.0, 1.0))
+        n = len(flags)
+        m_eff = n * p_correct
+
+        for k in ks:
+            if k <= 0:
+                continue
+            totals[k] += _pass_at_k_from_effective_mass(m_eff, n, k)
+
+    return {k: totals[k] / num_problems for k in ks}
+
+
 def bootstrap_ci(
     metric_fn, all_correct_flags, ks, all_scores=None, n_boot=1000, alpha=0.05, seed=42
 ):
@@ -567,6 +656,33 @@ def extract_flags(df: pd.DataFrame, num_generations: int = 16, disc: bool = True
     return all_correct_flags
 
 
+def extract_flags_and_scores(df: pd.DataFrame, num_generations: int = 16):
+    """
+    Build aligned correctness flags and selector score lists per prompt.
+    """
+    grouped = _group_by_prompt(df, num_generations=num_generations)
+    all_correct_flags, all_scores = [], []
+
+    for sub_df in grouped:
+        if sub_df.empty or "correctness_reward_func" not in sub_df.columns:
+            continue
+
+        flags = np.array(sub_df["correctness_reward_func"] == 2, dtype=int).tolist()
+        if "selector" in sub_df.columns:
+            scores = pd.to_numeric(sub_df["selector"], errors="coerce").tolist()
+        else:
+            # Fallback keeps shape aligned if selector is unavailable.
+            scores = [0.0] * len(flags)
+
+        n = min(len(flags), len(scores))
+        if n == 0:
+            continue
+        all_correct_flags.append(flags[:n])
+        all_scores.append(scores[:n])
+
+    return all_correct_flags, all_scores
+
+
 # -------------------------------
 # IO + plotting orchestration
 # -------------------------------
@@ -599,6 +715,9 @@ def discounted_mean(scores, gamma=0.9):
 
 
 _TOKENIZER_CACHE = {}
+MMLU_PRO_DATASET_ROOT = Path("/mnt/pdata/caf83/data/expert_reasoning/mmlu_pro")
+MMLU_PRO_SPLITS = ("train", "eval", "test")
+_MMLU_CATEGORY_LOOKUP_CACHE: Dict[Path, Dict[str, str]] = {}
 
 def get_tokenizer(model_path: str):
     """Loads the tokenizer once per worker process and caches it."""
@@ -607,8 +726,104 @@ def get_tokenizer(model_path: str):
     return _TOKENIZER_CACHE[model_path]
 
 
+def _normalize_question_for_lookup(text: str) -> str:
+    normalized = unicodedata.normalize("NFKC", text)
+    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized.casefold()
+
+
+def _extract_question_from_prompt(prompt: Any) -> Optional[str]:
+    if isinstance(prompt, list):
+        for message in prompt:
+            if isinstance(message, dict) and message.get("role") == "user":
+                content = message.get("content")
+                if isinstance(content, str):
+                    return content
+        for message in prompt:
+            if isinstance(message, dict):
+                content = message.get("content")
+                if isinstance(content, str):
+                    return content
+        return None
+
+    if isinstance(prompt, dict):
+        content = prompt.get("content")
+        return content if isinstance(content, str) else None
+
+    if isinstance(prompt, str):
+        return prompt
+
+    return None
+
+
+def _get_mmlu_category_lookup(dataset_root: Path = MMLU_PRO_DATASET_ROOT) -> Dict[str, str]:
+    dataset_root = Path(dataset_root)
+    if dataset_root in _MMLU_CATEGORY_LOOKUP_CACHE:
+        return _MMLU_CATEGORY_LOOKUP_CACHE[dataset_root]
+
+    lookup: Dict[str, str] = {}
+    for split in MMLU_PRO_SPLITS:
+        split_path = dataset_root / f"{split}.jsonl"
+        if not split_path.exists():
+            continue
+
+        with split_path.open("r", encoding="utf-8") as file:
+            for line in file:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                question = row.get("question")
+                category = row.get("category")
+                if not isinstance(question, str) or not isinstance(category, str):
+                    continue
+
+                normalized_question = _normalize_question_for_lookup(question)
+                if normalized_question and normalized_question not in lookup:
+                    lookup[normalized_question] = category
+
+    if not lookup:
+        print(f"[WARNING] Could not build MMLU-Pro category lookup from {dataset_root}")
+
+    _MMLU_CATEGORY_LOOKUP_CACHE[dataset_root] = lookup
+    return lookup
+
+
+def _attach_mmlu_category(df: pd.DataFrame) -> pd.DataFrame:
+    if "prompt" not in df.columns:
+        df = df.copy()
+        df["mmlu_category"] = pd.NA
+        return df
+
+    lookup = _get_mmlu_category_lookup()
+    if not lookup:
+        df = df.copy()
+        df["mmlu_category"] = pd.NA
+        return df
+
+    def _lookup_category(prompt: Any):
+        question = _extract_question_from_prompt(prompt)
+        if not isinstance(question, str):
+            return pd.NA
+
+        normalized_question = _normalize_question_for_lookup(question)
+        if not normalized_question:
+            return pd.NA
+
+        return lookup.get(normalized_question, pd.NA)
+
+    df = df.copy()
+    df["mmlu_category"] = df["prompt"].apply(_lookup_category)
+    return df
+
+
 def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = False) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
+
+    if "icml_mmlu" in str(jsonl_path).lower():
+        df = _attach_mmlu_category(df)
 
     # ==========================================
     # 1. LOAD AND MERGE LOG PROBS
@@ -722,10 +937,10 @@ def save_latex_table_txt(
 
     def _fmt_row(vals_label: str) -> str:
         return (
-            f"{results[vals_label][1]:.2f} [{cis[vals_label][1][0]:.2f}, {cis[vals_label][1][1]:.2f}] & "
-            f"{results[vals_label][3]:.2f} [{cis[vals_label][3][0]:.2f}, {cis[vals_label][3][1]:.2f}] & "
-            f"{results[vals_label][5]:.2f} [{cis[vals_label][5][0]:.2f}, {cis[vals_label][5][1]:.2f}] & "
-            f"{results[vals_label][10]:.2f} [{cis[vals_label][10][0]:.2f}, {cis[vals_label][10][1]:.2f}] \\\\"
+            f"{results[vals_label][1]:.4f} [{cis[vals_label][1][0]:.4f}, {cis[vals_label][1][1]:.4f}] & "
+            f"{results[vals_label][3]:.4f} [{cis[vals_label][3][0]:.4f}, {cis[vals_label][3][1]:.4f}] & "
+            f"{results[vals_label][5]:.4f} [{cis[vals_label][5][0]:.4f}, {cis[vals_label][5][1]:.4f}] & "
+            f"{results[vals_label][10]:.4f} [{cis[vals_label][10][0]:.4f}, {cis[vals_label][10][1]:.4f}] \\\\"
         )
 
     lines = []
@@ -753,10 +968,10 @@ def save_latex_table_txt_reranking(
 
     def _fmt_row(vals_label: str) -> str:
         return (
-            f"{results[vals_label][1]:.2f} [{cis[vals_label][1][0]:.2f}, {cis[vals_label][1][1]:.2f}] & "
-            f"{results[vals_label][3]:.2f} [{cis[vals_label][3][0]:.2f}, {cis[vals_label][3][1]:.2f}] & "
-            f"{results[vals_label][5]:.2f} [{cis[vals_label][5][0]:.2f}, {cis[vals_label][5][1]:.2f}] & "
-            f"{results[vals_label][10]:.2f} [{cis[vals_label][10][0]:.2f}, {cis[vals_label][10][1]:.2f}] \\\\"
+            f"{results[vals_label][1]:.4f} [{cis[vals_label][1][0]:.4f}, {cis[vals_label][1][1]:.4f}] & "
+            f"{results[vals_label][3]:.4f} [{cis[vals_label][3][0]:.4f}, {cis[vals_label][3][1]:.4f}] & "
+            f"{results[vals_label][5]:.4f} [{cis[vals_label][5][0]:.4f}, {cis[vals_label][5][1]:.4f}] & "
+            f"{results[vals_label][10]:.4f} [{cis[vals_label][10][0]:.4f}, {cis[vals_label][10][1]:.4f}] \\\\"
         )
 
     lines = []
@@ -766,6 +981,265 @@ def save_latex_table_txt_reranking(
     lines.append("Log Probability & " + _fmt_row("logprobs"))
     lines.append("Majority Voting & " + _fmt_row("majority"))
     lines.append("Weighted Majority & " + _fmt_row("majority_weighted"))
+    out_file = Path(out_file)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text("\n".join(lines))
+
+
+def _prompt_to_key(prompt: Any) -> str:
+    if isinstance(prompt, (list, dict)):
+        return str(prompt)
+    return str(prompt)
+
+
+def _group_by_prompt(df: pd.DataFrame, num_generations: int = 16):
+    if df.empty:
+        return []
+
+    if "prompt" in df.columns:
+        df_local = df.copy()
+        df_local["_prompt_key"] = df_local["prompt"].apply(_prompt_to_key)
+        grouped = [sub_df.copy() for _, sub_df in df_local.groupby("_prompt_key", sort=False)]
+        for sub_df in grouped:
+            if "_prompt_key" in sub_df.columns:
+                sub_df.drop(columns=["_prompt_key"], inplace=True)
+        return grouped
+
+    groups = []
+    for i in range(0, len(df), num_generations):
+        groups.append(df.iloc[i : i + num_generations].copy())
+    return groups
+
+
+def _extract_flags_grouped(df: pd.DataFrame, num_generations: int = 16):
+    grouped = _group_by_prompt(df, num_generations=num_generations)
+    all_correct_flags = []
+    for sub_df in grouped:
+        if sub_df.empty or "correctness_reward_func" not in sub_df.columns:
+            continue
+        all_correct_flags.append(
+            np.array(sub_df["correctness_reward_func"] == 2, dtype=int).tolist()
+        )
+    return all_correct_flags
+
+
+def _available_mmlu_categories(*dfs: pd.DataFrame) -> List[str]:
+    categories = set()
+    for df in dfs:
+        if "mmlu_category" not in df.columns:
+            continue
+        categories.update(df["mmlu_category"].dropna().astype(str).tolist())
+    return sorted(categories)
+
+
+def _latex_escape(text: str) -> str:
+    escaped = str(text)
+    escaped = escaped.replace("\\", r"\textbackslash{}")
+    escaped = escaped.replace("&", r"\&")
+    escaped = escaped.replace("%", r"\%")
+    escaped = escaped.replace("$", r"\$")
+    escaped = escaped.replace("#", r"\#")
+    escaped = escaped.replace("_", r"\_")
+    escaped = escaped.replace("{", r"\{")
+    escaped = escaped.replace("}", r"\}")
+    escaped = escaped.replace("~", r"\textasciitilde{}")
+    escaped = escaped.replace("^", r"\textasciicircum{}")
+    return escaped
+
+
+def _format_pass_row_no_ci(values: Dict[int, float], ks: Iterable[int]) -> str:
+    return " & ".join(f"{values[k]:.4f}" for k in ks)
+
+
+def _compute_reranking_results_no_ci(
+    df: pd.DataFrame, ks: Iterable[int], num_generations: int = 16
+) -> Optional[Dict[str, Dict[int, float]]]:
+    if df.empty:
+        return None
+    if "correctness_reward_func" not in df.columns or "selector" not in df.columns:
+        return None
+
+    df_small = df.copy()
+    if "generation_idx" in df_small.columns:
+        df_small = df_small[df_small["generation_idx"] < num_generations].copy()
+    if df_small.empty:
+        return None
+
+    if "prompt" not in df_small.columns or "generation" not in df_small.columns:
+        return None
+
+    df_small["isolated_prompt"] = df_small["prompt"].apply(
+        lambda x: _extract_question_from_prompt(x) or _prompt_to_key(x)
+    )
+    df_small["extracted_answer"] = df_small["generation"].apply(
+        lambda x: extract_xml_answer(x["content"])
+        if isinstance(x, dict) and isinstance(x.get("content"), str)
+        else ""
+    )
+    df_small = add_answer_confidence(
+        df_small, prompt_col="isolated_prompt", answer_col="extracted_answer"
+    )
+    df_small = add_weighted_answer_confidence(
+        df_small,
+        prompt_col="isolated_prompt",
+        answer_col="extracted_answer",
+        reward_col="selector",
+    )
+    df_small["length_heuristic"] = df_small["generation"].apply(
+        lambda x: -len(x["content"])
+        if isinstance(x, dict) and isinstance(x.get("content"), str)
+        else 0
+    )
+    df_small["_prompt_key"] = df_small["prompt"].apply(_prompt_to_key)
+
+    all_correct_flags = []
+    all_scores = []
+    all_dummy_scores = []
+    all_scores_heuristic = []
+    all_scores_logprobs = []
+    all_scores_majority = []
+    all_scores_majority_weighted = []
+
+    for _, sub_df in df_small.groupby("_prompt_key", sort=False):
+        flags = np.array(sub_df["correctness_reward_func"] == 2, dtype=int).tolist()
+        if not flags:
+            continue
+
+        all_correct_flags.append(flags)
+        all_scores.append(sub_df["selector"].tolist())
+        all_dummy_scores.append([0.0] * len(flags))
+        all_scores_heuristic.append(sub_df["length_heuristic"].tolist())
+        if "selector_logprobs" in sub_df.columns:
+            all_scores_logprobs.append(sub_df["selector_logprobs"].tolist())
+        else:
+            all_scores_logprobs.append(sub_df["majority_confidence"].tolist())
+        all_scores_majority.append(sub_df["majority_confidence"].tolist())
+        all_scores_majority_weighted.append(sub_df["weighted_confidence"].tolist())
+
+    if not all_correct_flags:
+        return None
+
+    return {
+        "reward": compute_success_at_k_from_scores(all_correct_flags, all_scores, ks),
+        "random": compute_success_at_k_from_scores(all_correct_flags, all_dummy_scores, ks),
+        "heuristic": compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_heuristic, ks
+        ),
+        "logprobs": compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_logprobs, ks
+        ),
+        "majority": compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_majority, ks
+        ),
+        "majority_weighted": compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_majority_weighted, ks
+        ),
+    }
+
+
+def save_latex_table_txt_mmlu_pass_by_category_no_ci(
+    df_airl: pd.DataFrame,
+    df_sft: pd.DataFrame,
+    df_grpo: pd.DataFrame,
+    ks: Iterable[int],
+    out_file: str | Path,
+    num_generations: int = 16,
+):
+    categories = _available_mmlu_categories(df_airl, df_sft, df_grpo)
+    if not categories:
+        return
+
+    model_to_df = {
+        "Outcome Sup.": df_grpo,
+        "AIRL (ours)": df_airl,
+        "SFT": df_sft,
+    }
+    lines = [
+        r"\begin{tabular}{llcccc}",
+        r"\toprule",
+        r"Category & Method & pass@1 & pass@3 & pass@5 & pass@10 \\",
+        r"\midrule",
+    ]
+
+    for cat_idx, category in enumerate(categories):
+        cat_rows = []
+        for method, df in model_to_df.items():
+            if "mmlu_category" not in df.columns:
+                continue
+            df_cat = df[df["mmlu_category"] == category]
+            flags = _extract_flags_grouped(df_cat, num_generations=num_generations)
+            if not flags:
+                continue
+
+            values = compute_pass_at_k(flags, ks)
+            cat_rows.append(
+                f"{_latex_escape(category)} & {_latex_escape(method)} & "
+                + _format_pass_row_no_ci(values, ks)
+                + r" \\"
+            )
+
+        lines.extend(cat_rows)
+        if cat_rows and cat_idx < len(categories) - 1:
+            lines.append(r"\midrule")
+
+    lines.append(r"\bottomrule")
+    lines.append(r"\end{tabular}")
+
+    out_file = Path(out_file)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text("\n".join(lines))
+
+
+def save_latex_table_txt_mmlu_reranking_by_category_no_ci(
+    df_airl: pd.DataFrame,
+    ks: Iterable[int],
+    out_file: str | Path,
+    num_generations: int = 16,
+):
+    categories = _available_mmlu_categories(df_airl)
+    if not categories:
+        return
+
+    row_order = [
+        ("Random Reranking", "random"),
+        ("Reasoning Reranking", "reward"),
+        ("Length Reranking", "heuristic"),
+        ("Log Probability", "logprobs"),
+        ("Majority Voting", "majority"),
+        ("Weighted Majority", "majority_weighted"),
+    ]
+
+    lines = [
+        r"\begin{tabular}{llcccc}",
+        r"\toprule",
+        r"Category & Reranking Method & pass@1 & pass@3 & pass@5 & pass@10 \\",
+        r"\midrule",
+    ]
+
+    for cat_idx, category in enumerate(categories):
+        if "mmlu_category" not in df_airl.columns:
+            continue
+        df_cat = df_airl[df_airl["mmlu_category"] == category]
+        results = _compute_reranking_results_no_ci(
+            df_cat, ks, num_generations=num_generations
+        )
+        if not results:
+            continue
+
+        for label, key in row_order:
+            if key not in results:
+                continue
+            lines.append(
+                f"{_latex_escape(category)} & {_latex_escape(label)} & "
+                + _format_pass_row_no_ci(results[key], ks)
+                + r" \\"
+            )
+        if cat_idx < len(categories) - 1:
+            lines.append(r"\midrule")
+
+    lines.append(r"\bottomrule")
+    lines.append(r"\end{tabular}")
+
     out_file = Path(out_file)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text("\n".join(lines))
@@ -798,6 +1272,32 @@ def compute_pass_results_ci(datasets: Dict[str, List[List[bool]]], ks: Iterable[
     for label, flags in datasets.items():
         res = compute_pass_at_k(flags, ks)
         ci = bootstrap_ci(compute_pass_at_k, flags, ks)
+        results[label] = res
+        cis[label] = ci
+    return results, cis
+
+
+def compute_reward_weighted_pass_results_ci(
+    datasets_with_scores: Dict[str, Dict[str, List[List[float]]]], ks: Iterable[int]
+):
+    """
+    Return (results, cis) for reward-weighted pass@k tables.
+    """
+    results, cis = {}, {}
+    for label, payload in datasets_with_scores.items():
+        flags = payload["flags"]
+        scores = payload["scores"]
+        if len(flags) == 0:
+            results[label] = {k: 0.0 for k in ks}
+            cis[label] = {k: (0.0, 0.0) for k in ks}
+            continue
+        res = compute_reward_weighted_pass_at_k_from_scores(flags, scores, ks)
+        ci = bootstrap_ci(
+            compute_reward_weighted_pass_at_k_from_scores,
+            flags,
+            ks,
+            all_scores=scores,
+        )
         results[label] = res
         cis[label] = ci
     return results, cis
@@ -1344,8 +1844,8 @@ def save_calibration_table_txt(
     ]
     
     for label, metrics in all_metrics.items():
-        auroc_fmt = f"{metrics['AUROC'][0]:.3f} [{metrics['AUROC'][1]:.3f}, {metrics['AUROC'][2]:.3f}]"
-        ece_fmt = f"{metrics['ECE'][0]:.3f} [{metrics['ECE'][1]:.3f}, {metrics['ECE'][2]:.3f}]"
+        auroc_fmt = f"{metrics['AUROC'][0]:.4f} [{metrics['AUROC'][1]:.4f}, {metrics['AUROC'][2]:.4f}]"
+        ece_fmt = f"{metrics['ECE'][0]:.4f} [{metrics['ECE'][1]:.4f}, {metrics['ECE'][2]:.4f}]"
         lines.append(f"{label} & {auroc_fmt} & {ece_fmt} \\\\")
         
     lines.append(r"\bottomrule")
@@ -1403,6 +1903,41 @@ def run_all_plots(
     results, cis = compute_pass_results_ci(datasets, ks)
     print_latex_table(results, cis, ks)  # for direct copy/paste in your terminal
     save_latex_table_txt(results, cis, ks, Path(out_dir) / "pass_at_k_table.txt")
+
+    weighted_datasets = {}
+    for label, df in {
+        "Outcome Sup.": df_grpo,
+        "Exp. Reas. (ours)": df_airl,
+        "SFT": df_sft,
+    }.items():
+        flags, scores = extract_flags_and_scores(df, num_generations=num_generations)
+        weighted_datasets[label] = {"flags": flags, "scores": scores}
+
+    weighted_results, weighted_cis = compute_reward_weighted_pass_results_ci(
+        weighted_datasets, ks
+    )
+    save_latex_table_txt(
+        weighted_results,
+        weighted_cis,
+        ks,
+        Path(out_dir) / "pass_at_k_table_reward_weighted.txt",
+    )
+
+    if _available_mmlu_categories(df_airl, df_sft, df_grpo):
+        save_latex_table_txt_mmlu_pass_by_category_no_ci(
+            df_airl,
+            df_sft,
+            df_grpo,
+            ks,
+            Path(out_dir) / "pass_at_k_table_by_category.txt",
+            num_generations=num_generations,
+        )
+        save_latex_table_txt_mmlu_reranking_by_category_no_ci(
+            df_airl,
+            ks,
+            Path(out_dir) / "pass_at_k_table_reranking_by_category.txt",
+            num_generations=num_generations,
+        )
 
     plot_pass_at_k(
         datasets, ks, out_dir / "pass_at_k_all.pdf", title="pass@k comparison"

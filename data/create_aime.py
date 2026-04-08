@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 import re
 from collections import Counter
@@ -27,6 +28,8 @@ SOURCE_ALIASES: Dict[str, List[str]] = {
 TOKENIZER_ALIASES: Dict[str, str] = {
     "qwen2.b-3b-instruct": "Qwen/Qwen2.5-3B-Instruct",
 }
+
+HF_DATASET_CACHE_ROOT = "/mnt/pdata/caf83/huggingface_cache/datasets"
 
 
 def normalize_whitespace(text: str) -> str:
@@ -266,17 +269,58 @@ def resolve_source(ds: Dataset, requested_source: str) -> str:
     )
 
 
-def load_and_filter_source(
-    dataset_name: str, split: str, source: str, cache_dir: Optional[str]
-) -> Tuple[Dataset, str]:
+def find_cached_arrow_file(dataset_name: str, split: str) -> Optional[str]:
+    """
+    Fallback for read-only/offline HF setups:
+    find a cached Arrow shard like '*-train.arrow' for a dataset.
+    """
+    repo_dir = dataset_name.replace("/", "___")
+    pattern = os.path.join(
+        HF_DATASET_CACHE_ROOT, repo_dir, "default", "*", "*", f"*-{split}.arrow"
+    )
+    matches = glob.glob(pattern)
+    if not matches and split != "train":
+        pattern_train = os.path.join(
+            HF_DATASET_CACHE_ROOT, repo_dir, "default", "*", "*", "*-train.arrow"
+        )
+        matches = glob.glob(pattern_train)
+    if not matches:
+        return None
+    matches.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return matches[0]
+
+
+def load_dataset_with_fallback(
+    dataset_name: str, split: str, cache_dir: Optional[str]
+) -> Dataset:
     kwargs = {}
     if cache_dir:
         os.makedirs(cache_dir, exist_ok=True)
         kwargs["cache_dir"] = cache_dir
 
-    ds = load_dataset(dataset_name, split=split, **kwargs)
-    resolved_source = resolve_source(ds, source)
+    try:
+        return load_dataset(dataset_name, split=split, **kwargs)
+    except Exception as first_error:
+        cached_arrow = find_cached_arrow_file(dataset_name, split=split)
+        if cached_arrow:
+            print(
+                "[info] load_dataset failed; using cached Arrow fallback:\n"
+                f"       {cached_arrow}"
+            )
+            return Dataset.from_file(cached_arrow)
+        raise first_error
 
+
+def load_and_filter_source(
+    dataset_name: str, split: str, source: str, cache_dir: Optional[str]
+) -> Tuple[Dataset, Optional[str]]:
+    ds = load_dataset_with_fallback(dataset_name=dataset_name, split=split, cache_dir=cache_dir)
+
+    if "source" not in ds.column_names:
+        print("[info] No 'source' column found; skipping source filter.")
+        return ds, None
+
+    resolved_source = resolve_source(ds, source)
     source_col = ds["source"]
     selected_indices = [i for i, s in enumerate(source_col) if s == resolved_source]
     filtered = ds.select(selected_indices)
@@ -287,9 +331,20 @@ def load_and_filter_source(
 def format_sft_rows(ds: Dataset) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     for idx, ex in enumerate(tqdm(ds, desc="Formatting SFT rows")):
-        question = (ex.get("problem") or "").strip()
+        question = (ex.get("problem") or ex.get("question") or "").strip()
         reasoning = (ex.get("solution") or "").strip()
-        answer, answer_method = extract_answer_from_solution(reasoning)
+        raw_answer = ex.get("answer")
+
+        if raw_answer is not None and normalize_whitespace(str(raw_answer)):
+            answer = clean_extracted_answer(str(raw_answer))
+            answer_method = "answer_field"
+        else:
+            answer, answer_method = extract_answer_from_solution(reasoning)
+
+        if (not normalize_whitespace(answer)) and reasoning:
+            # Fallback for rare cases where answer field exists but is empty/noisy.
+            answer, answer_method = extract_answer_from_solution(reasoning)
+
         answer_whole_number = parse_whole_number(answer)
         answer_int_0_999 = extract_integer_0_999(answer)
         if answer_whole_number is not None:
@@ -504,7 +559,10 @@ def build_dataset(args: argparse.Namespace) -> Dataset:
         raw_ds = raw_ds.select(range(min(len(raw_ds), args.max_samples)))
         print(f"[info] Using first {len(raw_ds)} rows after max_samples.")
 
-    print(f"[info] Formatting examples for SFT from source '{resolved_source}'.")
+    if resolved_source is not None:
+        print(f"[info] Formatting examples for SFT from source '{resolved_source}'.")
+    else:
+        print("[info] Formatting examples for SFT.")
     rows = format_sft_rows(raw_ds)
     formatted_ds = Dataset.from_list(rows)
     formatted_ds = filter_to_int_0_999_answers(formatted_ds)
@@ -533,6 +591,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_samples", type=int, default=None)
     parser.add_argument("--max_prompt_tokens", type=int, default=300)
     parser.add_argument("--max_generated_tokens", type=int, default=824)
+    parser.add_argument("--test_only", action="store_true")
     parser.add_argument("--seed", type=int, default=42)
     return parser.parse_args()
 
@@ -542,7 +601,10 @@ def main() -> None:
     os.makedirs(args.outdir, exist_ok=True)
 
     df = build_dataset(args)
-    dsd = make_splits(df, test_size=args.test_size, seed=args.seed)
+    if args.test_only:
+        dsd = DatasetDict({"test": df})
+    else:
+        dsd = make_splits(df, test_size=args.test_size, seed=args.seed)
 
     dsd.save_to_disk(args.outdir)
     export_readable_files(dsd, args.outdir)

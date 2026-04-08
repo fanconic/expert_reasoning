@@ -89,9 +89,9 @@ def main():
 
         for rm_key, _ in RM_MODELS:
             for r_ds_key, _ in DATASETS:
-                folder_name = f"transfer_{rm_key}_{METHOD_KEY}_P_{p_ds_key}_R_{r_ds_key}.jsonl"
+                folder_name = f"transfer_{rm_key}_{METHOD_KEY}_P_{p_ds_key}_R_{r_ds_key}"
                 fpath = os.path.join(ROOT_DIR, p_ds_key, folder_name, f'pass_at_k_table_reranking_{NUM_GENERATIONS}.txt')
-                
+                print(f"Extracting from {fpath}...")
                 res = extract_values(fpath)
                 delta = get_delta(res)
                 

@@ -1,0 +1,27 @@
+% Requires \usepackage{booktabs}, \usepackage{xcolor}
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{l c c}
+\toprule
+& \textbf{\textsc{AIME 2024}} & \textbf{\textsc{AIME 2025}} \\
+\textbf{Method} & Pass@1 & Pass@1 \\
+\midrule
+\multicolumn{3}{l}{\textbf{\texttt{Qwen2.5-3B}}} \\
+\hspace{1em}SFT & \textbf{2.59} & \underline{1.42} \\
+\hspace{1em}Ours (\textit{Sparse}) & \underline{1.21} & \textbf{1.67} \\
+\hspace{1em}Ours (\textit{Step-wise}) & 1.05 & 0.84 \\
+\hspace{1em}Ours (\textit{Interval}) & 0.86 & 0.36 \\
+\hspace{1em}Ours (\textit{Dense}) & 1.11 & 0.36 \\
+\midrule
+\multicolumn{3}{l}{\textbf{\texttt{Qwen3-4B}}} \\
+\hspace{1em}SFT & \textbf{3.45} & 3.12 \\
+\hspace{1em}Ours (\textit{Sparse}) & \underline{3.43} & \underline{3.82} \\
+\hspace{1em}Ours (\textit{Step-wise}) & 3.41 & 2.82 \\
+\hspace{1em}Ours (\textit{Interval}) & 3.31 & \textbf{4.30} \\
+\hspace{1em}Ours (\textit{Dense}) & 3.00 & 2.17 \\
+\bottomrule
+\end{tabular}%
+\caption{\textbf{Pass@1 Performance (\%).} \textbf{Bold} indicates the best performance compared between SFT and our methods.}
+\label{tab:p1_results_aime}
+\end{table}

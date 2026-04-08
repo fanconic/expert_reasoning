@@ -36,6 +36,9 @@ SYSTEM_PROMPT_MMLU = (
     "Question ... Answer Options: \nA. answer1 \nB. answer2 \nC. answer3 \nD. answer4 ... \n<think> reasoning process here </think><answer> answer </answer>"
 )
 
+AIME24_PREPROCESSED_PATH = "data/aime_2024_test_prompt300"
+AIME25_PREPROCESSED_PATH = "data/aime_2025_test_prompt300"
+
 
 
 # UTILS
@@ -65,6 +68,45 @@ def extract_boxed_integer(input_string: str) -> str:
 def extract_think_content(input_string: str) -> str:
     match = re.search(r"<think>(.*?)</think>", input_string, re.DOTALL)
     return match.group(1).strip() if match else input_string.strip()
+
+
+def _to_no_system_prompt(prompt):
+    """
+    Convert a [system,user] chat prompt into a single user message that includes
+    the system instruction prefix, matching existing no_system behavior.
+    """
+    if not prompt or not isinstance(prompt, list):
+        return prompt
+    if len(prompt) >= 2 and prompt[0].get("role") == "system" and prompt[1].get("role") == "user":
+        return [{"role": "user", "content": prompt[0]["content"] + "\n\n" + prompt[1]["content"]}]
+    return prompt
+
+
+def _load_preprocessed_aime(path: str, split: str, ratio: float = 1.0, no_system: bool = False) -> Dataset:
+    dsd = load_from_disk(path)
+
+    if split in dsd:
+        data = dsd[split]
+    elif "test" in dsd:
+        print(f"[info] Split '{split}' not found in {path}. Using 'test' split instead.")
+        data = dsd["test"]
+    elif "train" in dsd:
+        print(f"[info] Split '{split}' not found in {path}. Using 'train' split instead.")
+        data = dsd["train"]
+    else:
+        raise ValueError(f"No usable split found in {path}. Available: {list(dsd.keys())}")
+
+    if ratio < 1.0:
+        data = data.select(range(int(len(data) * ratio)))
+
+    data = data.map(
+        lambda x: {
+            "prompt": _to_no_system_prompt(x["prompt"]) if no_system else x["prompt"],
+            "answer": str(x["answer"]),
+        },
+        remove_columns=data.column_names,
+    )
+    return data
 
 
 def get_aime_distillation(
@@ -136,31 +178,12 @@ def get_aime25(split="train", ratio: float = 1.0, no_system=False):
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_dataset("MathArena/aime_2025")[split]
-    # optionally subsample
-    if ratio < 1.0:
-        data = data.select(range(int(len(data) * ratio)))
-
-    if no_system:
-        data = data.map(
-            lambda x: {
-                "prompt": [
-                    {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + x["problem"]},
-                ],
-                "answer": x["answer"],
-            }
-        )
-    else:
-        data = data.map(
-            lambda x: {
-                "prompt": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": x["problem"]},
-                ],
-                "answer": x["answer"],
-            }
-        )
-    return data
+    return _load_preprocessed_aime(
+        path=AIME25_PREPROCESSED_PATH,
+        split=split,
+        ratio=ratio,
+        no_system=no_system,
+    )
 
 
 def get_aime24(split="train", ratio: float = 1.0, no_system=False):
@@ -174,31 +197,12 @@ def get_aime24(split="train", ratio: float = 1.0, no_system=False):
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_dataset("HuggingFaceH4/aime_2024")[split]
-    # optionally subsample
-    if ratio < 1.0:
-        data = data.select(range(int(len(data) * ratio)))
-
-    if no_system:
-        data = data.map(
-            lambda x: {
-                "prompt": [
-                    {"role": "user", "content": SYSTEM_PROMPT + "\n\n" + x["problem"]},
-                ],
-                "answer": x["answer"],
-            }
-        )
-    else:
-        data = data.map(
-            lambda x: {
-                "prompt": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": x["problem"]},
-                ],
-                "answer": x["answer"],
-            }
-        )
-    return data
+    return _load_preprocessed_aime(
+        path=AIME24_PREPROCESSED_PATH,
+        split=split,
+        ratio=ratio,
+        no_system=no_system,
+    )
 
 
 
@@ -767,12 +771,12 @@ def get_dataset(
             neg_perturb_fns=neg_perturb_fns,
             num_neg_perturbations_per_expert=num_neg_perturbations_per_expert,
         )
-    elif name.lower() == "aime_2024":
-        return get_aime24("train", ratio, no_system=no_system)
-    elif name.lower() == "aime_2025":
-        return get_aime25("train", ratio, no_system=no_system)
+    elif name.lower() == "aime_2024" or name.lower() == "aime2024":
+        return get_aime24(split, ratio, no_system=no_system)
+    elif name.lower() == "aime_2025" or name.lower() == "aime2025":
+        return get_aime25(split, ratio, no_system=no_system)
     elif name.lower() == "aime_train":
-        return get_aime_grpo("train", ratio, no_system=no_system)
+        return get_aime_grpo(split, ratio, no_system=no_system)
     elif name.lower() == "aime_train_kd":
         return get_aime_distillation(
             split,

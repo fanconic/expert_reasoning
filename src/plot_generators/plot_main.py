@@ -37,6 +37,15 @@ DOMAINS: Dict[str, Path] = {
     "math": Path("/mnt/pdata/caf83/icml_math/outputs"),
     "medicine": Path("/mnt/pdata/caf83/icml_medicine/outputs"),
     "mmlu": Path("/mnt/pdata/caf83/icml_mmlu/outputs"),
+    "aime": Path("/mnt/pdata/caf83/icml_aime/outputs"),
+    "aime_2024": Path("/mnt/pdata/caf83/icml_aime/outputs"),
+    "aime_2025": Path("/mnt/pdata/caf83/icml_aime/outputs"),
+}
+
+AIME_JSONL_BY_DOMAIN: Dict[str, List[str]] = {
+    "aime": ["eval_results_aime_train.jsonl", "eval_results_aime_train_kd.jsonl"],
+    "aime_2024": ["eval_results_aime_2024.jsonl"],
+    "aime_2025": ["eval_results_aime_2025.jsonl", "eval_results_aime_2024.jsonl"],
 }
 
 DEFAULT_CKPT = "best_model"
@@ -45,40 +54,51 @@ RunName = Union[str, Mapping[str, str]]
 
 EXPERIMENTS: List[Dict[str, Any]] = [
     # Stepwise
-    # {"airl": "qwen3b_partial_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_new_from_sft"},
-    # {"airl": "llama3b_partial_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_new_from_sft"},
-    # {"airl": "qwen7b_partial_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_new_from_sft"},
-    # {"airl": "llama8b_partial_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_new_from_sft"},
+    {"airl": "qwen3b_partial_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_new", "domains": ["mmlu"]},
+    {"airl": "llama3b_partial_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_new", "domains": ["mmlu"]},
+    {"airl": "qwen7b_partial_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_new", "domains": ["mmlu"]},
+    {"airl": "llama8b_partial_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_new", "domains": ["mmlu"]},
 
 
-    # # Sparse
-    # {"airl": "qwen3b_sparse_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse_new_from_sft"},
-    # {"airl": "llama3b_sparse_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse_new_from_sft"},
-    # {"airl": "qwen7b_sparse_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse_new_from_sft"},
-    # {"airl": "llama8b_sparse_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse_new_from_sft"},
+    # Sparse
+    {"airl": "qwen3b_sparse_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse_new", "domains": ["mmlu"]},
+    {"airl": "llama3b_sparse_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_sparse_new", "domains": ["mmlu"]},
+    {"airl": "qwen7b_sparse_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_sparse_new", "domains": ["mmlu"]},
+    {"airl": "llama8b_sparse_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_sparse_new", "domains": ["mmlu"]},
 
-    # # Full
-    # {"airl": "qwen3b_full_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full_new_from_sft"},
-    # {"airl": "llama3b_full_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full_new_from_sft"},
-    # {"airl": "qwen7b_full_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full_new_from_sft"},
-    # {"airl": "llama8b_full_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full_new_from_sft"},
+    # Full
+    {"airl": "qwen3b_full_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full_new", "domains": ["mmlu"]},
+    {"airl": "llama3b_full_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_full_new", "domains": ["mmlu"]},
+    {"airl": "qwen7b_full_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_full_new", "domains": ["mmlu"]},
+    {"airl": "llama8b_full_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_full_new", "domains": ["mmlu"]},
 
-    # # Partial fixed
-    # {"airl": "qwen3b_partial_fixed_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed_new_from_sft"},
-    # {"airl": "llama3b_partial_fixed_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed_new_from_sft"},
-    # {"airl": "qwen7b_partial_fixed_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed_new_from_sft"},
-    # {"airl": "llama8b_partial_fixed_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed_new_from_sft"},
+    # Partial fixed
+    {"airl": "qwen3b_partial_fixed_new", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed_new", "domains": ["mmlu"]},
+    {"airl": "llama3b_partial_fixed_new", "sft": "llama3b_sft", "grpo": "llama3b_grpo", "label": "llama3b_partial_fixed_new", "domains": ["mmlu"]},
+    {"airl": "qwen7b_partial_fixed_new", "sft": "qwen7b_sft", "grpo": "qwen7b_grpo", "label": "qwen7b_partial_fixed_new", "domains": ["mmlu"]},
+    {"airl": "llama8b_partial_fixed_new", "sft": "llama8b_sft", "grpo": "llama8b_grpo", "label": "llama8b_partial_fixed_new", "domains": ["mmlu"]},
     
     # Qwen4b
-    # {"airl": "qwen4b_sparse", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_sparse", "domains": ["math"]},
-    # {"airl": "qwen4b_partial", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial", "domains": ["math"]},
-    # {"airl": "qwen4b_partial_fixed", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_fixed", "domains": ["math"]},
-    # {"airl": "qwen4b_full", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_full", "domains": ["math"]},
+    {"airl": "qwen4b_sparse", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_sparse", "domains": ["mmlu"]},
+    {"airl": "qwen4b_partial", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial", "domains": ["mmlu"]},
+    {"airl": "qwen4b_partial_fixed", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_fixed", "domains": ["mmlu"]},
+    {"airl": "qwen4b_full", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_full", "domains": ["mmlu"]},
     
-    {"airl": "qwen4b_sparse", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_sparse_new"},
-    {"airl": "qwen4b_partial", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_new"},
-    {"airl": "qwen4b_partial_fixed", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_fixed_new"},
-    {"airl": "qwen4b_full", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_full_new"},
+    # {"airl": "qwen4b_sparse", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_sparse_new"},
+    # {"airl": "qwen4b_partial", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_new"},
+    # {"airl": "qwen4b_partial_fixed", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_fixed_new"},
+    # {"airl": "qwen4b_full", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_full_new"},
+
+    # AIME
+    # {"airl": "qwen3b_sparse", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_sparse", "domains": ["aime_2024", "aime_2025"]},
+    # {"airl": "qwen3b_partial", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial", "domains": ["aime_2024", "aime_2025"]},
+    # {"airl": "qwen3b_partial_fixed", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_fixed", "domains": ["aime_2024", "aime_2025"]},
+    # {"airl": "qwen3b_full", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_full", "domains": ["aime_2024", "aime_2025"]},
+    
+    # {"airl": "qwen4b_sparse", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_sparse", "domains": ["aime_2024", "aime_2025"]},
+    # {"airl": "qwen4b_partial", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial", "domains": ["aime_2024", "aime_2025"]},
+    # {"airl": "qwen4b_partial_fixed", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_partial_fixed", "domains": ["aime_2024", "aime_2025"]},
+    # {"airl": "qwen4b_full", "sft": "qwen4b_sft", "grpo": "qwen4b_grpo", "label": "qwen4b_full", "domains": ["aime_2024", "aime_2025"]},
     
      # Betas
     # {"airl": "qwen3b_partial_range_-1.0_1.0", "sft": "qwen3b_sft", "grpo": "qwen3b_grpo", "label": "qwen3b_partial_range_11", "domains": ["math"]},
@@ -149,7 +169,14 @@ def resolve_run(name_or_map: RunName, domain: str) -> Optional[str]:
     return name_or_map.get(domain)
 
 
-def eval_jsonl(base: Path, run_name: str, ckpt: str) -> Path:
+def eval_jsonl(base: Path, run_name: str, ckpt: str, domain: str) -> Path:
+    if domain in AIME_JSONL_BY_DOMAIN:
+        for filename in AIME_JSONL_BY_DOMAIN[domain]:
+            aime_path = base / run_name / ckpt / filename
+            if aime_path.exists():
+                return aime_path
+        return base / run_name / ckpt / AIME_JSONL_BY_DOMAIN[domain][0]
+
     # define the preferred "new" path
     
     # new_path = base / run_name / ckpt / "eval_results_new.jsonl"
@@ -202,9 +229,9 @@ def run_one_experiment(domain: str, base: Path, exp: Dict[str, Any], ckpt: str, 
             # print(f"[SKIP] Skipping {domain}/{exp_label(exp)} (configuration missing for this domain)")
             return None 
 
-        airl_p = eval_jsonl(base, airl_run, ckpt)
-        sft_p = eval_jsonl(base, sft_run, ckpt)
-        grpo_p = eval_jsonl(base, grpo_run, ckpt)
+        airl_p = eval_jsonl(base, airl_run, ckpt, domain)
+        sft_p = eval_jsonl(base, sft_run, ckpt, domain)
+        grpo_p = eval_jsonl(base, grpo_run, ckpt, domain)
 
         label = exp_label(exp)
         out_dir = Path("./figures") / ("answer_only" if answer_only else "full_cot") / domain / label

@@ -2,7 +2,7 @@
 set -u
 export GPU_NUM="0"
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
-REWARD_FLAGS="model.reward_lb=-5.0 model.reward_ub=5.0 model.max_completion_length=2048 model.max_prompt_length=512 eval.per_device_eval_batch_size=5 eval.max_micro_batch=32"
+REWARD_FLAGS="model.reward_lb=-5.0 model.reward_ub=5.0"
 
 FAILED_RUNS=()
 run_aime() {
@@ -23,7 +23,7 @@ run_aime() {
     esac
 
     echo "▶ Eval: ${WNAME}"
-    bash "$RUNNER" evaluate_aime.py \
+    bash "$RUNNER" evaluate.py \
         --config-path="configs/aime/${MODEL}" \
         --config-name="$CONFIG" \
         wandb.run_name="$WNAME" \
@@ -34,9 +34,9 @@ run_aime() {
 }
 
 # --- Execution Loop ---
-for M in "qwen3b" "llama3b"; do
-    for YEAR in "aime_2024" "aime_2025"; do
-        for V in "sft" "grpo" "full_new" "sparse_new" "partial_new" "partial_fixed_new"; do
+for M in "qwen4b"; do
+    for YEAR in "aime_2024"; do
+        for V in "sft" "grpo" "full" "sparse" "partial" "partial_fixed"; do
             run_aime "$M" "$YEAR" "$V"
         done
     done
