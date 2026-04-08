@@ -1,5 +1,11 @@
 import os
 import re
+from pathlib import Path
+
+try:
+    from src.plot_generators.run_paths import resolve_run_dir
+except ModuleNotFoundError:
+    from run_paths import resolve_run_dir
 
 # ================= CONFIGURATION =================
 
@@ -57,7 +63,11 @@ def get_mean(val_str: str) -> float:
     if not val_str:
         return -100.0
     try:
-        clean = val_str.replace(r"\textbf{", "").replace(r"\underline{", "").replace("}", "")
+        clean = (
+            val_str.replace(r"\textbf{", "")
+            .replace(r"\underline{", "")
+            .replace("}", "")
+        )
         return float(clean.split()[0]) * 100.0
     except Exception:
         return -100.0
@@ -113,7 +123,12 @@ def main() -> None:
     data = {
         model_key: {
             algo_key: {
-                dataset_key: {"Random": None, "Reward": None, "is_best": False, "is_second": False}
+                dataset_key: {
+                    "Random": None,
+                    "Reward": None,
+                    "is_best": False,
+                    "is_second": False,
+                }
                 for dataset_key, _ in DATASET_COLUMNS
             }
             for algo_key, _ in ALGO_ORDER
@@ -123,14 +138,21 @@ def main() -> None:
 
     # --- Step 1: Extraction ---
     for dataset_key, _ in DATASET_COLUMNS:
-        ds_path = os.path.join(ROOT_DIR, dataset_key)
-        if not os.path.exists(ds_path):
+        ds_path = Path(ROOT_DIR) / dataset_key
+        if not ds_path.exists():
             continue
 
         for model_key, _ in MODEL_ORDER:
             for algo_key, _ in ALGO_ORDER:
                 folder_name = f"{model_key}_{algo_key}"
-                fpath = os.path.join(ds_path, folder_name, RERANKING_FILE)
+                run_dir = resolve_run_dir(
+                    ds_path, folder_name, required_file=RERANKING_FILE
+                )
+                fpath = (
+                    run_dir / RERANKING_FILE
+                    if run_dir is not None
+                    else ds_path / folder_name / RERANKING_FILE
+                )
                 data[model_key][algo_key][dataset_key] = extract_reranking_p1(fpath)
 
     # --- Step 2: Ranking Logic (best Reward per model/dataset) ---
@@ -148,12 +170,16 @@ def main() -> None:
 
             for algo_key, _ in ALGO_ORDER:
                 m = get_mean(data[model_key][algo_key][dataset_key]["Reward"])
-                data[model_key][algo_key][dataset_key]["is_best"] = (m == best and m > -1)
-                data[model_key][algo_key][dataset_key]["is_second"] = (m == second and m > -1)
+                data[model_key][algo_key][dataset_key]["is_best"] = m == best and m > -1
+                data[model_key][algo_key][dataset_key]["is_second"] = (
+                    m == second and m > -1
+                )
 
     # --- Step 3: Generate LaTeX ---
     latex = []
-    latex.append(r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}")
+    latex.append(
+        r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}"
+    )
     latex.append(r"\begin{table}[t]")
     latex.append(r"\centering")
     latex.append(r"\scriptsize")
@@ -184,9 +210,13 @@ def main() -> None:
 
             model_col = ""
             if first_row:
-                model_col = f"\\multirow{{{num_algos}}}{{*}}{{\\textbf{{{model_name}}}}}"
+                model_col = (
+                    f"\\multirow{{{num_algos}}}{{*}}{{\\textbf{{{model_name}}}}}"
+                )
 
-            latex.append(f"{model_col} & {algo_name} & " + " & ".join(row_cells) + r" \\")
+            latex.append(
+                f"{model_col} & {algo_name} & " + " & ".join(row_cells) + r" \\"
+            )
             first_row = False
 
         if model_key != MODEL_ORDER[-1][0]:

@@ -1,0 +1,161 @@
+default_ckpt: best_model
+output_root: ./figures
+answer_only_modes:
+  - true
+
+domains:
+  math: /mnt/pdata/caf83/icml_math/outputs
+  medicine: /mnt/pdata/caf83/icml_medicine/outputs
+  mmlu: /mnt/pdata/caf83/icml_mmlu/outputs
+
+preferred_jsonl_files:
+  - eval_results_new.jsonl
+  - debug.jsonl
+  - eval_results.jsonl
+
+airl_eval_file_from_label: true
+
+experiments:
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_math_R_math
+    domains: [math]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_math_R_medicine
+    domains: [math]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_math_R_mmlu
+    domains: [math]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_math_R_math
+    domains: [math]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_math_R_medicine
+    domains: [math]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_math_R_mmlu
+    domains: [math]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_math_R_math
+    domains: [math]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_math_R_medicine
+    domains: [math]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_math_R_mmlu
+    domains: [math]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_medicine_R_math
+    domains: [medicine]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_medicine_R_medicine
+    domains: [medicine]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_medicine_R_mmlu
+    domains: [medicine]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_medicine_R_math
+    domains: [medicine]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_medicine_R_medicine
+    domains: [medicine]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_medicine_R_mmlu
+    domains: [medicine]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_medicine_R_math
+    domains: [medicine]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_medicine_R_medicine
+    domains: [medicine]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_medicine_R_mmlu
+    domains: [medicine]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_mmlu_R_math
+    domains: [mmlu]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_mmlu_R_medicine
+    domains: [mmlu]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama3b_partial_P_mmlu_R_mmlu
+    domains: [mmlu]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_mmlu_R_math
+    domains: [mmlu]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_mmlu_R_medicine
+    domains: [mmlu]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_qwen3b_partial_P_mmlu_R_mmlu
+    domains: [mmlu]
+
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_mmlu_R_math
+    domains: [mmlu]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_mmlu_R_medicine
+    domains: [mmlu]
+  - airl: qwen7b_sft
+    sft: qwen7b_sft
+    grpo: qwen7b_grpo
+    label: transfer_llama8b_partial_P_mmlu_R_mmlu
+    domains: [mmlu]

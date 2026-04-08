@@ -37,7 +37,7 @@ run_bounds_ablation() {
     echo "------------------------------------------------"
     
     # 1. TRAIN
-    run_cmd "${WNAME}_TRAIN" bash "$RUNNER" irl_train.py \
+    run_cmd "${WNAME}_TRAIN" bash "$RUNNER" train_irl.py \
         --config-path="configs/gsm8k_rebuttals/${MODEL}" \
         --config-name="good_run" \
         $OVERRIDE $BASE_TRAIN_PARAMS

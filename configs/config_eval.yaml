@@ -40,6 +40,25 @@ sampling:
   top_p: 0.95
 
 eval:
+  # Modes:
+  # - generate: generate + reward-model evaluation (default)
+  # - aime: generate + reward-model evaluation, saved as eval_results_aime.jsonl
+  # - pregenerated_policy: read generations from jsonl and score policy log-probs
+  # - pregenerated_policy_and_reward: read generations and score both policy + reward model
+  mode: "generate"
+
+  # Optional overrides for pregenerated modes
+  pregenerated_jsonl_path: null
+  pregenerated_source_dir: null
+  pregenerated_candidates: null
+
+  # Optional output override (absolute or relative path)
+  output_file: null
+
+  # Optional switches; null means mode-based defaults
+  compute_policy_log_probs: null
+  compute_reward_model_scores: null
+
   ks : [1, 3, 5, 10]
   use_vllm: true
   per_device_eval_batch_size: 7

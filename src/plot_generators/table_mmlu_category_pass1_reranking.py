@@ -111,9 +111,8 @@ def format_cell(
 def find_run_dirs(root_dir: Path) -> List[Path]:
     if not root_dir.exists():
         return []
-    return sorted(
-        d for d in root_dir.iterdir() if d.is_dir() and (d / PASS_FILE).exists()
-    )
+    run_dirs = sorted({p.parent for p in root_dir.rglob(PASS_FILE)})
+    return [d for d in run_dirs if d.is_dir()]
 
 
 def ordered_candidates_for_model(model_key: str, run_names: List[str]) -> List[str]:
@@ -182,8 +181,7 @@ def main() -> None:
     # data[model][algo][category] = pass@1 float or None
     data: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {
         model_key: {
-            algo_key: {cat: None for cat in categories}
-            for algo_key, _ in ALGO_ORDER
+            algo_key: {cat: None for cat in categories} for algo_key, _ in ALGO_ORDER
         }
         for model_key, _ in MODEL_ORDER
     }
@@ -228,8 +226,7 @@ def main() -> None:
     # Highlighting: best/second among SFT + AIRL variants, excluding GRPO
     formatted_data: Dict[str, Dict[str, Dict[str, str]]] = {
         model_key: {
-            algo_key: {cat: "-" for cat in categories}
-            for algo_key, _ in ALGO_ORDER
+            algo_key: {cat: "-" for cat in categories} for algo_key, _ in ALGO_ORDER
         }
         for model_key, _ in MODEL_ORDER
     }
@@ -254,7 +251,9 @@ def main() -> None:
                     formatted_data[model_key][algo_key][cat] = "-"
                     continue
 
-                is_best = algo_key != "GRPO" and best_val is not None and val == best_val
+                is_best = (
+                    algo_key != "GRPO" and best_val is not None and val == best_val
+                )
                 is_second = (
                     algo_key != "GRPO" and second_val is not None and val == second_val
                 )
@@ -272,7 +271,9 @@ def main() -> None:
     col_spec = "l " + " ".join(["c"] * len(categories))
 
     latex: List[str] = []
-    latex.append(r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{arydshln}")
+    latex.append(
+        r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{arydshln}"
+    )
     latex.append(r"\begin{table*}[t]")
     latex.append(r"\centering")
     latex.append(r"\scriptsize")
@@ -281,7 +282,8 @@ def main() -> None:
     latex.append(r"\toprule")
 
     category_header = " & ".join(
-        rf"\textbf{{\textsc{{{latex_escape(capitalize_category(cat))}}}}}" for cat in categories
+        rf"\textbf{{\textsc{{{latex_escape(capitalize_category(cat))}}}}}"
+        for cat in categories
     )
     latex.append(f"& {category_header} \\\\")
     latex.append(r"\midrule")
@@ -291,7 +293,9 @@ def main() -> None:
 
         for algo_key, algo_name in ALGO_ORDER:
             row_vals = [formatted_data[model_key][algo_key][cat] for cat in categories]
-            latex.append(rf"\hspace{{1em}}{algo_name} & " + " & ".join(row_vals) + r" \\")
+            latex.append(
+                rf"\hspace{{1em}}{algo_name} & " + " & ".join(row_vals) + r" \\"
+            )
 
             if algo_key == "GRPO":
                 latex.append(

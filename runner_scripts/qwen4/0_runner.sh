@@ -25,13 +25,13 @@
 # }
 
 # # # 1. SFT (Now with max_steps)
-# # run_cmd "${DATASET}_SFT" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh sft_train.py \
+# # run_cmd "${DATASET}_SFT" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_sft.py \
 # #     --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
 # # run_cmd "${DATASET}_SFT_EVAL" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py \
 # #     --config-path=configs/${DATASET}/${MODEL} --config-name=sft_eval
 
 # # # 2. GRPO (Now with max_steps)
-# # run_cmd "${DATASET}_GRPO" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train.py \
+# # run_cmd "${DATASET}_GRPO" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_grpo.py \
 # #     --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_train $STEP_LIMIT
 # # run_cmd "${DATASET}_GRPO_EVAL" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py \
 # #     --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_eval
@@ -41,7 +41,7 @@
 #     DENSE="full" && [[ "$suffix" == "sparse" ]] && DENSE="false"
 #     WNAME="${MODEL}_${suffix}"
     
-#     # run_cmd "${DATASET}_IRL_${suffix}" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh irl_train.py \
+#     # run_cmd "${DATASET}_IRL_${suffix}" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_irl.py \
 #     #     --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
 #     #     wandb.run_name=$WNAME model.dense_rewards=$DENSE $COMMON_REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
         
@@ -72,7 +72,7 @@ for ds in "mmlu_rebuttals"; do
     for suffix in "partial"; do
         WNAME="${MODEL}_${suffix}"
         
-        run_cmd "${ds}_${suffix}_TRAIN" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh irl_train.py \
+        run_cmd "${ds}_${suffix}_TRAIN" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_irl.py \
             --config-path=configs/${ds}/${MODEL} --config-name=good_run \
             wandb.run_name=$WNAME model.dense_rewards=$suffix $COMMON_REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
             

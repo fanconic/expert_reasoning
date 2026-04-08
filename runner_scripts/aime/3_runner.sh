@@ -43,18 +43,18 @@ run_triple_eval() {
 
 # --- Execution ---
 
-run_cmd "SFT_TRAIN" bash "$RUNNER" sft_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
+run_cmd "SFT_TRAIN" bash "$RUNNER" train_sft.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
 run_triple_eval "sft" "sft_eval"
 
-run_cmd "GRPO_TRAIN" bash "$RUNNER" train.py --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_train $STEP_LIMIT
+run_cmd "GRPO_TRAIN" bash "$RUNNER" train_grpo.py --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_train $STEP_LIMIT
 run_triple_eval "grpo" "grpo_eval"
 
-run_cmd "SPARSE_TRAIN" bash "$RUNNER" irl_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
+run_cmd "SPARSE_TRAIN" bash "$RUNNER" train_irl.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
     wandb.run_name="${MODEL}_sparse" model.dense_rewards=false $REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
 run_triple_eval "sparse" "eval" "model.dense_rewards=false wandb.run_name=${MODEL}_sparse $REWARD_FLAGS"
 
 echo -e "\nSummary GPU 3: Failures: ${#FAILED_RUNS[@]}"
 printf "  %s\n" "${FAILED_RUNS[@]}"
 
-run_cmd "SFT_TRAIN" bash "$RUNNER" sft_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
+run_cmd "SFT_TRAIN" bash "$RUNNER" train_sft.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
 run_triple_eval "sft" "sft_eval"

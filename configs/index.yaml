@@ -1,0 +1,35 @@
+# Canonical config index for paper-style reruns
+
+canonical:
+  gsm8k:
+    qwen3b:
+      airl_train: gsm8k_rebuttals/qwen3b/irl_train.yaml
+      airl_eval: gsm8k_rebuttals/qwen3b/irl_eval.yaml
+      sft_train: gsm8k_rebuttals/qwen3b/sft_train.yaml
+      sft_eval: gsm8k_rebuttals/qwen3b/sft_eval.yaml
+      grpo_train: gsm8k_rebuttals/qwen3b/grpo_train.yaml
+      grpo_eval: gsm8k_rebuttals/qwen3b/grpo_eval.yaml
+  medreason:
+    qwen3b:
+      airl_train: medreason_rebuttals/qwen3b/irl_train.yaml
+      airl_eval: medreason_rebuttals/qwen3b/irl_eval.yaml
+      sft_train: medreason_rebuttals/qwen3b/sft_train.yaml
+      sft_eval: medreason_rebuttals/qwen3b/sft_eval.yaml
+      grpo_train: medreason_rebuttals/qwen3b/grpo_train.yaml
+      grpo_eval: medreason_rebuttals/qwen3b/grpo_eval.yaml
+  mmlu:
+    qwen3b:
+      airl_train: mmlu_rebuttals/qwen3b/irl_train.yaml
+      airl_eval: mmlu_rebuttals/qwen3b/irl_eval.yaml
+      sft_train: mmlu_rebuttals/qwen3b/sft_train.yaml
+      sft_eval: mmlu_rebuttals/qwen3b/sft_eval.yaml
+      grpo_train: mmlu_rebuttals/qwen3b/grpo_train.yaml
+      grpo_eval: mmlu_rebuttals/qwen3b/grpo_eval.yaml
+  aime:
+    qwen3b:
+      airl_train: aime/qwen3b/irl_train.yaml
+      airl_eval: aime/qwen3b/irl_eval.yaml
+      sft_train: aime/qwen3b/sft_train.yaml
+      sft_eval: aime/qwen3b/sft_eval.yaml
+      grpo_train: aime/qwen3b/grpo_train.yaml
+      grpo_eval: aime/qwen3b/grpo_eval.yaml

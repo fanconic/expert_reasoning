@@ -44,7 +44,7 @@ run_triple_eval() {
 # --- Execution ---
 
 
-run_cmd "PARTIAL_TRAIN" bash "$RUNNER" irl_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
+run_cmd "PARTIAL_TRAIN" bash "$RUNNER" train_irl.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
     wandb.run_name="${MODEL}_partial" model.dense_rewards=partial $REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
 run_triple_eval "partial" "eval" "model.dense_rewards=partial wandb.run_name=${MODEL}_partial $REWARD_FLAGS"
 

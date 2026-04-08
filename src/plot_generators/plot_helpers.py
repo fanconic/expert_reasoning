@@ -15,18 +15,19 @@ import re
 import unicodedata
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
-from matplotlib.colors import TwoSlopeNorm, Normalize, LinearSegmentedColormap
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.font_manager import FontProperties
-from matplotlib.patches import FancyBboxPatch
-from matplotlib.textpath import TextPath
 import matplotlib as mpl
 from sklearn.metrics import roc_auc_score
 from transformers import AutoTokenizer
 from collections import Counter
+
+try:
+    from src.plot_generators.token_viz import make_text_reward_image
+except ModuleNotFoundError:
+    from token_viz import make_text_reward_image
 
 plt.style.use("bright")
 plt.rcParams["font.family"] = "sans-serif"
@@ -78,8 +79,6 @@ def count_xml(text) -> float:
     return count
 
 
-
-
 def strict_format_reward_func(response, **kwargs):
     return 0.5 if STRICT_FMT.match(response) else 0.0
 
@@ -107,381 +106,6 @@ def int_reward_func(completions, **kwargs):
     return [0.5 if r.isdigit() else 0.0 for r in extracted_responses]
 
 
-def count_xml(text) -> float:
-    count = 0.0
-    if text.count("<think>") == 1:
-        count += 0.125
-    if text.count("</think>") == 1:
-        count += 0.125
-    if text.count("<answer>") == 1:
-        count += 0.125
-        count -= len(text.split("</answer>")[-1]) * 0.001
-    if text.count("</answer>") == 1:
-        count += 0.125
-        count -= (len(text.split("</answer>")[-1]) - 1) * 0.001
-    return count
-
-
-# -------------------------------
-# Token visualisation utilities
-# -------------------------------
-NEWLINE_CHAR = "Ċ"
-SPACE_CHAR = "Ġ"
-_QWEN_SPECIAL_RE = re.compile(r"<\|.*?\|>")
-
-def _escape_fmt(text: str) -> str:
-    """
-    Escapes special Matplotlib characters. 
-    Mainly '$' which triggers math mode if unescaped.
-    """
-    if not text:
-        return ""
-    # Replace '$' with '\$' to prevent Matplotlib from expecting an equation
-    return text.replace("$", "\\$")
-
-class TextMeasurer:
-    """Helper to measure text width exactly using Matplotlib's engine."""
-    def __init__(self, font_properties, dpi):
-        self.fp = font_properties
-        self.dpi = dpi
-        self.fig = plt.figure(dpi=dpi)
-        self.fig.canvas.draw()
-        self.renderer = self.fig.canvas.get_renderer()
-        
-    def get_text_width(self, text, fontsize):
-        # We assume text is already escaped/safe when passed here
-        txt = plt.Text(0, 0, text, fontproperties=self.fp, fontsize=fontsize)
-        txt.set_figure(self.fig)
-        bbox = txt.get_window_extent(renderer=self.renderer)
-        return bbox.width
-
-    def wrap_text(self, text, fontsize, max_width_px):
-        # Normalize spaces and split
-        words = text.replace("\n", " \n ").split(" ")
-        lines = []
-        current_line = []
-        current_width = 0
-        space_w = self.get_text_width(" ", fontsize)
-
-        for word in words:
-            if word == "\n":
-                lines.append(" ".join(current_line))
-                current_line = []
-                current_width = 0
-                continue
-            if not word: continue
-            
-            w = self.get_text_width(word, fontsize)
-            
-            if current_line and (current_width + space_w + w <= max_width_px):
-                current_line.append(word)
-                current_width += space_w + w
-            elif not current_line:
-                current_line.append(word)
-                current_width = w
-            else:
-                lines.append(" ".join(current_line))
-                current_line = [word]
-                current_width = w
-                
-        if current_line: lines.append(" ".join(current_line))
-        return [l for l in lines if l.strip()]
-
-    def close(self):
-        plt.close(self.fig)
-
-def _analyze_token(raw_tok: str, score: float) -> dict:
-    if raw_tok is None:
-        return {"text": "", "score": score, "is_start_word": False, "newlines_after": 0, "is_special": False}
-    
-    if raw_tok in ["<|im_end|>", "<|endoftext|>"]:
-        return {"text": "", "score": score, "is_start_word": False, "newlines_after": 1, "is_special": True}
-    
-    is_start_word = raw_tok.startswith(SPACE_CHAR)
-    newlines_after = raw_tok.count(NEWLINE_CHAR)
-    
-    # Clean standard token artifacts
-    txt = raw_tok.replace(SPACE_CHAR, "").replace(NEWLINE_CHAR, "")
-    txt = _QWEN_SPECIAL_RE.sub("", txt).replace("\u0120", " ").strip()
-    
-    # --- FIX: Escape special characters in the token text ---
-    txt = _escape_fmt(txt)
-    
-    is_special = txt.startswith("<") and txt.endswith(">")
-
-    return {
-        "text": txt, "score": score, "is_start_word": is_start_word,
-        "newlines_after": newlines_after, "is_special": is_special
-    }
-    
-def normalise(values, mode="minmax", max_val=None, min_val=None):
-    v = np.array(values, dtype=float)
-    if v.size == 0:
-        return v.tolist()
-    if mode == "minmax":
-        vmin, vmax = float(v.min()), float(v.max())
-        if np.isclose(vmin, vmax):
-            return np.zeros_like(v).tolist()
-        return ((v - vmin) / (vmax - vmin)).tolist()
-    elif mode == "sigmoid":
-        return ((1 / (1 + np.exp(-v))) * 2 - 1).tolist()
-    elif mode == "diverging":
-        # Map [-V, 0, +V] -> [0, 0.5, 1], so negatives are <0.5 (red), positives >0.5 (blue)
-        if max_val is None:
-            vmax = float(np.max(np.abs(v)))
-        else:
-            vmax = float(max(np.abs([max_val, min_val])))
-        if np.isclose(vmax, 0.0):
-            return (0.5 * np.ones_like(v)).tolist()  # all near zero → neutral white
-        return (((v / vmax) + 1.0) / 2.0).tolist()
-    else:
-        raise ValueError("Unknown normalisation mode")
-
-
-def make_text_reward_image(
-    tokens: List[str],
-    scores: List[float],
-    out_path: str,
-    prompt_text: Optional[str] = None,
-    title: Optional[str] = None,
-    cmap_name: str = "Blues",
-    pad_x: int = 5,
-    pad_y: int = 4,
-    gap_word: int = 10,
-    gap_subword: int = 1,
-    gap_y: int = 10,
-    font_size: int = 12,
-    max_width_px: int = 800, 
-    dpi: int = 200,
-    font_properties: Optional[FontProperties] = None,
-    show_colorbar: bool = True,
-    max_val=None,
-    min_val=None
-):
-    fp = font_properties or FontProperties(size=font_size, family="DejaVu Sans")
-    measurer = TextMeasurer(fp, dpi)
-    
-    # --- 1. SETUP COLOR NORMALIZATION ---
-    vals = np.array(scores)
-    if max_val is None:
-        abs_max = np.max(np.abs(vals)) if vals.size > 0 else 1.0
-    else:
-        abs_max = max(abs(max_val), abs(min_val)) if min_val is not None else abs(max_val)
-    if abs_max == 0: abs_max = 1.0 
-    
-    norm_obj = mcolors.Normalize(vmin=-abs_max, vmax=abs_max)
-    
-    # --- 2. PREPARE PILLS ---
-    try:
-        norm_scores = np.array(normalise(scores, mode="diverging", max_val=max_val, min_val=min_val))
-    except NameError:
-        norm_scores = vals
-
-    processed_tokens = []
-    for t, sc in zip(tokens, norm_scores):
-        processed_tokens.append(_analyze_token(t, sc))
-
-    for item in processed_tokens:
-        if item["text"]:
-            item["width"] = measurer.get_text_width(item["text"], font_size)
-        else:
-            item["width"] = 0
-
-    pill_h = (font_size * 1.4 * dpi / 72) + 2 * pad_y 
-    row_height_px = pill_h + gap_y
-    min_text_w = measurer.get_text_width("i", font_size) * 1.5 
-
-    rows = []
-    cur_row = []
-    cur_x = 0
-    
-    for item in processed_tokens:
-        txt = item["text"]
-        if txt:
-            if not cur_row: gap = 0
-            elif item["is_start_word"]: gap = gap_word
-            else: gap = gap_subword
-
-            pill_w = max(item["width"], min_text_w) + 2 * pad_x
-            w_total = gap + pill_w
-            
-            if cur_row and (cur_x + w_total > max_width_px * 0.96):
-                rows.append(cur_row)
-                cur_row = []
-                cur_x = 0
-                gap = 0
-            
-            cur_row.append({
-                "text": txt, "score": item["score"], "pill_w": pill_w, 
-                "gap_before": gap, "is_special": item["is_special"]
-            })
-            cur_x += gap + pill_w
-        
-        if item["newlines_after"] > 0:
-            if cur_row: rows.append(cur_row)
-            cur_row = []
-            cur_x = 0
-            for _ in range(item["newlines_after"] - 1): rows.append([])
-
-    if cur_row: rows.append(cur_row)
-
-    # --- 3. BUILD LAYOUT BLOCKS ---
-    layout_blocks = []
-    content_width = max_width_px - 40 
-
-    if title:
-        safe_title = _escape_fmt(title)
-        t_lines = measurer.wrap_text(safe_title, font_size + 2, content_width)
-        layout_blocks.append(("text_lines", t_lines, {"size": font_size + 2, "style": "italic", "weight": "normal"}))
-        layout_blocks.append(("spacer", 20, {}))
-
-    if prompt_text:
-        layout_blocks.append(("text_lines", ["Question:"], {"size": font_size, "style": "normal", "weight": "bold"}))
-        clean_prompt = prompt_text.replace(SPACE_CHAR, " ").replace(NEWLINE_CHAR, "\n")
-        safe_prompt = _escape_fmt(clean_prompt)
-        p_lines = measurer.wrap_text(safe_prompt, font_size, content_width)
-        layout_blocks.append(("text_lines", p_lines, {"size": font_size, "style": "normal", "weight": "normal"}))
-        layout_blocks.append(("spacer", 60, {}))
-
-    layout_blocks.append(("text_lines", ["Reasoning + Answer:"], {"size": font_size, "style": "normal", "weight": "bold"}))
-    layout_blocks.append(("spacer", 20, {}))
-    layout_blocks.append(("pills", rows, {}))
-
-    measurer.close()
-
-    # --- 4. CALCULATE GEOMETRY ---
-    total_text_height = 0
-    top_margin = 20
-    bottom_margin = 20
-    
-    def get_line_height(fs): return fs * 1.5 * dpi / 72
-
-    for kind, content, params in layout_blocks:
-        if kind == "text_lines":
-            lh = get_line_height(params["size"])
-            total_text_height += len(content) * lh
-        elif kind == "spacer":
-            total_text_height += content
-        elif kind == "pills":
-            total_text_height += len(content) * row_height_px
-
-    final_h_px = top_margin + total_text_height + bottom_margin
-
-    # --- 5. FIGURE DIMENSIONS (FIXED MARGINS) ---
-    cbar_width_px = 30 if show_colorbar else 0
-    cbar_pad_px = 40 if show_colorbar else 0
-    
-    # FIX: Add specific margin for the labels (numbers) on the right
-    # 80px should be plenty for standard fonts to not get cut off
-    cbar_labels_margin = 80 if show_colorbar else 20 
-
-    total_fig_width_px = max_width_px + cbar_pad_px + cbar_width_px + cbar_labels_margin
-
-    width_in = total_fig_width_px / dpi
-    height_in = max(1.0, final_h_px / dpi)
-    
-    fig = plt.figure(figsize=(width_in, height_in), dpi=dpi)
-    
-    # Text Axis covers the WHOLE figure, but we only draw in the max_width_px area
-    ax = plt.axes([0, 0, 1, 1])
-    ax.set_xlim(0, total_fig_width_px)
-    ax.set_ylim(0, final_h_px)
-    ax.axis("off")
-
-    try:
-        cmap = plt.get_cmap(cmap_name)
-    except:
-        cmap = plt.cm.Blues
-
-    # --- 6. DRAW TEXT CONTENT ---
-    y = final_h_px - top_margin
-    left_margin = 20
-
-    for kind, content, params in layout_blocks:
-        if kind == "text_lines":
-            lh = get_line_height(params["size"])
-            for line in content:
-                ax.text(
-                    left_margin, y, line,
-                    fontsize=params["size"],
-                    fontstyle=params["style"],
-                    fontweight=params["weight"],
-                    va="top", ha="left",
-                    fontproperties=fp
-                )
-                y -= lh
-        
-        elif kind == "spacer":
-            y -= content
-            
-        elif kind == "pills":
-            y_row_top = y
-            for row in content:
-                x = left_margin
-                if not row:
-                    y_row_top -= row_height_px
-                    continue
-                
-                for pill in row:
-                    x += pill["gap_before"]
-                    
-                    sc = pill["score"]
-                    if pill["is_special"]:
-                        face = (0.95, 0.95, 0.95, 1.0)
-                        edge = (0.8, 0.8, 0.8, 1.0)
-                        txt_col = "black"
-                    else:
-                        face = cmap(sc)
-                        lum = 0.299 * face[0] + 0.587 * face[1] + 0.114 * face[2]
-                        txt_col = "white" if lum < 0.5 else "black"
-                        edge = (0.9, 0.9, 0.9, 0.0)
-
-                    # Draw Box
-                    y_pill = y_row_top - pill_h
-                    patch = FancyBboxPatch(
-                        (x, y_pill), pill["pill_w"], pill_h,
-                        boxstyle="round,pad=0.0,rounding_size=6",
-                        linewidth=1.0, edgecolor=edge, facecolor=face
-                    )
-                    ax.add_patch(patch)
-
-                    # Draw Text
-                    ax.text(
-                        x + pill["pill_w"]/2, y_pill + pill_h/2,
-                        pill["text"],
-                        fontsize=font_size,
-                        va="center", ha="center",
-                        color=txt_col, fontproperties=fp
-                    )
-                    x += pill["pill_w"]
-                
-                y_row_top -= row_height_px
-            y = y_row_top
-
-    # --- 7. DRAW COLORBAR ---
-    if show_colorbar:
-        # Calculate position in normalized coordinates (0 to 1)
-        # Left edge of bar starts after text area + padding
-        cb_left = (max_width_px + cbar_pad_px) / total_fig_width_px
-        cb_width = cbar_width_px / total_fig_width_px
-        
-        # Center vertically
-        cb_height = 0.8
-        cb_bottom = (1.0 - cb_height) / 2.0
-        
-        cax = fig.add_axes([cb_left, cb_bottom, cb_width, cb_height])
-        
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm_obj)
-        sm.set_array([]) 
-        
-        cbar = fig.colorbar(sm, cax=cax, orientation='vertical')
-        cbar.outline.set_visible(False)
-        cbar.ax.tick_params(labelsize=font_size-2, size=0)
-
-    out_path = Path(out_path)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, bbox_inches="tight", pad_inches=0.02)
-    plt.close(fig)
 # -------------------------------
 # Metrics utilities
 # -------------------------------
@@ -687,6 +311,7 @@ def extract_flags_and_scores(df: pd.DataFrame, num_generations: int = 16):
 # IO + plotting orchestration
 # -------------------------------
 
+
 def discounted_mean(scores, gamma=0.9):
     """
     Calculates a weighted average where the last element has the highest weight (1.0),
@@ -694,22 +319,22 @@ def discounted_mean(scores, gamma=0.9):
     """
     # Ensure input is a numpy array
     scores = np.array(scores)
-    
+
     # Create a mask for valid (non-NaN) values
     mask = ~np.isnan(scores)
-    
+
     # If all values are NaN, return NaN
     if not np.any(mask):
         return np.nan
-        
+
     # Generate weights: [gamma^(n-1), ..., gamma^1, 1]
     n = len(scores)
     weights = gamma ** np.arange(n)[::-1]
-    
+
     # Apply mask to both scores and weights
     valid_scores = scores[mask]
     valid_weights = weights[mask]
-    
+
     # Calculate weighted average
     return np.sum(valid_scores * valid_weights) / np.sum(valid_weights)
 
@@ -718,6 +343,7 @@ _TOKENIZER_CACHE = {}
 MMLU_PRO_DATASET_ROOT = Path("/mnt/pdata/caf83/data/expert_reasoning/mmlu_pro")
 MMLU_PRO_SPLITS = ("train", "eval", "test")
 _MMLU_CATEGORY_LOOKUP_CACHE: Dict[Path, Dict[str, str]] = {}
+
 
 def get_tokenizer(model_path: str):
     """Loads the tokenizer once per worker process and caches it."""
@@ -757,7 +383,9 @@ def _extract_question_from_prompt(prompt: Any) -> Optional[str]:
     return None
 
 
-def _get_mmlu_category_lookup(dataset_root: Path = MMLU_PRO_DATASET_ROOT) -> Dict[str, str]:
+def _get_mmlu_category_lookup(
+    dataset_root: Path = MMLU_PRO_DATASET_ROOT,
+) -> Dict[str, str]:
     dataset_root = Path(dataset_root)
     if dataset_root in _MMLU_CATEGORY_LOOKUP_CACHE:
         return _MMLU_CATEGORY_LOOKUP_CACHE[dataset_root]
@@ -819,7 +447,9 @@ def _attach_mmlu_category(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = False) -> pd.DataFrame:
+def read_and_enhance(
+    jsonl_path: str, gamma: float = 0.9, answer_only: bool = False
+) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
 
     if "icml_mmlu" in str(jsonl_path).lower():
@@ -845,57 +475,85 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
         tokeniser = get_tokenizer("unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit")
         df = df.copy()
         df["response_token_ids"] = df.apply(
-            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)["input_ids"],
+            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)[
+                "input_ids"
+            ],
             axis=1,
         )
         df["response_token"] = df.apply(
             lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
         )
-        
+
         # Shift both rewards and logprobs for Qwen
         if "reward_model_score" in df.columns:
-            df["reward_model_score"] = df["reward_model_score"].apply(lambda x: [x[0]] + x if isinstance(x, list) and len(x) > 0 else x)
+            df["reward_model_score"] = df["reward_model_score"].apply(
+                lambda x: [x[0]] + x if isinstance(x, list) and len(x) > 0 else x
+            )
         if "policy_log_probs" in df.columns:
-            df["policy_log_probs"] = df["policy_log_probs"].apply(lambda x: [x[0]] + x if isinstance(x, list) and len(x) > 0 else x)
-            
+            df["policy_log_probs"] = df["policy_log_probs"].apply(
+                lambda x: [x[0]] + x if isinstance(x, list) and len(x) > 0 else x
+            )
+
     elif "llama" in str(jsonl_path) and "response_token" not in df.columns:
         tokeniser = get_tokenizer("unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit")
         df = df.copy()
         df["response_token_ids"] = df.apply(
-            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)["input_ids"][1:],
+            lambda x: tokeniser(x["generation"]["content"] + tokeniser.eos_token)[
+                "input_ids"
+            ][1:],
             axis=1,
         )
         df["response_token"] = df.apply(
             lambda x: tokeniser.convert_ids_to_tokens(x["response_token_ids"]), axis=1
         )
     else:
-        print(f"[WARNING] `llama` or `qwen` not found in {jsonl_path}, skipping tokenization.")
+        print(
+            f"[WARNING] `llama` or `qwen` not found in {jsonl_path}, skipping tokenization."
+        )
 
     # ==========================================
     # 3. METRIC PROCESSING (Rewards & Logprobs)
     # ==========================================
-    
+
     # Process Reward Scores
     if "reward_model_score" in df.columns:
         df["reward_model_score_np"] = df["reward_model_score"].apply(
-            lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))] if isinstance(x, (list, np.ndarray)) else np.array([])
+            lambda x: (
+                (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
+                if isinstance(x, (list, np.ndarray))
+                else np.array([])
+            )
         )
-        df["mean_rewards"] = df["reward_model_score_np"].apply(lambda x: np.nanmean(x) if len(x) > 0 else np.nan)
+        df["mean_rewards"] = df["reward_model_score_np"].apply(
+            lambda x: np.nanmean(x) if len(x) > 0 else np.nan
+        )
 
     # Process Policy Log Probs (Mirrored)
     if "policy_log_probs" in df.columns:
         df["policy_log_probs_np"] = df["policy_log_probs"].apply(
-            lambda x: (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))] if isinstance(x, (list, np.ndarray)) else np.array([])
+            lambda x: (
+                (np.array(x, dtype=float))[~np.isnan(np.array(x, dtype=float))]
+                if isinstance(x, (list, np.ndarray))
+                else np.array([])
+            )
         )
-        df["mean_log_probs"] = df["policy_log_probs_np"].apply(lambda x: np.nanmean(x) if len(x) > 0 else np.nan)
-        df["sum_log_probs"] = df["policy_log_probs_np"].apply(lambda x: np.nansum(x) if len(x) > 0 else np.nan)
+        df["mean_log_probs"] = df["policy_log_probs_np"].apply(
+            lambda x: np.nanmean(x) if len(x) > 0 else np.nan
+        )
+        df["sum_log_probs"] = df["policy_log_probs_np"].apply(
+            lambda x: np.nansum(x) if len(x) > 0 else np.nan
+        )
 
     # ==========================================
     # 4. EXTRACTIONS & SELECTORS
     # ==========================================
     if "generation" in df.columns:
-        df["strict_format_reward_func"] = df.generation.apply(lambda x: strict_format_reward_func(x["content"]))
-        df["xmlcount_reward_func"] = df.generation.apply(lambda x: count_xml(x["content"]))
+        df["strict_format_reward_func"] = df.generation.apply(
+            lambda x: strict_format_reward_func(x["content"])
+        )
+        df["xmlcount_reward_func"] = df.generation.apply(
+            lambda x: count_xml(x["content"])
+        )
 
     if "response_token" in df.columns:
         df["answer_positions"] = df["response_token"].apply(
@@ -905,17 +563,22 @@ def read_and_enhance(jsonl_path: str, gamma: float = 0.9, answer_only: bool = Fa
                 else (-10, -4)
             )
         )
-        
+
     if answer_only and "reward_model_score_np" in df.columns:
-        # Note: Selector is still tied to rewards here. 
-        df["selector"] = df["reward_model_score_np"].apply(lambda x: discounted_mean(x, gamma=0.95))
+        # Note: Selector is still tied to rewards here.
+        df["selector"] = df["reward_model_score_np"].apply(
+            lambda x: discounted_mean(x, gamma=0.95)
+        )
         if "policy_log_probs" in df.columns:
-            df["selector_logprobs"] = df["policy_log_probs_np"].apply(lambda x: discounted_mean(x, gamma=0.95))
+            df["selector_logprobs"] = df["policy_log_probs_np"].apply(
+                lambda x: discounted_mean(x, gamma=0.95)
+            )
     elif "mean_rewards" in df.columns:
         df["selector"] = df["mean_rewards"].copy()
         if "policy_log_probs" in df.columns:
             df["selector_logprobs"] = df["mean_log_probs"].copy()
     return df
+
 
 def ensure_dir(p: str | Path) -> Path:
     p = Path(p)
@@ -954,7 +617,8 @@ def save_latex_table_txt(
     out_file = Path(out_file)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text("\n".join(lines))
-    
+
+
 def save_latex_table_txt_reranking(
     results: Dict, cis: Dict, ks: Iterable[int], out_file: str | Path
 ):
@@ -962,8 +626,8 @@ def save_latex_table_txt_reranking(
     Write a LaTeX table fragment (4 columns for k in {1,3,5,10}).
 
     Keys expected in `results`/`cis`:
-      - "Random Rerankning"               
-      - "Reasoning Reranking"             
+      - "Random Rerankning"
+      - "Reasoning Reranking"
     """
 
     def _fmt_row(vals_label: str) -> str:
@@ -999,7 +663,9 @@ def _group_by_prompt(df: pd.DataFrame, num_generations: int = 16):
     if "prompt" in df.columns:
         df_local = df.copy()
         df_local["_prompt_key"] = df_local["prompt"].apply(_prompt_to_key)
-        grouped = [sub_df.copy() for _, sub_df in df_local.groupby("_prompt_key", sort=False)]
+        grouped = [
+            sub_df.copy() for _, sub_df in df_local.groupby("_prompt_key", sort=False)
+        ]
         for sub_df in grouped:
             if "_prompt_key" in sub_df.columns:
                 sub_df.drop(columns=["_prompt_key"], inplace=True)
@@ -1072,9 +738,11 @@ def _compute_reranking_results_no_ci(
         lambda x: _extract_question_from_prompt(x) or _prompt_to_key(x)
     )
     df_small["extracted_answer"] = df_small["generation"].apply(
-        lambda x: extract_xml_answer(x["content"])
-        if isinstance(x, dict) and isinstance(x.get("content"), str)
-        else ""
+        lambda x: (
+            extract_xml_answer(x["content"])
+            if isinstance(x, dict) and isinstance(x.get("content"), str)
+            else ""
+        )
     )
     df_small = add_answer_confidence(
         df_small, prompt_col="isolated_prompt", answer_col="extracted_answer"
@@ -1086,9 +754,11 @@ def _compute_reranking_results_no_ci(
         reward_col="selector",
     )
     df_small["length_heuristic"] = df_small["generation"].apply(
-        lambda x: -len(x["content"])
-        if isinstance(x, dict) and isinstance(x.get("content"), str)
-        else 0
+        lambda x: (
+            -len(x["content"])
+            if isinstance(x, dict) and isinstance(x.get("content"), str)
+            else 0
+        )
     )
     df_small["_prompt_key"] = df_small["prompt"].apply(_prompt_to_key)
 
@@ -1121,7 +791,9 @@ def _compute_reranking_results_no_ci(
 
     return {
         "reward": compute_success_at_k_from_scores(all_correct_flags, all_scores, ks),
-        "random": compute_success_at_k_from_scores(all_correct_flags, all_dummy_scores, ks),
+        "random": compute_success_at_k_from_scores(
+            all_correct_flags, all_dummy_scores, ks
+        ),
         "heuristic": compute_success_at_k_from_scores(
             all_correct_flags, all_scores_heuristic, ks
         ),
@@ -1364,26 +1036,26 @@ def plot_pass_at_k(
     ensure_dir(out_path.parent)
     plt.savefig(out_path, bbox_inches="tight")
     plt.close()
-    
-    
+
+
 def add_weighted_answer_confidence(
-    df: pd.DataFrame, 
-    prompt_col: str = "prompt", 
+    df: pd.DataFrame,
+    prompt_col: str = "prompt",
     answer_col: str = "extracted_answer",
-    reward_col: str = "selector"  # The column containing your scalar reward
+    reward_col: str = "selector",  # The column containing your scalar reward
 ) -> pd.DataFrame:
     """
     Returns the original dataframe with a 'weighted_confidence' column.
-    Uses a softmax over the reward scores per prompt to assign a positive voting weight 
+    Uses a softmax over the reward scores per prompt to assign a positive voting weight
     to each generation, then sums those weights for identical answers.
     """
     df_out = df.copy()
-    
+
     # 1. Create a hashable version of the prompt for grouping
-    df_out['_hashable_prompt'] = df_out[prompt_col].apply(
+    df_out["_hashable_prompt"] = df_out[prompt_col].apply(
         lambda x: str(x) if isinstance(x, (list, dict)) else x
     )
-    
+
     # Helper function to compute softmax safely (subtracting max for numerical stability)
     def calculate_softmax(series):
         # Drop NaNs temporarily for the math, fill with -inf so they get 0 weight
@@ -1392,53 +1064,57 @@ def add_weighted_answer_confidence(
         return e_x / e_x.sum()
 
     # 2. Convert raw rewards into positive voting weights (probabilities) per prompt
-    df_out['reward_weight'] = df_out.groupby('_hashable_prompt')[reward_col].transform(calculate_softmax)
-    
+    df_out["reward_weight"] = df_out.groupby("_hashable_prompt")[reward_col].transform(
+        calculate_softmax
+    )
+
     # 3. Sum the weights for each specific answer per prompt
-    df_out['weighted_confidence'] = df_out.groupby(['_hashable_prompt', answer_col])['reward_weight'].transform('sum')
-    
+    df_out["weighted_confidence"] = df_out.groupby(["_hashable_prompt", answer_col])[
+        "reward_weight"
+    ].transform("sum")
+
     # Fill NaNs with 0.0 (in case the answer itself was missing/un-parsable)
-    df_out['weighted_confidence'] = df_out['weighted_confidence'].fillna(0.0)
-    
+    df_out["weighted_confidence"] = df_out["weighted_confidence"].fillna(0.0)
+
     # Clean up temporary columns
-    df_out = df_out.drop(columns=['_hashable_prompt', 'reward_weight'])
-    
+    df_out = df_out.drop(columns=["_hashable_prompt", "reward_weight"])
+
     return df_out
-    
-    
+
+
 def add_answer_confidence(
-    df: pd.DataFrame, 
-    prompt_col: str = "prompt", 
-    answer_col: str = "extracted_answer"
+    df: pd.DataFrame, prompt_col: str = "prompt", answer_col: str = "extracted_answer"
 ) -> pd.DataFrame:
     """
     Returns the original dataframe with a new 'majority_confidence' column.
-    The confidence represents how often the answer in that specific row 
+    The confidence represents how often the answer in that specific row
     appeared among all generations for that same prompt.
     """
     df_out = df.copy()
-    
+
     # 1. Create a hashable version of the prompt for grouping
-    df_out['_hashable_prompt'] = df_out[prompt_col].apply(
+    df_out["_hashable_prompt"] = df_out[prompt_col].apply(
         lambda x: str(x) if isinstance(x, (list, dict)) else x
     )
-    
+
     # 2. Count how many times each specific answer appears per prompt
     # Grouping by both prompt AND answer gives us the frequency of that exact response
-    answer_counts = df_out.groupby(['_hashable_prompt', answer_col])[answer_col].transform('count')
-    
+    answer_counts = df_out.groupby(["_hashable_prompt", answer_col])[
+        answer_col
+    ].transform("count")
+
     # 3. Count the total number of valid (non-null) answers per prompt
-    total_answers = df_out.groupby('_hashable_prompt')[answer_col].transform('count')
-    
+    total_answers = df_out.groupby("_hashable_prompt")[answer_col].transform("count")
+
     # 4. Calculate the confidence (frequency ratio) for the row's answer
-    df_out['majority_confidence'] = (answer_counts / total_answers)
-    
+    df_out["majority_confidence"] = answer_counts / total_answers
+
     # Fill NaNs with 0.0 (in case the answer itself was missing/un-parsable)
-    df_out['majority_confidence'] = df_out['majority_confidence'].fillna(0.0)
-    
+    df_out["majority_confidence"] = df_out["majority_confidence"].fillna(0.0)
+
     # Clean up the temporary grouping column
-    df_out = df_out.drop(columns=['_hashable_prompt'])
-    
+    df_out = df_out.drop(columns=["_hashable_prompt"])
+
     return df_out
 
 
@@ -1449,10 +1125,10 @@ def plot_success_at_k_given(
     out_path: str | Path,
     title: str,
 ):
-    
+
     for num_gen in num_generations:
         df_small = df[df.generation_idx < num_gen].copy().reset_index()
-        
+
         # Extract flags + scores
         all_correct_flags, all_scores = [], []
         for i in range(0, len(df_small), num_gen):
@@ -1463,20 +1139,30 @@ def plot_success_at_k_given(
             all_scores.append(sub_df["selector"].tolist())
 
         all_dummy_scores = [[0.0] * num_gen for _ in range(len(all_correct_flags))]
-        
-        
+
         all_scores_heuristic = []
         all_scores_logprobs = []
         all_scores_majority = []
         all_scores_majority_weighted = []
-        
-        df_small["isolated_prompt"] = df_small["prompt"].apply(lambda x: x[1]['content'])
-        df_small["extracted_answer"] = df_small["generation"].apply(lambda x: extract_xml_answer(x['content']))
-        df_small = add_answer_confidence(df_small, prompt_col="isolated_prompt", answer_col="extracted_answer")
+
+        df_small["isolated_prompt"] = df_small["prompt"].apply(
+            lambda x: x[1]["content"]
+        )
+        df_small["extracted_answer"] = df_small["generation"].apply(
+            lambda x: extract_xml_answer(x["content"])
+        )
+        df_small = add_answer_confidence(
+            df_small, prompt_col="isolated_prompt", answer_col="extracted_answer"
+        )
         df_small = add_weighted_answer_confidence(
-            df_small, prompt_col="isolated_prompt", answer_col="extracted_answer", reward_col="selector"
+            df_small,
+            prompt_col="isolated_prompt",
+            answer_col="extracted_answer",
+            reward_col="selector",
         )  # Combine confidence with reward score
-        df_small["length_heuristic"] = df_small["generation"].apply(lambda x: -len(x['content']))
+        df_small["length_heuristic"] = df_small["generation"].apply(
+            lambda x: -len(x["content"])
+        )
 
         for i in range(0, len(df_small), num_gen):
             sub_df = df_small.iloc[i : i + num_gen]
@@ -1488,36 +1174,64 @@ def plot_success_at_k_given(
             all_scores_majority.append(sub_df["majority_confidence"].tolist())
             all_scores_majority_weighted.append(sub_df["weighted_confidence"].tolist())
 
-        results_given = compute_success_at_k_from_scores(all_correct_flags, all_scores, ks)
+        results_given = compute_success_at_k_from_scores(
+            all_correct_flags, all_scores, ks
+        )
         cis_given = bootstrap_ci(
-            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores
+            compute_success_at_k_from_scores,
+            all_correct_flags,
+            ks,
+            all_scores=all_scores,
         )
 
         results_uniform = compute_success_at_k_from_scores(
             all_correct_flags, all_dummy_scores, ks
         )
         cis_uniform = bootstrap_ci(
-            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_dummy_scores,
+            compute_success_at_k_from_scores,
+            all_correct_flags,
+            ks,
+            all_scores=all_dummy_scores,
         )
-        
-        results_heuristic = compute_success_at_k_from_scores(all_correct_flags, all_scores_heuristic, ks)
+
+        results_heuristic = compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_heuristic, ks
+        )
         cis_heuristic = bootstrap_ci(
-            compute_success_at_k_from_scores, all_correct_flags,ks, all_scores=all_scores_heuristic
+            compute_success_at_k_from_scores,
+            all_correct_flags,
+            ks,
+            all_scores=all_scores_heuristic,
         )
-        
-        results_logprobs = compute_success_at_k_from_scores(all_correct_flags, all_scores_logprobs, ks)
+
+        results_logprobs = compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_logprobs, ks
+        )
         cis_logprobs = bootstrap_ci(
-            compute_success_at_k_from_scores,all_correct_flags, ks, all_scores=all_scores_logprobs,
+            compute_success_at_k_from_scores,
+            all_correct_flags,
+            ks,
+            all_scores=all_scores_logprobs,
         )
-        
-        results_majority = compute_success_at_k_from_scores(all_correct_flags, all_scores_majority, ks)
+
+        results_majority = compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_majority, ks
+        )
         cis_majority = bootstrap_ci(
-            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores_majority,
+            compute_success_at_k_from_scores,
+            all_correct_flags,
+            ks,
+            all_scores=all_scores_majority,
         )
-        
-        results_majority_weighted = compute_success_at_k_from_scores(all_correct_flags, all_scores_majority_weighted, ks)
+
+        results_majority_weighted = compute_success_at_k_from_scores(
+            all_correct_flags, all_scores_majority_weighted, ks
+        )
         cis_majority_weighted = bootstrap_ci(
-            compute_success_at_k_from_scores, all_correct_flags, ks, all_scores=all_scores_majority_weighted,
+            compute_success_at_k_from_scores,
+            all_correct_flags,
+            ks,
+            all_scores=all_scores_majority_weighted,
         )
 
         results = {
@@ -1527,8 +1241,7 @@ def plot_success_at_k_given(
             "logprobs": results_logprobs,
             "majority": results_majority,
             "majority_weighted": results_majority_weighted,
-
-        } 
+        }
         cis = {
             "reward": cis_given,
             "random": cis_uniform,
@@ -1537,7 +1250,12 @@ def plot_success_at_k_given(
             "majority": cis_majority,
             "majority_weighted": cis_majority_weighted,
         }
-        save_latex_table_txt_reranking(results, cis, ks, Path(out_path) / f"pass_at_k_table_reranking_{num_gen}.txt")
+        save_latex_table_txt_reranking(
+            results,
+            cis,
+            ks,
+            Path(out_path) / f"pass_at_k_table_reranking_{num_gen}.txt",
+        )
 
         prop_cycle = plt.rcParams.get("axes.prop_cycle")
         colors = prop_cycle.by_key()["color"] if prop_cycle else [None, None]
@@ -1558,7 +1276,7 @@ def plot_success_at_k_given(
         for label, (results_model, cis_model) in {
             "Reward Reranker": (results_given, cis_given),
             "Random Ranking": (results_uniform, cis_uniform),
-            #"Length Reranker": (results_heuristic, cis_heuristic),
+            # "Length Reranker": (results_heuristic, cis_heuristic),
         }.items():
             means = [results_model[k] for k in ks]
             ci = [cis_model[k] for k in ks]
@@ -1582,7 +1300,7 @@ def plot_success_at_k_given(
         plt.title(title)
         plt.legend()
         plt.grid()
-        out_path = Path(out_path) 
+        out_path = Path(out_path)
         ensure_dir(out_path)
         plt.savefig(out_path / f"pass_atkN_expert_{num_gen}.pdf", bbox_inches="tight")
         plt.close()
@@ -1728,22 +1446,21 @@ def plot_formatting_distributions(
     plt.close()
 
 
-
 def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
     reward_cols = [
         "selector",
-        #"selector_discounted",
+        # "selector_discounted",
         "xmlcount_reward_func",
         "strict_format_reward_func",
-        #"int_reward_func",
+        # "int_reward_func",
         "correctness_reward_func",
     ]
     rename_map = {
         "selector": "Rewards",
-        #"selector_discounted": "Rewards\n(Discounted)",
+        # "selector_discounted": "Rewards\n(Discounted)",
         "xmlcount_reward_func": "XML Count",
         "strict_format_reward_func": "Strict Format",
-        #"int_reward_func": "Integer",
+        # "int_reward_func": "Integer",
         "correctness_reward_func": "Correctness",
     }
     corr_matrix = df[reward_cols].corr()
@@ -1767,7 +1484,8 @@ def plot_reward_correlations(df: pd.DataFrame, out_pdf: str | Path):
     ensure_dir(Path(out_pdf).parent)
     plt.savefig(out_pdf, bbox_inches="tight")
     plt.close()
-    
+
+
 def compute_ece(labels: np.ndarray, probs: np.ndarray, n_bins: int = 10) -> float:
     """
     Computes the Expected Calibration Error (ECE).
@@ -1784,43 +1502,47 @@ def compute_ece(labels: np.ndarray, probs: np.ndarray, n_bins: int = 10) -> floa
             ece += bin_weight * np.abs(bin_acc - bin_conf)
     return ece
 
-def compute_calibration_metrics(labels: List[int], scores: List[float]) -> Dict[str, float]:
+
+def compute_calibration_metrics(
+    labels: List[int], scores: List[float]
+) -> Dict[str, float]:
     """
     Computes AUROC and ECE. Scores are converted to probabilities via sigmoid.
     """
     y_true = np.array(labels)
     # Convert logits to probabilities
     y_prob = 1 / (1 + np.exp(-np.array(scores)))
-    
+
     return {
         "AUROC": float(roc_auc_score(y_true, y_prob)),
-        "ECE": float(compute_ece(y_true, y_prob))
+        "ECE": float(compute_ece(y_true, y_prob)),
     }
 
+
 def bootstrap_calibration_ci(
-    labels: List[int], 
-    scores: List[float], 
-    n_boot: int = 1000, 
-    alpha: int = 0.05, 
-    seed: int = 42
+    labels: List[int],
+    scores: List[float],
+    n_boot: int = 1000,
+    alpha: int = 0.05,
+    seed: int = 42,
 ):
     rng = np.random.default_rng(seed)
     n = len(labels)
     boot_results = {"AUROC": [], "ECE": []}
-    
+
     for _ in range(n_boot):
         idxs = rng.integers(0, n, size=n)
         labels_bs = [labels[i] for i in idxs]
         scores_bs = [scores[i] for i in idxs]
-        
+
         # Guard against single-class bootstrap samples which break AUROC
         if len(set(labels_bs)) < 2:
             continue
-            
+
         metrics = compute_calibration_metrics(labels_bs, scores_bs)
         boot_results["AUROC"].append(metrics["AUROC"])
         boot_results["ECE"].append(metrics["ECE"])
-        
+
     ci = {}
     for metric in ["AUROC", "ECE"]:
         lower = np.percentile(boot_results[metric], 100 * alpha / 2)
@@ -1829,9 +1551,8 @@ def bootstrap_calibration_ci(
         ci[metric] = (mean, lower, upper)
     return ci
 
-def save_calibration_table_txt(
-    all_metrics: Dict[str, Dict], out_file: str | Path
-):
+
+def save_calibration_table_txt(all_metrics: Dict[str, Dict], out_file: str | Path):
     """
     Writes a LaTeX table for AUROC and ECE.
     all_metrics should be: { "Model Name": { "AUROC": (mean, l, u), "ECE": (mean, l, u) } }
@@ -1840,41 +1561,39 @@ def save_calibration_table_txt(
         r"\begin{tabular}{lcc}",
         r"\toprule",
         r"Model & AUROC $\uparrow$ & ECE $\downarrow$ \\",
-        r"\midrule"
+        r"\midrule",
     ]
-    
+
     for label, metrics in all_metrics.items():
         auroc_fmt = f"{metrics['AUROC'][0]:.4f} [{metrics['AUROC'][1]:.4f}, {metrics['AUROC'][2]:.4f}]"
         ece_fmt = f"{metrics['ECE'][0]:.4f} [{metrics['ECE'][1]:.4f}, {metrics['ECE'][2]:.4f}]"
         lines.append(f"{label} & {auroc_fmt} & {ece_fmt} \\\\")
-        
+
     lines.append(r"\bottomrule")
     lines.append(r"\end{tabular}")
-    
+
     out_file = Path(out_file)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text("\n".join(lines))
     print(f"Calibration table saved to {out_file}")
-    
-    
-    
+
+
 def run_calibration_analysis(df_dict: Dict[str, pd.DataFrame], out_dir: Path):
     all_calibration_results = {}
-    
+
     for name, df in df_dict.items():
         # 1. Prepare labels (1 for correct, 0 for wrong)
         labels = (df["correctness_reward_func"] == 2).astype(int).tolist()
-        
+
         # 2. Use your 'selector' (discounted mean) as the aggregate logit
         scores = df["selector"].tolist()
-        
+
         # 3. Compute bootstrapped metrics
         ci_results = bootstrap_calibration_ci(labels, scores)
         all_calibration_results[name] = ci_results
-        
+
     save_calibration_table_txt(
-        all_calibration_results, 
-        out_dir / "calibration_metrics_table.txt"
+        all_calibration_results, out_dir / "calibration_metrics_table.txt"
     )
 
 
@@ -1899,7 +1618,7 @@ def run_all_plots(
         "Exp. Reas. (ours)": extract_flags(df_airl, num_generations),
         "SFT": extract_flags(df_sft, num_generations),
     }
-    #NEW: compute + print + save LaTeX table fragment
+    # NEW: compute + print + save LaTeX table fragment
     results, cis = compute_pass_results_ci(datasets, ks)
     print_latex_table(results, cis, ks)  # for direct copy/paste in your terminal
     save_latex_table_txt(results, cis, ks, Path(out_dir) / "pass_at_k_table.txt")
@@ -1942,14 +1661,10 @@ def run_all_plots(
     plot_pass_at_k(
         datasets, ks, out_dir / "pass_at_k_all.pdf", title="pass@k comparison"
     )
-    
+
     # Create a mapping for the calibration function
-    df_dict = {
-        "Outcome Sup.": df_grpo,
-        "Exp. Reas. (ours)": df_airl,
-        "SFT": df_sft
-    }
-    
+    df_dict = {"Outcome Sup.": df_grpo, "Exp. Reas. (ours)": df_airl, "SFT": df_sft}
+
     # Run the calibration analysis (AUROC/ECE)
     run_calibration_analysis(df_dict, out_dir)
 
@@ -1958,7 +1673,7 @@ def run_all_plots(
     plot_success_at_k_given(
         df_airl,
         ks,
-        #[2,3,5,8,16],
+        # [2,3,5,8,16],
         [16],
         out_dir,
         title=r"Expert Reasoning: pass@k$\mid$N comparison",
@@ -1972,7 +1687,7 @@ def run_all_plots(
     )
 
     # raw vs discounted
-    #plot_rewards_vs_discounted(df_airl, out_dir / "rewards_vs_discounted.pdf")
+    # plot_rewards_vs_discounted(df_airl, out_dir / "rewards_vs_discounted.pdf")
 
     # formatting distributions
     plot_formatting_distributions(
@@ -1998,56 +1713,74 @@ def run_all_plots(
             if "response_token" in df_airl.columns:
                 plt.rcParams["text.usetex"] = False
                 # 1. Calculate Means
-                # Note: Keeping your logic where 'wrong' mean is based on 0, 
+                # Note: Keeping your logic where 'wrong' mean is based on 0,
                 # but sampling pool is based on != 2.
-                correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][mean_name].mean()
-                wrong_mean   = df_airl[df_airl["correctness_reward_func"] == 0][mean_name].mean()
+                correct_mean = df_airl[df_airl["correctness_reward_func"] == 2][
+                    mean_name
+                ].mean()
+                wrong_mean = df_airl[df_airl["correctness_reward_func"] == 0][
+                    mean_name
+                ].mean()
                 overall_mean = df_airl[mean_name].mean()
                 # 2. Standardise rewards (Vectorized is faster than .apply)
                 df_airl["prompt_idx"] = np.arange(len(df_airl)) // 16
-                df_airl["reward_model_standard"] = df_airl[reward_score_name] - overall_mean
+                df_airl["reward_model_standard"] = (
+                    df_airl[reward_score_name] - overall_mean
+                )
 
                 # 1. Find row index of Correct answer with HIGHEST 'selector'
                 # idxmax returns the index label where the max value is found
-                pos_series = df_airl[df_airl["correctness_reward_func"] == 2].groupby('prompt_idx')['selector'].idxmax()
+                pos_series = (
+                    df_airl[df_airl["correctness_reward_func"] == 2]
+                    .groupby("prompt_idx")["selector"]
+                    .idxmax()
+                )
 
                 # 2. Find row index of Wrong answer with LOWEST 'selector'
                 # idxmin returns the index label where the min value is found
-                neg_series = df_airl[df_airl["correctness_reward_func"] == 0].groupby('prompt_idx')['selector'].idxmin()
+                neg_series = (
+                    df_airl[df_airl["correctness_reward_func"] == 0]
+                    .groupby("prompt_idx")["selector"]
+                    .idxmin()
+                )
 
                 # 3. Merge the two series on 'prompt_idx'
                 # This aligns them and drops groups that don't have both a correct and wrong answer
-                aligned_pairs = pd.merge(pos_series, neg_series, on='prompt_idx', suffixes=('_pos', '_neg'))
+                aligned_pairs = pd.merge(
+                    pos_series, neg_series, on="prompt_idx", suffixes=("_pos", "_neg")
+                )
 
                 # 4. Extract the aligned lists of indices
-                positive_indices = aligned_pairs['selector_pos'].tolist()[:5]
-                negative_indices = aligned_pairs['selector_neg'].tolist()[:5]
-
+                positive_indices = aligned_pairs["selector_pos"].tolist()[:5]
+                negative_indices = aligned_pairs["selector_neg"].tolist()[:5]
 
                 # # --- Positive Indices ---
                 # # Filter first: Correctness == 2 AND Strict Format == 0.5
                 # pos_subset = df_airl[
-                #     (df_airl["correctness_reward_func"] == 2) #& 
+                #     (df_airl["correctness_reward_func"] == 2) #&
                 #     #(df_airl["strict_format_reward_func"] == 0.5)
                 # ]
                 # # Find the 5 points with the smallest absolute difference from correct_mean
                 # positive_indices = (pos_subset[mean_name] - correct_mean).abs().nsmallest(5).index
 
-
                 # # --- Negative Indices ---
                 # # Filter first: Correctness != 2 AND Strict Format == 0.5
                 # neg_subset = df_airl[
-                #     (df_airl["correctness_reward_func"] != 2) #& 
+                #     (df_airl["correctness_reward_func"] != 2) #&
                 #     #(df_airl["strict_format_reward_func"] == 0.5)
                 # ]
                 # # Find the 5 points with the smallest absolute difference from wrong_mean
                 # negative_indices = (neg_subset[mean_name] - wrong_mean).abs().nsmallest(5).index
-                all_indices = np.concatenate([positive_indices, negative_indices ])
-                df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(lambda x: max(x))
-                df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(lambda x: min(x))
+                all_indices = np.concatenate([positive_indices, negative_indices])
+                df_airl["reward_model_max"] = df_airl["reward_model_standard"].apply(
+                    lambda x: max(x)
+                )
+                df_airl["reward_model_min"] = df_airl["reward_model_standard"].apply(
+                    lambda x: min(x)
+                )
                 max_value = df_airl.loc[all_indices, "reward_model_max"].max()
                 min_value = df_airl.loc[all_indices, "reward_model_min"].min()
-            
+
                 for i, idx in enumerate(positive_indices):
                     tokens = df_airl.loc[idx, "response_token"]
                     scores = df_airl.loc[idx, "reward_model_standard"]
@@ -2062,9 +1795,9 @@ def run_all_plots(
                         dpi=300,
                         max_width_px=4000,
                         max_val=max_value,
-                        min_val=min_value
+                        min_val=min_value,
                     )
-            
+
                 for i, idx in enumerate(negative_indices):
                     tokens = df_airl.loc[idx, "response_token"]
                     scores = df_airl.loc[idx, "reward_model_standard"]
@@ -2079,9 +1812,8 @@ def run_all_plots(
                         dpi=300,
                         max_width_px=4000,
                         max_val=max_value,
-                        min_val=min_value
+                        min_val=min_value,
                     )
-                
 
     # return path for reference
     return Path(out_dir)

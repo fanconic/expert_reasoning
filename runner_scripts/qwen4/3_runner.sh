@@ -18,7 +18,7 @@ for ds in "gsm8k_rebuttals" "medreason_rebuttals"; do
     for suffix in "partial" "partial_fixed"; do
         WNAME="${MODEL}_${suffix}"
         
-        run_cmd "${ds}_${suffix}_TRAIN" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh irl_train.py \
+        run_cmd "${ds}_${suffix}_TRAIN" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_irl.py \
             --config-path=configs/${ds}/${MODEL} --config-name=good_run \
             wandb.run_name=$WNAME model.dense_rewards=$suffix $COMMON_REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
             

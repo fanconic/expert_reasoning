@@ -5,7 +5,7 @@ export GPU_NUM="3"
 RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 
 MODEL="qwen7b"
-# Base training parameters that only go to irl_train.py
+# Base training parameters that only go to train_irl.py
 BASE_TRAIN_PARAMS="model.reward_updates_per_policy_step=3 training.beta=0.1 training.max_steps=400 training.buffer_size=50"
 # Common flags that both train and eval can handle
 COMMON_FLAGS="model.reward_lb=-5.0 model.reward_ub=5.0 model.dense_rewards=partial"
@@ -31,7 +31,7 @@ run_perturb_ablation() {
     # 3. EXECUTION: Notice the REMOVAL of quotes around the variables here
     # This lets Bash split them into separate arguments for Hydra
     echo "Running Training..."
-    bash "$RUNNER" irl_train.py \
+    bash "$RUNNER" train_irl.py \
         --config-path="configs/gsm8k_rebuttals/${MODEL}" \
         --config-name="good_run" \
         $SHARED_OVERRIDE $BASE_TRAIN_PARAMS $TRAIN_ONLY_FLAGS

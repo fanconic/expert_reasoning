@@ -9,10 +9,30 @@
 \cmidrule(lr){3-5} \cmidrule(lr){6-8} \cmidrule(lr){9-11}
 \textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\
 \midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-3B}}} & \textit{Sparse} & - & - & - & - & - & - & 37 \tiny\textcolor{gray}{[35, 40]} & 42 \tiny\textcolor{gray}{[39, 44]} & \textbf{\textcolor{insightteal}{($\uparrow$ +4)}} \\
+ & \textit{Step-wise} & - & - & - & - & - & - & 34 \tiny\textcolor{gray}{[31, 36]} & 37 \tiny\textcolor{gray}{[35, 40]} & \textbf{\textcolor{insightteal}{($\uparrow$ +4)}} \\
+ & \textit{Interval} & - & - & - & - & - & - & 31 \tiny\textcolor{gray}{[28, 33]} & 26 \tiny\textcolor{gray}{[24, 29]} & \textcolor{purple}{($\downarrow$ -5)} \\
+ & \textit{Dense} & - & - & - & - & - & - & 28 \tiny\textcolor{gray}{[26, 31]} & 28 \tiny\textcolor{gray}{[26, 31]} & (+0) \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.2-3B}}} & \textit{Sparse} & - & - & - & - & - & - & 29 \tiny\textcolor{gray}{[27, 31]} & 31 \tiny\textcolor{gray}{[29, 34]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} \\
+ & \textit{Step-wise} & - & - & - & - & - & - & 23 \tiny\textcolor{gray}{[21, 25]} & 24 \tiny\textcolor{gray}{[22, 26]} & \textbf{\textcolor{insightteal}{($\uparrow$ +1)}} \\
+ & \textit{Interval} & - & - & - & - & - & - & 16 \tiny\textcolor{gray}{[14, 18]} & \textcolor{gray}{12$^*$ \tiny [11, 14]} & \textcolor{purple}{($\downarrow$ -3)} \\
+ & \textit{Dense} & - & - & - & - & - & - & - & - & - \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Qwen2.5-7B}}} & \textit{Sparse} & - & - & - & - & - & - & 47 \tiny\textcolor{gray}{[45, 50]} & 51 \tiny\textcolor{gray}{[48, 53]} & \textbf{\textcolor{insightteal}{($\uparrow$ +4)}} \\
+ & \textit{Step-wise} & - & - & - & - & - & - & 43 \tiny\textcolor{gray}{[40, 45]} & 45 \tiny\textcolor{gray}{[43, 48]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} \\
+ & \textit{Interval} & - & - & - & - & - & - & 48 \tiny\textcolor{gray}{[46, 51]} & 51 \tiny\textcolor{gray}{[49, 54]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} \\
+ & \textit{Dense} & - & - & - & - & - & - & 42 \tiny\textcolor{gray}{[40, 45]} & 43 \tiny\textcolor{gray}{[41, 45]} & \textbf{\textcolor{insightteal}{($\uparrow$ +1)}} \\
+\midrule
+\multirow{4}{*}{\textbf{\texttt{Llama3.1-8B}}} & \textit{Sparse} & - & - & - & - & - & - & 37 \tiny\textcolor{gray}{[35, 39]} & 38 \tiny\textcolor{gray}{[35, 40]} & \textbf{\textcolor{insightteal}{($\uparrow$ +1)}} \\
+ & \textit{Step-wise} & - & - & - & - & - & - & 37 \tiny\textcolor{gray}{[35, 39]} & 45 \tiny\textcolor{gray}{[43, 47]} & \textbf{\textcolor{insightteal}{($\uparrow$ +8)}} \\
+ & \textit{Interval} & - & - & - & - & - & - & 24 \tiny\textcolor{gray}{[22, 26]} & 27 \tiny\textcolor{gray}{[25, 29]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} \\
+ & \textit{Dense} & - & - & - & - & - & - & 29 \tiny\textcolor{gray}{[27, 32]} & 33 \tiny\textcolor{gray}{[31, 35]} & \textbf{\textcolor{insightteal}{($\uparrow$ +4)}} \\
+\midrule
 \multirow{4}{*}{\textbf{\texttt{Qwen3-4B}}} & \textit{Sparse} & 90 \tiny\textcolor{gray}{[88, 92]} & 93 \tiny\textcolor{gray}{[91, 94]} & \textbf{\textcolor{insightteal}{($\uparrow$ +3)}} & 65 \tiny\textcolor{gray}{[63, 67]} & 70 \tiny\textcolor{gray}{[68, 73]} & \textbf{\textcolor{insightteal}{($\uparrow$ +5)}} & 55 \tiny\textcolor{gray}{[52, 57]} & 62 \tiny\textcolor{gray}{[59, 64]} & \textbf{\textcolor{insightteal}{($\uparrow$ +7)}} \\
- & \textit{Step-wise} & 85 \tiny\textcolor{gray}{[83, 87]} & 90 \tiny\textcolor{gray}{[88, 92]} & \textbf{\textcolor{insightteal}{($\uparrow$ +5)}} & 60 \tiny\textcolor{gray}{[58, 63]} & 60 \tiny\textcolor{gray}{[57, 62]} & (+0) & 53 \tiny\textcolor{gray}{[51, 56]} & 61 \tiny\textcolor{gray}{[58, 63]} & \textbf{\textcolor{insightteal}{($\uparrow$ +8)}} \\
+ & \textit{Step-wise} & 85 \tiny\textcolor{gray}{[83, 87]} & 90 \tiny\textcolor{gray}{[88, 92]} & \textbf{\textcolor{insightteal}{($\uparrow$ +5)}} & 60 \tiny\textcolor{gray}{[58, 63]} & 60 \tiny\textcolor{gray}{[57, 62]} & (+0) & 53 \tiny\textcolor{gray}{[51, 56]} & 61 \tiny\textcolor{gray}{[58, 63]} & \textbf{\textcolor{insightteal}{($\uparrow$ +7)}} \\
  & \textit{Interval} & 85 \tiny\textcolor{gray}{[83, 87]} & 91 \tiny\textcolor{gray}{[89, 92]} & \textbf{\textcolor{insightteal}{($\uparrow$ +6)}} & 53 \tiny\textcolor{gray}{[50, 55]} & 52 \tiny\textcolor{gray}{[49, 54]} & \textcolor{purple}{($\downarrow$ -1)} & 54 \tiny\textcolor{gray}{[52, 57]} & 62 \tiny\textcolor{gray}{[59, 64]} & \textbf{\textcolor{insightteal}{($\uparrow$ +8)}} \\
- & \textit{Dense} & 89 \tiny\textcolor{gray}{[87, 91]} & 91 \tiny\textcolor{gray}{[89, 93]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} & 50 \tiny\textcolor{gray}{[47, 52]} & 60 \tiny\textcolor{gray}{[58, 63]} & \textbf{\textcolor{insightteal}{($\uparrow$ +10)}} & 53 \tiny\textcolor{gray}{[50, 55]} & 59 \tiny\textcolor{gray}{[57, 62]} & \textbf{\textcolor{insightteal}{($\uparrow$ +6)}} \\
+ & \textit{Dense} & 89 \tiny\textcolor{gray}{[87, 91]} & 91 \tiny\textcolor{gray}{[89, 93]} & \textbf{\textcolor{insightteal}{($\uparrow$ +2)}} & 50 \tiny\textcolor{gray}{[47, 52]} & 60 \tiny\textcolor{gray}{[58, 63]} & \textbf{\textcolor{insightteal}{($\uparrow$ +10)}} & 53 \tiny\textcolor{gray}{[50, 55]} & 59 \tiny\textcolor{gray}{[57, 62]} & \textbf{\textcolor{insightteal}{($\uparrow$ +7)}} \\
 \bottomrule
 \end{tabular}%
 }

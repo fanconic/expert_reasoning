@@ -15,7 +15,7 @@
             "name": "expert_reasoning",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/irl_train.py",
+            "program": "${workspaceFolder}/train_irl.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "args": [

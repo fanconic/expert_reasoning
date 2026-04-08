@@ -5,227 +5,97 @@
 </div>
 
 ## Abstract
-Reasoning in large language models is typically trained via distillation from supervised fine-tuning (SFT) on expert traces or reinforcement learning with outcome-based verifiable rewards. However, SFT focuses on imitation rather than optimisation, while outcome-based RL requires a well-defined reward function. We propose an inverse reinforcement learning (IRL) framework that learns (partially) dense token-level reasoning reward models directly from expert demonstrations. We demonstrate that this learned reward serves a dual purpose: (1) as a dense training signal that optimises policies to reason more effectively, outperforming SFT baselines on GSM8K (79\% vs. 56\%) and MedReason (74\% vs. 65\%); and (2) as an inference-time assistant that improves performance via reward-guided reranking, yielding gains of up to 12 percentage points on Llama3 architectures. Furthermore, our dense rewards provide interpretable, step-wise diagnostics that can indicate the location of logical errors. This work proposes a process-level reasoning learning framework from data, bridging the gap between imitation and reinforcement learning for reasoning.
+Current methods for training reasoning capabilities in large language models (LLMs) primarily rely
+on supervised fine-tuning (SFT) to imitate expert traces or on reinforcement learning (RL) guided by
+outcome rewards. However, SFT focuses on imitation rather than exploration and generalisation, while
+outcome-based RL depends heavily on strictly defined reward functions. To address these limitations, we
+introduce an adversarial inverse reinforcement learning (IRL) framework that directly extracts reasoning
+reward models at various granularities (sparse, step-wise, and token-level) from expert demonstrations.
+We demonstrate that this learned reward offers dual utility. First, it provides a robust training signal,
+enabling policies to significantly outperform standard SFT baselines across multiple datasets and models.
+Second, it functions as a highly effective inference-time reranker, boosting performance by up to 25
+percentage points. Furthermore, our reasoning rewards can serve as a process supervisor that pinpoints
+the location of logical errors. This data-driven framework bridges the gap between pure imitation and
+traditional RL, advancing process-level reasoning in LLMs.
 
-## Getting Started
+## What This Repo Covers
+- AIRL-style reasoning reward learning (sparse / partial-step / interval / dense variants)
+- Policy training baselines: AIRL, SFT, GRPO
+- Evaluation and reranking analyses for GSM8K, MedReason, MMLU(-Pro), and AIME variants
+- Plot/table generation for pass@k, reranking, calibration, and token-level diagnostics
 
+## Repository Layout
+- `train_irl.py`, `train_sft.py`, `train.py`: training entrypoints
+- `evaluate.py`: unified evaluation entrypoint (see `docs/EVALUATION_GUIDE.md`)
+- `configs/`: training/eval configs (see `configs/README.md`)
+- `src/`: implementation modules (models, training, rewards, plotting, data)
+- `src/plot_generators/configs/`: YAML specs for plotting runs
+- `figures/`: generated outputs and historical artifacts (see `figures/README.md`)
+- `docs/REPO_CLEANUP_PLAN.md`: cleanup roadmap and design decisions
 
-### Installation
-
-1. Clone the repository and navigate to the project directory:
-```bash
-git clone <repository_url>
-cd <repository_name>
-```
-
-2. Create and activate a virtual environment with required dependencies:
+## Setup
 ```bash
 conda env create -f environment.yaml
 conda activate unsloth_env
 ```
 
-## Repository Setup
+## Data and Paths
+Many configs reference cluster paths under `/mnt/pdata/...`. For local runs, override paths at launch time (especially `training.output_dir` and any dataset/model path overrides).
 
-```
-my_repo/
-├── configs/
-│   ├── llama3b/                      # Llama3.2 3B experiments
-│   ├── llama8b/                      # Llama3.1 8B experiments
-│   ├── qwen3b/                       # Qwen2.5 7B experiments
-│   ├── qwen7b/                       # Qwen2.5 7B experiments
-│   ├── qwen7b-dscriminator/          # Discriminator Experiment
-│   ├── config_eval.yaml
-│   ├── config_irl_eval.yaml
-│   ├── config_irl_train.yaml
-│   ├── config_irl_train.yaml
-│   └── config_train.yaml
-├── data/
-│   ├── countdown                     # Not used, future work
-│   └── medical-o1                    # Not used, future work
-├── figures/                          # Source to create figures and results
-├── runner_scripts/                   # Scripts to run experiment with unsloth on single A100 GPU
-├── src/
-│   ├── config/                       # config file for the AIRL method
-│   ├── data/                         # Data loaders 
-│   ├── eval/                         # Evaluation callbacks
-│   ├── models/                       # Model modules
-│   ├── rewards/                      # Verifiable rewards for GRPO and evaluation
-│   ├── training/                     # TRainer module --> AIRL.py is where the magic happens!
-│   └── utils/                        # utils
-├── evaluate_irl.py
-├── evaluate.py
-├── irl_train.py
-├── sft_train.py
-└── train.py
-```
-## Reproduce Experiments
-We recommend using 1 A100 for each experiment. With the `runner_script` you can start these isolated, and then parallelise.
-
-### Standard Experiments
-
-#### Llama-3.2-3B -> Llama-3.2-1B
+## Training
+Examples (Hydra-based):
 
 ```bash
-#AIRL
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=3B_1B_config_eval
+# AIRL (example: GSM8K Qwen3B)
+python train_irl.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=irl_train
 
 # SFT
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama3b --config-name=sft_3B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=sft_3B_config_eval
+python train_sft.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=sft_train
 
 # GRPO
-bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/llama3b --config-name=grpo_3B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=grpo_3B_config_eval
+python train_grpo.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=grpo_train
 ```
 
-#### Llama-3.1-8B -> Llama-3.2-15B
-
+## Evaluation
 ```bash
-#AIRL
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=3B_1B_config_eval
+# AIRL evaluation
+python evaluate.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=irl_eval
 
-# SFT
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/llama8b --config-name=sft_8B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=sft_8B_config_eval
+# SFT evaluation
+python evaluate.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=sft_eval
 
-# GRPO
-bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/llama8b --config-name=grpo_8B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=grpo_8B_config_eval
+# GRPO evaluation
+python evaluate.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=grpo_eval
+
+# AIME-style output filename (legacy evaluate_aime behavior)
+python evaluate.py --config-path=configs/aime/qwen3b --config-name=irl_eval eval.mode=aime
+
+# Pregenerated completions + policy log-probs (legacy evaluate_pregenerated behavior)
+python evaluate.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=irl_eval eval.mode=pregenerated_policy
+
+# Pregenerated completions + policy + reward model (legacy evaluate_pregenerated_sft behavior)
+python evaluate.py --config-path=configs/gsm8k_rebuttals/qwen3b --config-name=irl_eval eval.mode=pregenerated_policy_and_reward
 ```
 
-#### Qwen2.5-3B-> Qwen2.5-0.5B
+See `docs/EVALUATION_GUIDE.md` for full mode details, jsonl input resolution rules, and output naming.
+
+## Plot and Table Generation
+Plot scripts now use external YAML specs instead of hardcoded experiment lists.
 
 ```bash
-#AIRL
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=3B_1B_config_eval
+# Main plotting runs
+python src/plot_generators/plot_main.py \
+  --config src/plot_generators/configs/main.yaml \
+  --workers 8
 
-# SFT
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen3b --config-name=sft_3B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=sft_3B_config_eval
-
-# GRPO
-bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/qwen3b --config-name=grpo_3B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=grpo_3B_config_eval
+# Transferability plotting runs
+python src/plot_generators/plot_transfer.py \
+  --config src/plot_generators/configs/transfer.yaml \
+  --workers 8
 ```
 
-####  Qwen2.5-7B-> Qwen2.5-1.5B
-
-```bash
-#AIRL
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=7B_1B_config_eval
-
-# SFT
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/qwen7b --config-name=sft_7B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=sft_7B_config_eval
-
-# GRPO
-bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/qwen7b --config-name=grpo_7B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=grpo_7B_config_eval
-```
-
-#### Medical Qwen2.5-7B-> Qwen2.5-1.5B
-
-```bash
-# SFT
-bash runner_scripts/0_run_gpu_node.sh sft_train.py --config-path=configs/medreason/qwen7b --config-name=sft_7B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/medreason/qwen7b --config-name=sft_7B_config_eval
-
-# GRPO
-bash runner_scripts/0_run_gpu_node.sh train.py --config-path=configs/medreason/qwen7b --config-name=grpo_7B_config_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/medreason/qwen7b --config-name=grpo_7B_config_eval
-
-#AIRL
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/medreason/qwen7b --config-name=8B_1B_config_irl_train
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/medreason/qwen7b --config-name=7B_1B_config_eval
-
-
-### No Perturbation
-
-#### Llama-3.2-3B -> Llama-3.2-1B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=llama3b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=llama3b_airl_noper"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=3B_1B_config_eval $OVERRIDE
-```
-
-#### Llama-3.1-8B -> Llama-3.2-15B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=llama8b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=llama8b_airl_noper"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=3B_1B_config_eval $OVERRIDE
-```
-
-#### Qwen2.5-3B-> Qwen2.5-0.5B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=qwen3b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=qwen3b_airl_noper"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=3B_1B_config_eval $OVERRIDE
-
-```
-
-####  Qwen2.5-7B-> Qwen2.5-1.5B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=qwen7b_airl_noper model.num_neg_perturbations_per_expert=0"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=qwen7b_airl_noper"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=7B_1B_config_eval $OVERRIDE
-```
-
-
-### WGAN
-
-#### Llama-3.2-3B -> Llama-3.2-1B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=llama3b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama3b --config-name=3B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=llama3b_airl_wgan"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama3b --config-name=3B_1B_config_eval $OVERRIDE
-```
-
-#### Llama-3.1-8B -> Llama-3.2-15B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=llama8b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/llama8b --config-name=3B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=llama8b_airl_wgan"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/llama8b --config-name=3B_1B_config_eval $OVERRIDE
-```
-
-#### Qwen2.5-3B-> Qwen2.5-0.5B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=qwen3b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen3b --config-name=3B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=qwen3b_airl_wgan"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen3b --config-name=3B_1B_config_eval $OVERRIDE
-
-```
-
-####  Qwen2.5-7B-> Qwen2.5-1.5B
-
-```bash
-#AIRL
-export OVERRIDE="wandb.run_name=qwen7b_airl_wgan model.classifier_loss=wgan"
-bash runner_scripts/0_run_gpu_node.sh irl_train.py --config-path=configs/qwen7b --config-name=7B_1B_config_irl_train $OVERRIDE
-export OVERRIDE="wandb.run_name=qwen7b_airl_wgan"
-bash runner_scripts/0_run_gpu_node.sh evaluate.py --config-path=configs/qwen7b --config-name=7B_1B_config_eval $OVERRIDE
-```
+Useful flags:
+- `--ckpt <name>`: override checkpoint folder (default: `best_model`)
+- `--output-root <path>`: override output root directory
+- `--no-token-figs`: skip expensive token-level visualizations
+- `--debug`: run sequentially (easier debugging)

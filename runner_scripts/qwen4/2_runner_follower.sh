@@ -25,7 +25,7 @@ run_cmd() {
 }
 
 # # 2. GRPO (Now with max_steps)
-# run_cmd "${DATASET}_GRPO" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train.py \
+# run_cmd "${DATASET}_GRPO" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_grpo.py \
 #     --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_train $STEP_LIMIT
 run_cmd "${DATASET}_GRPO_EVAL" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py \
     --config-path=configs/${DATASET}/${MODEL} --config-name=grpo_eval

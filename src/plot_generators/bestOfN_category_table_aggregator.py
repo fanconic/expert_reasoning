@@ -5,7 +5,9 @@ from typing import Dict, List, Optional, Set
 
 ROOT_DIR = Path("figures") / "answer_only" / "mmlu"
 RERANK_FILE = "pass_at_k_table_reranking_by_category.txt"
-OUTPUT_FILE = Path("figures") / "answer_only" / "results_reranking_long_mmlu_categories.txt"
+OUTPUT_FILE = (
+    Path("figures") / "answer_only" / "results_reranking_long_mmlu_categories.txt"
+)
 
 # Rows: The Methods (bestOfN style)
 ALGO_ORDER = [
@@ -90,14 +92,20 @@ def discover_run_dirs(root_dir: Path) -> List[Path]:
     if not root_dir.exists():
         return []
     runs = []
-    for d in sorted(root_dir.iterdir()):
-        if not d.is_dir():
-            continue
+    for f in sorted(root_dir.rglob(RERANK_FILE)):
+        d = f.parent
         if d.name.startswith("transfer_"):
             continue
-        if (d / RERANK_FILE).exists():
-            runs.append(d)
-    return runs
+        runs.append(d)
+    # de-duplicate
+    deduped = []
+    seen = set()
+    for d in runs:
+        if d in seen:
+            continue
+        deduped.append(d)
+        seen.add(d)
+    return deduped
 
 
 def select_variant_run(
@@ -117,7 +125,9 @@ def select_variant_run(
 
     prefix = f"{model_key}_{algo_key}"
     fallback = sorted(
-        name for name in parsed_by_run if name.startswith(prefix) and not name.startswith("transfer_")
+        name
+        for name in parsed_by_run
+        if name.startswith(prefix) and not name.startswith("transfer_")
     )
     return fallback[0] if fallback else None
 
@@ -186,7 +196,12 @@ def main() -> None:
     data: Dict[str, Dict[str, Dict[str, Dict[str, Optional[float]]]]] = {
         model_key: {
             algo_key: {
-                cat: {"Random": None, "Reward": None, "is_best": False, "is_second": False}
+                cat: {
+                    "Random": None,
+                    "Reward": None,
+                    "is_best": False,
+                    "is_second": False,
+                }
                 for cat in categories
             }
             for algo_key, _ in ALGO_ORDER
@@ -222,12 +237,14 @@ def main() -> None:
 
             for algo_key, _ in ALGO_ORDER:
                 m = get_mean_from_float(data[model_key][algo_key][cat]["Reward"])
-                data[model_key][algo_key][cat]["is_best"] = (m == best and m > -1)
-                data[model_key][algo_key][cat]["is_second"] = (m == second and m > -1)
+                data[model_key][algo_key][cat]["is_best"] = m == best and m > -1
+                data[model_key][algo_key][cat]["is_second"] = m == second and m > -1
 
     # --- Step 3: Generate LaTeX ---
     latex: List[str] = []
-    latex.append(r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}")
+    latex.append(
+        r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}"
+    )
     latex.append(r"\begin{table*}[t]")
     latex.append(r"\centering")
     latex.append(r"\scriptsize")
@@ -270,15 +287,21 @@ def main() -> None:
                 entry = data[model_key][algo_key][cat]
                 rand_cell = format_cell(entry["Random"])
                 rew_cell = format_cell(
-                    entry["Reward"], entry.get("is_best", False), entry.get("is_second", False)
+                    entry["Reward"],
+                    entry.get("is_best", False),
+                    entry.get("is_second", False),
                 )
                 delta_cell = format_delta(entry["Random"], entry["Reward"])
                 row_cells.extend([rand_cell, rew_cell, delta_cell])
 
             model_col = (
-                rf"\multirow{{{num_algos}}}{{*}}{{\textbf{{{model_name}}}}}" if first_row else ""
+                rf"\multirow{{{num_algos}}}{{*}}{{\textbf{{{model_name}}}}}"
+                if first_row
+                else ""
             )
-            latex.append(f"{model_col} & {algo_name} & " + " & ".join(row_cells) + r" \\")
+            latex.append(
+                f"{model_col} & {algo_name} & " + " & ".join(row_cells) + r" \\"
+            )
             first_row = False
 
         if model_key != MODEL_ORDER[-1][0]:

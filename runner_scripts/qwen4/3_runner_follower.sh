@@ -29,7 +29,7 @@ run_cmd() {
 for suffix in "partial_fixed"; do
     WNAME="${MODEL}_${suffix}"
     
-    # run_cmd "${DATASET}_IRL_${suffix}" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh irl_train.py \
+    # run_cmd "${DATASET}_IRL_${suffix}" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_irl.py \
     #     --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
     #     wandb.run_name=$WNAME model.dense_rewards=$DENSE $COMMON_REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
         

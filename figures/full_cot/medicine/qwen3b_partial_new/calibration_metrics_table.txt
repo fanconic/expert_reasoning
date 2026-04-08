@@ -1,9 +1,0 @@
-\begin{tabular}{lcc}
-\toprule
-Model & AUROC $\uparrow$ & ECE $\downarrow$ \\
-\midrule
-Outcome Sup. & 0.500 [0.500, 0.500] & 0.044 [0.037, 0.050] \\
-Exp. Reas. (ours) & 0.557 [0.550, 0.565] & 0.424 [0.419, 0.430] \\
-SFT & 0.500 [0.500, 0.500] & 0.069 [0.063, 0.075] \\
-\bottomrule
-\end{tabular}

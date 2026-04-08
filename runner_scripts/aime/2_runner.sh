@@ -43,9 +43,9 @@ run_triple_eval() {
 
 # --- Execution ---
 
-# run_cmd "FIXED_TRAIN" bash "$RUNNER" irl_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
+# run_cmd "FIXED_TRAIN" bash "$RUNNER" train_irl.py --config-path=configs/${DATASET}/${MODEL} --config-name=good_run \
 #     wandb.run_name="${MODEL}_partial_fixed" model.dense_rewards=partial_fixed $REWARD_FLAGS $IRL_PARAMS $STEP_LIMIT
 run_triple_eval "grpo" "grpo_eval"
 
-#run_cmd "SFT_TRAIN" bash "$RUNNER" sft_train.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
+#run_cmd "SFT_TRAIN" bash "$RUNNER" train_sft.py --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
 # run_triple_eval "sft" "sft_eval"

@@ -25,7 +25,7 @@ run_cmd() {
 }
 
 # # 1. SFT (Now with max_steps)
-# run_cmd "${DATASET}_SFT" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh sft_train.py \
+# run_cmd "${DATASET}_SFT" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh train_sft.py \
 #     --config-path=configs/${DATASET}/${MODEL} --config-name=sft_train $STEP_LIMIT
 run_cmd "${DATASET}_SFT_EVAL" bash runner_scripts/${GPU_NUM}_run_gpu_node.sh evaluate.py \
     --config-path=configs/${DATASET}/${MODEL} --config-name=sft_eval

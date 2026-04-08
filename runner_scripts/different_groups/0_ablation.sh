@@ -23,7 +23,7 @@ run_ablation() {
     echo "▶ Starting Ablation: ${WNAME}"
     
     # 1. TRAIN
-    bash "$RUNNER" irl_train.py \
+    bash "$RUNNER" train_irl.py \
         --config-path="configs/gsm8k_rebuttals/${MODEL}" \
         --config-name="good_run" \
         $OVERRIDE $BASE_TRAIN_PARAMS $ABLATION_FLAGS
