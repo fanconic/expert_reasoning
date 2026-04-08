@@ -99,3 +99,15 @@ Useful flags:
 - `--output-root <path>`: override output root directory
 - `--no-token-figs`: skip expensive token-level visualizations
 - `--debug`: run sequentially (easier debugging)
+
+
+## Citation
+```
+@inproceedings{
+fanconi2026learning,
+title={Learning Reasoning Reward Models from Expert Demonstration via Inverse Reinforcement Learning},
+author={Claudio Fanconi and Nicol{\'a}s Astorga and Mihaela van der Schaar},
+booktitle={ICLR 2026 Workshop on Logical Reasoning of Large Language Models},
+year={2026},
+url={https://openreview.net/forum?id=4jNCTU5HMG}
+}
