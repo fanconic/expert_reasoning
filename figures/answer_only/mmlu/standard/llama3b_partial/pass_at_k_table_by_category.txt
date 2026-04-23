@@ -2,60 +2,60 @@
 \toprule
 Category & Method & pass@1 & pass@3 & pass@5 & pass@10 \\
 \midrule
-biology & Outcome Sup. & 0.6314 & 0.7732 & 0.8157 & 0.8558 \\
-biology & AIRL (ours) & 0.4633 & 0.6649 & 0.7333 & 0.8170 \\
-biology & SFT & 0.4897 & 0.6230 & 0.6689 & 0.7181 \\
+biology & Outcome Sup. & 0.6675 & 0.7960 & 0.8427 & 0.8881 \\
+biology & AIRL (ours) & 0.5863 & 0.7458 & 0.7991 & 0.8558 \\
+biology & SFT & 0.5084 & 0.6140 & 0.6538 & 0.6993 \\
 \midrule
-business & Outcome Sup. & 0.3609 & 0.5655 & 0.6541 & 0.7730 \\
-business & AIRL (ours) & 0.2483 & 0.4370 & 0.5262 & 0.6417 \\
-business & SFT & 0.3536 & 0.5974 & 0.7046 & 0.8245 \\
+business & Outcome Sup. & 0.4043 & 0.5793 & 0.6565 & 0.7533 \\
+business & AIRL (ours) & 0.3643 & 0.5351 & 0.6007 & 0.6870 \\
+business & SFT & 0.4020 & 0.6060 & 0.6920 & 0.8010 \\
 \midrule
-chemistry & Outcome Sup. & 0.2744 & 0.5019 & 0.6142 & 0.7497 \\
-chemistry & AIRL (ours) & 0.1280 & 0.2745 & 0.3671 & 0.5134 \\
-chemistry & SFT & 0.2444 & 0.4903 & 0.6156 & 0.7636 \\
+chemistry & Outcome Sup. & 0.2979 & 0.5114 & 0.6089 & 0.7283 \\
+chemistry & AIRL (ours) & 0.2354 & 0.4239 & 0.5228 & 0.6615 \\
+chemistry & SFT & 0.3181 & 0.5527 & 0.6634 & 0.7898 \\
 \midrule
-computer science & Outcome Sup. & 0.2394 & 0.4305 & 0.5173 & 0.6167 \\
-computer science & AIRL (ours) & 0.1863 & 0.3492 & 0.4419 & 0.5779 \\
-computer science & SFT & 0.3007 & 0.5500 & 0.6661 & 0.7972 \\
+computer science & Outcome Sup. & 0.2748 & 0.4456 & 0.5225 & 0.6218 \\
+computer science & AIRL (ours) & 0.2476 & 0.4241 & 0.5089 & 0.6142 \\
+computer science & SFT & 0.3408 & 0.5464 & 0.6358 & 0.7441 \\
 \midrule
-economics & Outcome Sup. & 0.3755 & 0.5282 & 0.5997 & 0.7033 \\
-economics & AIRL (ours) & 0.2925 & 0.5042 & 0.6000 & 0.7269 \\
-economics & SFT & 0.3607 & 0.5382 & 0.6108 & 0.6950 \\
+economics & Outcome Sup. & 0.3899 & 0.5175 & 0.5715 & 0.6390 \\
+economics & AIRL (ours) & 0.3576 & 0.5224 & 0.5917 & 0.6732 \\
+economics & SFT & 0.3745 & 0.5408 & 0.6065 & 0.6764 \\
 \midrule
-engineering & Outcome Sup. & 0.2651 & 0.4900 & 0.5956 & 0.7140 \\
-engineering & AIRL (ours) & 0.1291 & 0.2792 & 0.3708 & 0.5054 \\
-engineering & SFT & 0.2246 & 0.4624 & 0.5897 & 0.7472 \\
+engineering & Outcome Sup. & 0.2850 & 0.5081 & 0.6061 & 0.7083 \\
+engineering & AIRL (ours) & 0.1930 & 0.3564 & 0.4435 & 0.5612 \\
+engineering & SFT & 0.2727 & 0.4928 & 0.5946 & 0.7100 \\
 \midrule
-health & Outcome Sup. & 0.3451 & 0.5319 & 0.6145 & 0.7272 \\
-health & AIRL (ours) & 0.2607 & 0.4659 & 0.5645 & 0.6915 \\
-health & SFT & 0.3424 & 0.5765 & 0.6716 & 0.7750 \\
+health & Outcome Sup. & 0.3889 & 0.5600 & 0.6353 & 0.7325 \\
+health & AIRL (ours) & 0.3376 & 0.5090 & 0.5885 & 0.6955 \\
+health & SFT & 0.4097 & 0.6002 & 0.6730 & 0.7520 \\
 \midrule
-history & Outcome Sup. & 0.3102 & 0.4884 & 0.5646 & 0.6581 \\
-history & AIRL (ours) & 0.2708 & 0.4808 & 0.5718 & 0.6769 \\
-history & SFT & 0.3449 & 0.5235 & 0.5889 & 0.6746 \\
+history & Outcome Sup. & 0.3843 & 0.5376 & 0.6003 & 0.6792 \\
+history & AIRL (ours) & 0.3264 & 0.4704 & 0.5178 & 0.5639 \\
+history & SFT & 0.3819 & 0.5101 & 0.5354 & 0.5509 \\
 \midrule
-law & Outcome Sup. & 0.2491 & 0.4368 & 0.5222 & 0.6256 \\
-law & AIRL (ours) & 0.1717 & 0.3550 & 0.4522 & 0.5824 \\
-law & SFT & 0.1972 & 0.3937 & 0.4924 & 0.6018 \\
+law & Outcome Sup. & 0.2738 & 0.4277 & 0.4895 & 0.5654 \\
+law & AIRL (ours) & 0.2368 & 0.4207 & 0.5054 & 0.6039 \\
+law & SFT & 0.2456 & 0.3973 & 0.4607 & 0.5333 \\
 \midrule
-math & Outcome Sup. & 0.3543 & 0.5549 & 0.6464 & 0.7560 \\
-math & AIRL (ours) & 0.2343 & 0.4248 & 0.5239 & 0.6594 \\
-math & SFT & 0.3282 & 0.5480 & 0.6569 & 0.7915 \\
+math & Outcome Sup. & 0.3886 & 0.5682 & 0.6468 & 0.7390 \\
+math & AIRL (ours) & 0.3318 & 0.5282 & 0.6247 & 0.7480 \\
+math & SFT & 0.3857 & 0.5869 & 0.6785 & 0.7917 \\
 \midrule
-other & Outcome Sup. & 0.3765 & 0.5731 & 0.6540 & 0.7546 \\
-other & AIRL (ours) & 0.2622 & 0.4746 & 0.5734 & 0.6947 \\
-other & SFT & 0.3125 & 0.5491 & 0.6532 & 0.7703 \\
+other & Outcome Sup. & 0.3994 & 0.5406 & 0.6006 & 0.6807 \\
+other & AIRL (ours) & 0.3413 & 0.4997 & 0.5640 & 0.6463 \\
+other & SFT & 0.3677 & 0.5455 & 0.6195 & 0.7080 \\
 \midrule
-philosophy & Outcome Sup. & 0.2045 & 0.3730 & 0.4657 & 0.5956 \\
-philosophy & AIRL (ours) & 0.1679 & 0.3318 & 0.4229 & 0.5477 \\
-philosophy & SFT & 0.2509 & 0.4485 & 0.5369 & 0.6417 \\
+philosophy & Outcome Sup. & 0.1714 & 0.2897 & 0.3524 & 0.4318 \\
+philosophy & AIRL (ours) & 0.1732 & 0.2833 & 0.3335 & 0.4096 \\
+philosophy & SFT & 0.2866 & 0.4664 & 0.5357 & 0.6110 \\
 \midrule
-physics & Outcome Sup. & 0.2860 & 0.4984 & 0.5939 & 0.7046 \\
-physics & AIRL (ours) & 0.1555 & 0.3317 & 0.4367 & 0.5870 \\
-physics & SFT & 0.2596 & 0.5035 & 0.6261 & 0.7622 \\
+physics & Outcome Sup. & 0.3320 & 0.5312 & 0.6137 & 0.7165 \\
+physics & AIRL (ours) & 0.2371 & 0.4093 & 0.4929 & 0.6015 \\
+physics & SFT & 0.3074 & 0.5172 & 0.6067 & 0.7058 \\
 \midrule
-psychology & Outcome Sup. & 0.4278 & 0.5948 & 0.6686 & 0.7619 \\
-psychology & AIRL (ours) & 0.3253 & 0.5090 & 0.5862 & 0.6932 \\
-psychology & SFT & 0.3955 & 0.5800 & 0.6550 & 0.7447 \\
+psychology & Outcome Sup. & 0.4283 & 0.5453 & 0.5968 & 0.6638 \\
+psychology & AIRL (ours) & 0.3996 & 0.5322 & 0.5845 & 0.6496 \\
+psychology & SFT & 0.4631 & 0.6268 & 0.6877 & 0.7436 \\
 \bottomrule
 \end{tabular}

@@ -1,5 +1,6 @@
 # evaluate.py
 import os
+import inspect
 
 os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
 from unsloth import FastLanguageModel
@@ -45,6 +46,7 @@ from src.eval.eval_mode_utils import (
     resolve_pregenerated_jsonl_path,
 )
 from vllm import SamplingParams
+import vllm.envs as vllm_envs
 import wandb
 from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
 
@@ -55,13 +57,55 @@ import re
 wandb.login()
 
 
+def _vllm_supports_request_logits_processors() -> bool:
+    """
+    Returns whether this vLLM runtime supports request-level logits processors
+    in SamplingParams.
+    """
+    if vllm_envs.VLLM_USE_V1:
+        return False
+    try:
+        from vllm.engine.llm_engine import LLMEngine
+
+        src = inspect.getsource(LLMEngine.add_request)
+        if "Logits processors are not supported in multi-step decoding" in src:
+            return False
+    except Exception:
+        # If introspection fails, avoid hard-blocking; let vLLM runtime decide.
+        pass
+    return True
+
+
 class TopKRewardLogitsProcessor:
-    def __init__(self, reward_model, reward_tokenizer, alpha=1.0, k=10, device="cuda"):
+    def __init__(
+        self,
+        reward_model,
+        reward_tokenizer,
+        policy_tokenizer,
+        alpha=1.0,
+        k=10,
+        device="cuda",
+        dense_reward=False,
+        reward_discount_gamma=0.95,
+    ):
         self.reward_model = reward_model
         self.reward_tokenizer = reward_tokenizer
+        self.policy_tokenizer = policy_tokenizer
         self.alpha = alpha
         self.k = k
         self.device = device
+        self.dense_reward = dense_reward
+        self.reward_discount_gamma = reward_discount_gamma
+        self._policy_piece_cache = {}
+
+    def _decode_policy_piece(self, tok_id: int) -> str:
+        if tok_id not in self._policy_piece_cache:
+            self._policy_piece_cache[tok_id] = self.policy_tokenizer.decode(
+                [tok_id],
+                skip_special_tokens=False,
+                clean_up_tokenization_spaces=False,
+            )
+        return self._policy_piece_cache[tok_id]
 
     def __call__(self, prompt_tokens_ids, generated_tokens_ids, logits):
         """
@@ -75,36 +119,183 @@ class TopKRewardLogitsProcessor:
         top_k_scores, top_k_indices = torch.topk(logits, self.k)
 
         # 2. Prepare inputs for the Reward Model
-        # We need to construct K sequences: [Prompt + Generated + Candidate_i]
-        base_seq = prompt_tokens_ids + generated_tokens_ids
-
-        # Create a batch of K sequences
-        # shape: [K, seq_len + 1]
-        candidate_seqs = []
-        for token_idx in top_k_indices:
-            candidate_seqs.append(base_seq + [token_idx.item()])
-
-        inputs = torch.tensor(candidate_seqs, device=self.device)
+        # vLLM logits are in policy tokenizer space, so we decode in policy space
+        # and re-tokenize in reward-tokenizer space for correctness.
+        base_seq = list(prompt_tokens_ids) + list(generated_tokens_ids)
+        base_text = self.policy_tokenizer.decode(
+            base_seq,
+            skip_special_tokens=False,
+            clean_up_tokenization_spaces=False,
+        )
+        candidate_texts = [
+            base_text + self._decode_policy_piece(int(token_idx.item()))
+            for token_idx in top_k_indices
+        ]
+        inputs = _tokenize_for_reward_model(
+            self.reward_tokenizer,
+            candidate_texts,
+            self.device,
+            max_length=getattr(self.reward_model, "max_seq_length", None),
+        )
 
         # 3. Compute Rewards (Batched for Efficiency)
         with torch.no_grad():
             # Run the RM on the K candidates
-            # Assuming RM outputs [Batch, Seq_Len, Vocab] (Dense) OR [Batch] (Scalar)
-            output = self.reward_model(inputs)
-
-            # Logic to extract the specific scalar reward for the last token
-            if hasattr(output, "logits"):
-
-                rm_scores = output.logits[:, -1].mean(dim=-1)  # Fallback heuristic
-            else:
-                # If Scalar RM
-                rm_scores = output[:, -1] if output.ndim > 1 else output
+            output = self.reward_model(**inputs)
+            rm_scores = _extract_rm_scores(
+                output,
+                attention_mask=inputs.get("attention_mask"),
+                dense_reward=self.dense_reward,
+                reward_discount_gamma=self.reward_discount_gamma,
+            )
+            rm_scores = rm_scores.to(dtype=top_k_scores.dtype, device=top_k_scores.device)
 
         new_logits = torch.full_like(logits, float("-inf"))
         guided_scores = top_k_scores + (self.alpha * rm_scores)
         new_logits.scatter_(0, top_k_indices, guided_scores)
 
         return new_logits
+
+
+def _discounted_token_mean(logits, attention_mask=None, gamma=0.95):
+    """
+    Compute discounted mean across sequence positions with newest token weighted
+    highest: w_t = gamma^(T-1-t), where t increases left->right.
+    """
+    if logits.ndim != 2:
+        raise ValueError(f"Expected 2D logits, got shape {tuple(logits.shape)}")
+
+    gamma = float(gamma)
+    B, T = logits.shape
+    device = logits.device
+
+    # Highest weight on most recent token (right-most / last valid position).
+    powers = torch.arange(T - 1, -1, -1, device=device, dtype=torch.float32)
+    base = torch.full((T,), gamma, device=device, dtype=torch.float32)
+    pos_weights = torch.pow(base, powers).unsqueeze(0)  # [1, T]
+
+    if attention_mask is None:
+        weights = pos_weights.expand(B, -1)
+    else:
+        mask = attention_mask.to(device=device, dtype=torch.float32)
+        if mask.ndim == 1:
+            mask = mask.unsqueeze(0)
+        if mask.ndim != 2:
+            raise ValueError(
+                f"Expected 2D attention_mask, got shape {tuple(mask.shape)}"
+            )
+        if mask.shape[1] != T:
+            if mask.shape[1] > T:
+                # Keep the most recent suffix aligned with truncated logits.
+                mask = mask[:, -T:]
+            else:
+                # Pad on the right; extra logits positions receive zero weight.
+                pad = torch.zeros(
+                    (mask.shape[0], T - mask.shape[1]),
+                    dtype=mask.dtype,
+                    device=mask.device,
+                )
+                mask = torch.cat([mask, pad], dim=1)
+        weights = pos_weights * mask
+
+    logits_f = logits.to(dtype=torch.float32)
+    numer = (logits_f * weights).sum(dim=1)
+    denom = weights.sum(dim=1).clamp(min=1e-12)
+    return numer / denom
+
+
+def _extract_rm_scores(
+    rm_out, attention_mask=None, dense_reward=False, reward_discount_gamma=0.95
+):
+    """
+    Extract one scalar reward per sequence from reward model output.
+    For dense outputs:
+      - dense_reward=False: use last valid token score.
+      - dense_reward=True: use discounted mean with highest weight on most recent
+        token.
+    """
+    logits = rm_out.logits if hasattr(rm_out, "logits") else rm_out
+
+    if isinstance(logits, (tuple, list)):
+        logits = logits[0]
+
+    if logits.ndim == 3 and logits.shape[-1] == 1:
+        logits = logits.squeeze(-1)
+
+    if logits.ndim == 1:
+        return logits
+
+    if logits.ndim == 2:
+        T = logits.shape[1]
+        if T <= 0:
+            return torch.zeros(logits.shape[0], device=logits.device, dtype=logits.dtype)
+
+        mask = attention_mask
+        if mask is not None:
+            mask = mask.to(device=logits.device)
+            if mask.ndim == 1:
+                mask = mask.unsqueeze(0)
+            if mask.ndim != 2:
+                raise ValueError(
+                    f"Expected 2D attention_mask, got shape {tuple(mask.shape)}"
+                )
+            if mask.shape[1] != T:
+                if mask.shape[1] > T:
+                    # Keep the right-most mask suffix to match truncated logits.
+                    mask = mask[:, -T:]
+                else:
+                    pad = torch.zeros(
+                        (mask.shape[0], T - mask.shape[1]),
+                        dtype=mask.dtype,
+                        device=mask.device,
+                    )
+                    mask = torch.cat([mask, pad], dim=1)
+
+        if dense_reward:
+            return _discounted_token_mean(
+                logits, attention_mask=mask, gamma=reward_discount_gamma
+            )
+        if mask is None:
+            return logits[:, -1]
+        last_idx = mask.long().sum(dim=1).clamp(min=1) - 1
+        last_idx = last_idx.clamp(min=0, max=T - 1)
+        return logits.gather(1, last_idx.unsqueeze(1)).squeeze(1)
+
+    # Conservative fallback for unusual output shapes.
+    flat = logits.reshape(logits.shape[0], -1)
+    return flat.mean(dim=1)
+
+
+def _tokenize_for_reward_model(tokenizer, texts, device, max_length=None):
+    """
+    Tokenize for reward-model scoring while preserving the latest suffix when
+    truncation is needed (important for chunk guidance).
+    """
+    if max_length is not None:
+        max_length = int(max_length)
+        # Reserve one token of slack to avoid occasional off-by-one shape issues
+        # in some model/tokenizer combinations near the context limit.
+        max_length = max(8, max_length - 1)
+
+    original_truncation_side = getattr(tokenizer, "truncation_side", None)
+    try:
+        if max_length is not None and original_truncation_side is not None:
+            tokenizer.truncation_side = "left"
+
+        batch = tokenizer(
+            texts,
+            return_tensors="pt",
+            padding=True,
+            truncation=max_length is not None,
+            max_length=max_length,
+            add_special_tokens=False,
+            padding_side="right",
+        )
+    finally:
+        if original_truncation_side is not None:
+            tokenizer.truncation_side = original_truncation_side
+
+    return batch.to(device)
 
 
 # ==========================================
@@ -114,72 +305,143 @@ def generate_with_chunk_guidance(
     model,
     reward_model,
     reward_tokenizer,
+    policy_tokenizer,
     prompts_text,
     sampling_params,
     step_size=5,
     n_candidates=4,
-    max_tokens=256,
+    max_tokens=None,
+    policy_max_length=None,
+    rm_max_length=None,
+    dense_reward=False,
+    reward_discount_gamma=0.95,
+    lora_req=None,
 ):
     """
     Performs generation by stepping 'step_size' tokens at a time,
     generating 'n_candidates', and selecting the best one via Reward Model.
     """
     # Initialize current generation with prompts
-    current_gens = prompts_text
+    current_gens = list(prompts_text)
+    num_sequences = len(current_gens)
+    if num_sequences == 0:
+        return current_gens
 
     # We iterate until we hit max length (simplified loop)
     # Note: vLLM is most efficient with batching, this manual loop
     # splits the batch logic somewhat.
 
-    for _ in range(0, max_tokens, step_size):
+    if max_tokens is None:
+        max_tokens = sampling_params.max_tokens
+
+    # Safety cap for policy context length to avoid vLLM prompt-overflow errors.
+    if policy_max_length is None:
+        policy_max_length = getattr(model, "max_seq_length", None)
+    if policy_max_length is not None:
+        # Small safety margin for tokenizer/engine off-by-few differences.
+        policy_max_length = max(8, int(policy_max_length) - 4)
+
+    # Per-sequence remaining generation budget in tokens.
+    if policy_max_length is not None and policy_tokenizer is not None:
+        prompt_tok = policy_tokenizer(
+            text=current_gens,
+            return_attention_mask=True,
+            add_special_tokens=False,
+            padding=False,
+            truncation=False,
+        )
+        prompt_lens = [len(ids) for ids in prompt_tok["input_ids"]]
+        remaining_budget = [
+            max(0, min(int(max_tokens), policy_max_length - prompt_len))
+            for prompt_len in prompt_lens
+        ]
+    else:
+        remaining_budget = [int(max_tokens)] * num_sequences
+
+    while True:
+        active_indices = [i for i, rem in enumerate(remaining_budget) if rem > 0]
+        if not active_indices:
+            break
+
+        step_tokens = min(step_size, min(remaining_budget[i] for i in active_indices))
+        if step_tokens <= 0:
+            break
+
         # 1. Generate Candidates for the next step
         step_params = copy.deepcopy(sampling_params)
-        step_params.max_tokens = step_size
+        step_params.max_tokens = int(step_tokens)
         step_params.n = n_candidates
+
+        active_texts = [current_gens[i] for i in active_indices]
 
         # model.fast_generate typically returns a list of RequestOutputs
         outputs = model.fast_generate(
-            current_gens, sampling_params=step_params, use_tqdm=False
+            active_texts,
+            sampling_params=step_params,
+            use_tqdm=False,
+            lora_request=lora_req,
         )
 
-        new_current_gens = []
-
-        # 2. Evaluate Candidates
+        # 2. Build one global RM batch for all candidates in this step.
+        flat_full_candidates = []
+        grouped_candidates = []
         for i, out in enumerate(outputs):
-            candidates_text = [o.text for o in out.outputs]  # Just the NEW text
-            parent_text = current_gens[i]
+            cand_texts = [o.text for o in out.outputs]
+            grouped_candidates.append(cand_texts)
+            parent_text = active_texts[i]
+            for cand in cand_texts:
+                flat_full_candidates.append(parent_text + cand)
 
-            # Construct full sequences for scoring
-            full_candidates = [parent_text + c for c in candidates_text]
+        if not flat_full_candidates:
+            break
 
-            # Tokenize for RM
-            inputs = reward_tokenizer(
-                full_candidates, return_tensors="pt", padding=True, truncation=True
-            ).to(reward_model.device)
+        inputs = _tokenize_for_reward_model(
+            reward_tokenizer,
+            flat_full_candidates,
+            reward_model.device,
+            max_length=rm_max_length,
+        )
 
-            with torch.no_grad():
-                rm_out = reward_model(**inputs)
-                # Assuming dense rewards [B, Seq], take mean of the NEW chunk
-                # or just the score of the last token.
-                if hasattr(rm_out, "logits"):
-                    scores = rm_out.logits.mean(dim=1).squeeze().cpu().numpy()
-                else:
-                    scores = rm_out.mean(dim=1).squeeze().cpu().numpy()
+        with torch.no_grad():
+            rm_out = reward_model(**inputs)
+            rm_scores = _extract_rm_scores(
+                rm_out,
+                attention_mask=inputs.get("attention_mask"),
+                dense_reward=dense_reward,
+                reward_discount_gamma=reward_discount_gamma,
+            ).detach()
 
-                # Handle single candidate edge case
-                if scores.ndim == 0:
-                    scores = [scores]
+        # 3. Select best candidate for each parent sequence.
+        rm_scores_cpu = rm_scores.float().cpu().numpy()
+        offset = 0
+        any_nonempty_extension = False
+        for i, cand_texts in enumerate(grouped_candidates):
+            global_idx = active_indices[i]
+            parent_text = current_gens[global_idx]
+            num_cands = len(cand_texts)
+            if num_cands == 0:
+                remaining_budget[global_idx] = 0
+                continue
 
-            # 3. Select Best Candidate
-            best_idx = np.argmax(scores)
-            best_extension = candidates_text[best_idx]
-            new_current_gens.append(parent_text + best_extension)
+            local_scores = rm_scores_cpu[offset : offset + num_cands]
+            best_idx = int(np.argmax(local_scores))
+            best_extension = cand_texts[best_idx]
+            current_gens[global_idx] = parent_text + best_extension
 
-        current_gens = new_current_gens
+            all_empty = all(c == "" for c in cand_texts)
+            if all_empty:
+                remaining_budget[global_idx] = 0
+            else:
+                remaining_budget[global_idx] = max(
+                    0, remaining_budget[global_idx] - int(step_tokens)
+                )
 
-    final_outputs = []
-    for gen in current_gens:
-        final_outputs.append([{"content": gen[len(p) :]} for p in prompts_text])
+            if best_extension != "":
+                any_nonempty_extension = True
+            offset += num_cands
+
+        if not any_nonempty_extension:
+            break
 
     return current_gens
 
@@ -813,6 +1075,10 @@ def main(cfg: DictConfig):
 
     eval_mode = canonical_eval_mode(getattr(cfg.eval, "mode", MODE_GENERATE))
     use_pregenerated = eval_mode_uses_pregenerated(eval_mode)
+    guidance_method = getattr(cfg, "guidance", {}).get("method", "none")
+    guidance_requires_reward_model = (
+        (not use_pregenerated) and guidance_method in {"topk", "chunk"}
+    )
     compute_policy_log_probs = _cfg_bool(
         cfg.eval, "compute_policy_log_probs", use_pregenerated
     )
@@ -869,8 +1135,10 @@ def main(cfg: DictConfig):
         model.eval()
         policy_tokenizer = tokenizer
 
-        if compute_reward_model_scores:
+        if compute_reward_model_scores or guidance_requires_reward_model:
             reward_model.eval()
+            if guidance_requires_reward_model:
+                FastLanguageModel.for_inference(reward_model)
         else:
             del reward_model
             reward_model = None
@@ -880,10 +1148,16 @@ def main(cfg: DictConfig):
         model.eval()
         policy_tokenizer = tokenizer
 
-    if compute_reward_model_scores and reward_model is None:
+    if guidance_requires_reward_model and not cfg.airl:
         raise ValueError(
-            "Reward-model scoring requested, but no reward model is loaded. "
-            "Set `airl=true` or disable `eval.compute_reward_model_scores`."
+            "Reward-guided generation requires AIRL components. "
+            "Set `airl=true` to load reward model/tokenizer."
+        )
+
+    if (compute_reward_model_scores or guidance_requires_reward_model) and reward_model is None:
+        raise ValueError(
+            "Reward model is required (for scoring and/or guidance), but none is loaded. "
+            "Set `airl=true` or disable reward-model-dependent features."
         )
 
     # Generation parameters
@@ -896,22 +1170,31 @@ def main(cfg: DictConfig):
         top_p=cfg.sampling.top_p,
     )
 
-    guidance_method = getattr(cfg, "guidance", {}).get("method", "none")
-
     if not use_pregenerated:
         if hasattr(model, "load_lora"):
             lora_req = model.load_lora(cfg.model.name, load_tensors=True)
 
         if guidance_method == "topk" and cfg.airl:
+            if not _vllm_supports_request_logits_processors():
+                raise ValueError(
+                    "guidance.method=topk is unsupported by this vLLM runtime: "
+                    "per-request logits processors are unavailable "
+                    "(V1 limitation and/or V0 multi-step limitation). "
+                    "Use guidance.method=chunk instead."
+                )
             print(
-                f"--- ACTIVATING REWARD-AUGMENTED DECODING (Top-K={cfg.guidance.k}) ---"
+                "--- ACTIVATING REWARD-AUGMENTED DECODING "
+                f"(Top-K={getattr(cfg.guidance, 'k', 5)}) ---"
             )
             rw_processor = TopKRewardLogitsProcessor(
                 reward_model=reward_model,
                 reward_tokenizer=reward_tokenizer,
+                policy_tokenizer=policy_tokenizer,
                 alpha=getattr(cfg.guidance, "alpha", 1.0),
                 k=getattr(cfg.guidance, "k", 5),
                 device=next(reward_model.parameters()).device,
+                dense_reward=bool(getattr(cfg.model, "dense_rewards", False)),
+                reward_discount_gamma=getattr(cfg.guidance, "dense_reward_gamma", 0.95),
             )
             sampling_params.logits_processors = [rw_processor]
         elif guidance_method == "chunk" and cfg.airl:
@@ -984,14 +1267,27 @@ def main(cfg: DictConfig):
                     model=model,
                     reward_model=reward_model,
                     reward_tokenizer=reward_tokenizer,
-                    prompts_text=prompts_text,
+                    policy_tokenizer=policy_tokenizer,
+                    prompts_text=[p for p in prompts_text for _ in range(n)],
                     sampling_params=sampling_params,
                     step_size=getattr(cfg.guidance, "step_size", 10),
                     n_candidates=getattr(cfg.guidance, "n_candidates", 4),
+                    max_tokens=cfg.model.max_completion_length,
+                    policy_max_length=cfg.model.max_prompt_length
+                    + cfg.model.max_completion_length,
+                    rm_max_length=cfg.model.max_prompt_length
+                    + cfg.model.max_completion_length,
+                    dense_reward=bool(getattr(cfg.model, "dense_rewards", False)),
+                    reward_discount_gamma=getattr(cfg.guidance, "dense_reward_gamma", 0.95),
+                    lora_req=lora_req,
                 )
+                grouped_generated_texts = [
+                    generated_texts[i * n : (i + 1) * n]
+                    for i in range(len(prompts_text))
+                ]
                 completions = [
-                    [{"content": t[len(p) :]}]
-                    for p, t in zip(prompts_text, generated_texts)
+                    [{"content": t[len(prompts_text[i]) :]} for t in grouped_generated_texts[i]]
+                    for i in range(len(prompts_text))
                 ]
             else:
                 outputs = model.fast_generate(
@@ -1075,7 +1371,7 @@ def main(cfg: DictConfig):
                     )
                 result = result | rews
                 all_results.append(result)
-                all_reward_scores.append(np.nanmean(scores, axis=1).tolist())
+            all_reward_scores.append(np.nanmean(scores, axis=1).tolist())
 
         for completion, answer in zip(completions, answers):
             correct_flags = eval_correctness(completions=completion, answer=answer)

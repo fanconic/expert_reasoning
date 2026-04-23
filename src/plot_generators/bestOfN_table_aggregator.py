@@ -14,17 +14,17 @@ ROOT_DIR = os.path.join("figures", "answer_only")
 
 # Rows: The Methods
 ALGO_ORDER = [
-    ("sparse_new", "\\textit{Sparse}"),
-    ("partial_new", "\\textit{Step-wise}"),
-    ("partial_fixed_new", "\\textit{Interval}"),
-    ("full_new", "\\textit{Dense}"),
+    ("sparse", "\\textit{Sparse}"),
+    # ("partial", "\\textit{Step-wise}"),
+    ("partial_fixed", "\\textit{Interval}"),
+    ("full", "\\textit{Dense}"),
     # ('ovr', '\\textit{Step-wise + OVR}')
 ]
 
 # Backbones (Grouped rows)
 MODEL_ORDER = [
-    ("qwen3b", r"\texttt{Qwen2.5-3B}"),
-    ("llama3b", r"\texttt{Llama3.2-3B}"),
+ #   ("qwen3b", r"\texttt{Qwen2.5-3B}"),
+ #   ("llama3b", r"\texttt{Llama3.2-3B}"),
     ("qwen7b", r"\texttt{Qwen2.5-7B}"),
     ("llama8b", r"\texttt{Llama3.1-8B}"),
     ("qwen4b", r"\texttt{Qwen3-4B}"),
@@ -57,6 +57,24 @@ def extract_reranking_p1(filepath):
     return results
 
 
+def extract_pass1_from_table(filepath, method_label="AIRL"):
+    """Extract pass@1 value string from pass_at_k_table.txt for the selected method."""
+    if not os.path.exists(filepath):
+        return None
+
+    with open(filepath, "r") as f:
+        content = f.read().replace("\n", " ")
+
+    rows = content.split(r"\\")
+    for row in rows:
+        if method_label not in row:
+            continue
+        matches = re.findall(VALUE_PATTERN, row)
+        if matches:
+            return matches[0]
+    return None
+
+
 def get_mean(val_str):
     if not val_str:
         return -100.0
@@ -73,7 +91,7 @@ def get_mean(val_str):
 
 def format_cell(val_str, is_best=False, is_second=False):
     """
-    Formats: 79 [76, 81] in percentage with no decimals.
+    Formats: 79 [76, 81] as mean ± half-width (percentage points).
     """
     if not val_str:
         return "-"
@@ -92,18 +110,18 @@ def format_cell(val_str, is_best=False, is_second=False):
             .replace("}", "")
         )
         mean_val = float(clean_mean) * 100
-        mean_disp = f"{mean_val:.0f}"
+        mean_disp = f"{mean_val:.1f}"
     except:
         mean_val = 100.0
         mean_disp = "100"
 
-    # 2. Convert Interval to Percentage
+    # 2. Convert 95% CI to half-width in percentage points
     try:
         clean_ci = interval.strip("[]")
         low, high = clean_ci.split(",")
-        low_pct = float(low) * 100
-        high_pct = float(high) * 100
-        ci_disp = f"[{low_pct:.0f}, {high_pct:.0f}]"
+        low_pct = float(low.strip()) * 100
+        high_pct = float(high.strip()) * 100
+        ci_disp = f"$\\pm$ {(high_pct - low_pct) / 2.0:.1f}"
     except:
         ci_disp = interval
 
@@ -118,27 +136,27 @@ def format_cell(val_str, is_best=False, is_second=False):
     # elif is_second:
     #     fmt_mean = f"\\underline{{{mean_disp}}}"
 
-    # Inline format: Mean [CI]
+    # Inline format: Mean ± CI half-width
     return f"{fmt_mean} \\tiny\\textcolor{{gray}}{{{ci_disp}}}"
 
 
-def format_delta(rand_str, rew_str):
-    if not rand_str or not rew_str:
+def format_delta(base_str, rew_str):
+    if not base_str or not rew_str:
         return "-"
 
     try:
-        # Parse Random
-        r_clean = rand_str.split()[0].replace(r"\textbf{", "").replace("}", "")
-        r_val = float(r_clean) * 100
+        # Parse baseline (Pass@1 from pass_at_k_table.txt)
+        base_clean = base_str.split()[0].replace(r"\textbf{", "").replace("}", "")
+        base_val = float(base_clean) * 100
 
         # Parse Reward
         rew_clean = rew_str.split()[0].replace(r"\textbf{", "").replace("}", "")
         rew_val = float(rew_clean) * 100
 
-        delta = rew_val - r_val
+        delta = rew_val - base_val
 
         # Format: +2
-        d_text = f"{delta:+.0f}"
+        d_text = f"{delta:+.1f}"
 
         if delta > 0:
             return f"\\textbf{{\\textcolor{{insightteal}}{{($\\uparrow$ {d_text})}}}}"
@@ -171,8 +189,16 @@ def main():
                     if run_dir is not None
                     else ds_path / folder / "pass_at_k_table_reranking_16.txt"
                 )
+                p1_path = (
+                    run_dir / "pass_at_k_table.txt"
+                    if run_dir is not None
+                    else ds_path / folder / "pass_at_k_table.txt"
+                )
 
                 res = extract_reranking_p1(fpath)
+                pass1_airl = extract_pass1_from_table(p1_path, method_label="AIRL")
+                if pass1_airl is not None:
+                    res["Random"] = pass1_airl
                 data[model_key][algo_key][dataset] = res
 
     # --- Step 2: Ranking Logic (Best Reward per Model/Dataset) ---
@@ -205,7 +231,7 @@ def main():
     latex.append(r"\scriptsize")
     latex.append(r"\resizebox{\textwidth}{!}{%")
 
-    # Cols: Backbone | Method | GSM(Rand, Rew, Delta) | Med(Rand, Rew, Delta) | MMLU(Rand, Rew, Delta)
+    # Cols: Backbone | Method | GSM(Pass@1, Rew, Delta) | Med(Pass@1, Rew, Delta) | MMLU(Pass@1, Rew, Delta)
     # Total 10 columns
     latex.append(r"\begin{tabular}{ll ccc ccc ccc}")
     latex.append(r"\toprule")
@@ -218,7 +244,7 @@ def main():
 
     # Header 2: Metrics
     latex.append(
-        r"\textbf{Backbone} & \textbf{Method} & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp) & Random & Reward & $\Delta$ (pp)\\"
+        r"\textbf{Backbone} & \textbf{Method} & Pass@1 & Reward & $\Delta$ (pp) & Pass@1 & Reward & $\Delta$ (pp) & Pass@1 & Reward & $\Delta$ (pp)\\"
     )
     latex.append(r"\midrule")
 
@@ -284,12 +310,12 @@ def main():
     latex.append(r"\end{tabular}%")
     latex.append(r"}")
     latex.append(
-        r"\caption{\textbf{Best-of-N Reranking Performance (\%).} Comparison of Random selection vs. Reward Model selection. Values are percentages. \textbf{Bold} is best, \underline{underline} is second best. $\Delta$ indicates percentage-point improvement. \textcolor{insightteal}{Blue} is positive, \textcolor{purple}{purple} is negative. * symbolises an adversarial mode collapse (results grayed out).}"
+        r"\caption{\textbf{Best-of-N Reranking Performance (\%).} Comparison of standard Pass@1 baseline (from the corresponding \texttt{pass\_at\_k\_table.txt}) vs. Reward Model reranking. Values are percentages. \textbf{Bold} is best, \underline{underline} is second best. $\Delta$ indicates percentage-point improvement over Pass@1. \textcolor{insightteal}{Blue} is positive, \textcolor{purple}{purple} is negative. * symbolises an adversarial mode collapse (results grayed out).}"
     )
     latex.append(r"\label{tab:reranking_long}")
     latex.append(r"\end{table*}")
 
-    output_file = os.path.join(ROOT_DIR, "results_reranking_long_qwen4b.txt")
+    output_file = os.path.join(ROOT_DIR, "reranking_results_main.txt")
     with open(output_file, "w") as f:
         f.write("\n".join(latex))
 

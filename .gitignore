@@ -12,6 +12,7 @@ figures/qwen7b_*
 figures/llama8b_*
 figures/qwen3b_*
 figures/llama3b_*
+figures/
 
 data/mmlu_trace_dataset_builder_mer.py
 data/mmlu_pro_modes

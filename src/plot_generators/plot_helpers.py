@@ -8,13 +8,18 @@ script and made reusable.
 
 from __future__ import annotations
 import json
-import scienceplots
 import os
 import math
 import re
 import unicodedata
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+if "MPLCONFIGDIR" not in os.environ:
+    os.environ["MPLCONFIGDIR"] = "/tmp/matplotlib"
+os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
+
+import scienceplots
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -339,6 +344,246 @@ def discounted_mean(scores, gamma=0.9):
     return np.sum(valid_scores * valid_weights) / np.sum(valid_weights)
 
 
+def _to_valid_float_array(values: Any) -> np.ndarray:
+    if not isinstance(values, (list, np.ndarray)):
+        return np.array([], dtype=float)
+    arr = np.asarray(values, dtype=float).reshape(-1)
+    return arr[np.isfinite(arr)]
+
+
+def _safe_softmax(values: np.ndarray, beta: float = 1.0) -> np.ndarray:
+    if values.size == 0:
+        return values
+    scaled = beta * values
+    scaled = scaled - np.max(scaled)
+    exp_vals = np.exp(scaled)
+    denom = np.sum(exp_vals)
+    if not np.isfinite(denom) or denom <= 0:
+        return np.ones_like(values, dtype=float) / len(values)
+    return exp_vals / denom
+
+
+def _map_span_to_reward_indices(
+    answer_span: Any, token_count: Optional[int], reward_count: int
+) -> Optional[Tuple[int, int]]:
+    if reward_count <= 0:
+        return None
+    if not isinstance(answer_span, (tuple, list)) or len(answer_span) != 2:
+        return None
+
+    start_raw, end_raw = answer_span
+    if start_raw is None or end_raw is None:
+        return None
+
+    try:
+        start_raw = int(start_raw)
+        end_raw = int(end_raw)
+    except (TypeError, ValueError):
+        return None
+
+    if token_count is not None and token_count > 0:
+        if end_raw < 0:
+            end_raw = token_count + end_raw
+        start = int(round((start_raw / token_count) * reward_count))
+        end = int(round((end_raw / token_count) * reward_count))
+    else:
+        start = start_raw
+        end = reward_count + end_raw if end_raw < 0 else end_raw
+
+    start = max(0, min(start, reward_count))
+    end = max(0, min(end, reward_count))
+    if end <= start:
+        return None
+    return start, end
+
+
+def aggregate_dense_rewards(
+    rewards: Any,
+    mode: str = "discounted_mean",
+    *,
+    gamma: float = 0.95,
+    tail_k: int = 4,
+    top_k: int = 4,
+    softmax_beta: float = 2.0,
+    power_p: float = 2.0,
+    trim_frac: float = 0.1,
+    answer_span: Any = None,
+    token_count: Optional[int] = None,
+    answer_weight: float = 2.0,
+    fallback_tail_ratio: float = 0.2,
+) -> float:
+    """
+    Aggregate dense per-token reward traces into a single scalar score.
+
+    Notes:
+      - `discounted_mean` is the historical selector used in this repo.
+      - `answer_boost` upweights the answer segment when a span is available,
+        otherwise it falls back to boosting the final tail portion.
+    """
+    arr = _to_valid_float_array(rewards)
+    if arr.size == 0:
+        return float("nan")
+
+    mode_key = str(mode or "").strip().lower()
+    if mode_key in {"discounted", "discounted_mean", "current"}:
+        return float(discounted_mean(arr, gamma=gamma))
+    if mode_key in {"mean", "avg", "average"}:
+        return float(np.mean(arr))
+    if mode_key in {"last", "final", "last_token"}:
+        return float(arr[-1])
+    if mode_key in {"tail_mean", "tail", "tail_k"}:
+        k = max(1, min(int(tail_k), arr.size))
+        return float(np.mean(arr[-k:]))
+    if mode_key in {"topk_mean", "top_k_mean", "topk"}:
+        k = max(1, min(int(top_k), arr.size))
+        return float(np.mean(np.sort(arr)[-k:]))
+    if mode_key in {"softmax_weighted", "softmax"}:
+        w = _safe_softmax(arr, beta=float(softmax_beta))
+        return float(np.sum(w * arr))
+    if mode_key in {"power_mean", "power"}:
+        p = max(float(power_p), 1e-6)
+        min_val = float(np.min(arr))
+        shift = -min_val + 1e-8 if min_val <= 0 else 0.0
+        shifted = arr + shift
+        return float((np.mean(shifted**p) ** (1.0 / p)) - shift)
+    if mode_key in {"trimmed_mean", "trimmed"}:
+        n = arr.size
+        if n <= 2:
+            return float(np.mean(arr))
+        frac = float(np.clip(trim_frac, 0.0, 0.45))
+        k = int(np.floor(n * frac))
+        if k == 0 or (2 * k) >= n:
+            return float(np.mean(arr))
+        arr_sorted = np.sort(arr)
+        return float(np.mean(arr_sorted[k : n - k]))
+    if mode_key in {"answer_boost", "answer_weighted"}:
+        n = arr.size
+        weights = np.ones(n, dtype=float)
+
+        span = _map_span_to_reward_indices(answer_span, token_count, n)
+        if span is not None:
+            s, e = span
+            weights[s:e] *= float(answer_weight)
+        else:
+            tail_len = max(1, int(round(n * float(fallback_tail_ratio))))
+            weights[-tail_len:] *= float(answer_weight)
+
+        return float(np.sum(weights * arr) / np.sum(weights))
+
+    raise ValueError(f"Unknown dense reward aggregation mode: {mode}")
+
+
+SELECTOR_VARIANT_DISPLAY_ORDER: List[Tuple[str, str]] = [
+    ("selector_variant_discounted", "Discounted Mean (gamma=0.95) [current]"),
+    ("selector_variant_mean", "Uniform Mean"),
+    ("selector_variant_last", "Last Token"),
+    ("selector_variant_tail3", "Tail Mean (k=3)"),
+    ("selector_variant_top3", "Top-3 Mean"),
+    ("selector_variant_softmax2", "Softmax-Weighted (beta=2)"),
+    ("selector_variant_power2", "Power Mean (p=2)"),
+    ("selector_variant_trimmed10", "Trimmed Mean (10%)"),
+    ("selector_variant_answer_boost2", "Answer-Boosted Mean (x2)"),
+]
+
+
+def _resolve_selector_column(
+    selector_mode: str, *, answer_only: bool
+) -> Tuple[str, str]:
+    mode_key = str(selector_mode or "auto").strip().lower()
+    if mode_key in {"auto", "default"}:
+        col = (
+            "selector_variant_discounted"
+            if answer_only
+            else "selector_variant_mean"
+        )
+        return col, f"{mode_key}->{col}"
+
+    aliases = {
+        "discounted": "selector_variant_discounted",
+        "discounted_mean": "selector_variant_discounted",
+        "current": "selector_variant_discounted",
+        "mean": "selector_variant_mean",
+        "avg": "selector_variant_mean",
+        "average": "selector_variant_mean",
+        "last": "selector_variant_last",
+        "last_token": "selector_variant_last",
+        "tail3": "selector_variant_tail3",
+        "tail_3": "selector_variant_tail3",
+        "top3": "selector_variant_top3",
+        "top_3": "selector_variant_top3",
+        "softmax2": "selector_variant_softmax2",
+        "softmax_2": "selector_variant_softmax2",
+        "power2": "selector_variant_power2",
+        "power_2": "selector_variant_power2",
+        "trimmed10": "selector_variant_trimmed10",
+        "trimmed_10": "selector_variant_trimmed10",
+        "answer_boost": "selector_variant_answer_boost2",
+        "answer_boost2": "selector_variant_answer_boost2",
+        "answer": "selector_variant_answer_boost2",
+    }
+    resolved = aliases.get(mode_key, mode_key)
+    if not resolved.startswith("selector_variant_"):
+        resolved = f"selector_variant_{resolved}"
+    return resolved, selector_mode
+
+
+def _compute_selector_variant_columns(df: pd.DataFrame, gamma: float = 0.95) -> pd.DataFrame:
+    if "reward_model_score_np" not in df.columns:
+        return df
+
+    df = df.copy()
+    rewards_list = df["reward_model_score_np"].tolist()
+
+    df["selector_variant_discounted"] = [
+        aggregate_dense_rewards(x, mode="discounted_mean", gamma=gamma)
+        for x in rewards_list
+    ]
+    df["selector_variant_mean"] = [
+        aggregate_dense_rewards(x, mode="mean") for x in rewards_list
+    ]
+    df["selector_variant_last"] = [
+        aggregate_dense_rewards(x, mode="last") for x in rewards_list
+    ]
+    df["selector_variant_tail3"] = [
+        aggregate_dense_rewards(x, mode="tail_mean", tail_k=3) for x in rewards_list
+    ]
+    df["selector_variant_top3"] = [
+        aggregate_dense_rewards(x, mode="topk_mean", top_k=3) for x in rewards_list
+    ]
+    df["selector_variant_softmax2"] = [
+        aggregate_dense_rewards(x, mode="softmax_weighted", softmax_beta=2.0)
+        for x in rewards_list
+    ]
+    df["selector_variant_power2"] = [
+        aggregate_dense_rewards(x, mode="power_mean", power_p=2.0) for x in rewards_list
+    ]
+    df["selector_variant_trimmed10"] = [
+        aggregate_dense_rewards(x, mode="trimmed_mean", trim_frac=0.10)
+        for x in rewards_list
+    ]
+
+    if "answer_positions" in df.columns and "response_token" in df.columns:
+        answer_spans = df["answer_positions"].tolist()
+        token_lens = df["response_token"].apply(
+            lambda x: len(x) if isinstance(x, list) else None
+        ).tolist()
+    else:
+        answer_spans = [None] * len(df)
+        token_lens = [None] * len(df)
+
+    df["selector_variant_answer_boost2"] = [
+        aggregate_dense_rewards(
+            rewards,
+            mode="answer_boost",
+            answer_span=span,
+            token_count=tok_len,
+            answer_weight=2.0,
+        )
+        for rewards, span, tok_len in zip(rewards_list, answer_spans, token_lens)
+    ]
+    return df
+
+
 _TOKENIZER_CACHE = {}
 MMLU_PRO_DATASET_ROOT = Path("/mnt/pdata/caf83/data/expert_reasoning/mmlu_pro")
 MMLU_PRO_SPLITS = ("train", "eval", "test")
@@ -447,8 +692,38 @@ def _attach_mmlu_category(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _resolve_logprobs_path(jsonl_path: str | Path) -> Path:
+    """
+    Resolve the sidecar logprobs jsonl for a given eval results file.
+
+    Supports both legacy naming:
+      - eval_results_logprobs.jsonl
+    and run-specific naming:
+      - eval_results_logprobs_<same suffix as eval_results_*.jsonl>
+    """
+    source_path = Path(jsonl_path)
+    candidates = []
+
+    name = source_path.name
+    if name.startswith("eval_results_"):
+        suffix = name[len("eval_results_") :]
+        candidates.append(source_path.with_name(f"eval_results_logprobs_{suffix}"))
+
+    candidates.append(source_path.parent / "eval_results_logprobs.jsonl")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    # Return the first candidate for a useful missing-file warning path.
+    return candidates[0]
+
+
 def read_and_enhance(
-    jsonl_path: str, gamma: float = 0.9, answer_only: bool = False
+    jsonl_path: str,
+    gamma: float = 0.95,
+    answer_only: bool = False,
+    selector_mode: str = "auto",
 ) -> pd.DataFrame:
     df = pd.read_json(jsonl_path, lines=True)
 
@@ -458,7 +733,7 @@ def read_and_enhance(
     # ==========================================
     # 1. LOAD AND MERGE LOG PROBS
     # ==========================================
-    logprobs_path = Path(jsonl_path).parent / "eval_results_logprobs.jsonl"
+    logprobs_path = _resolve_logprobs_path(jsonl_path)
     if logprobs_path.exists():
         df_logprobs = pd.read_json(logprobs_path, lines=True)
         if "policy_log_probs" in df_logprobs.columns:
@@ -564,19 +839,42 @@ def read_and_enhance(
             )
         )
 
-    if answer_only and "reward_model_score_np" in df.columns:
-        # Note: Selector is still tied to rewards here.
-        df["selector"] = df["reward_model_score_np"].apply(
-            lambda x: discounted_mean(x, gamma=0.95)
+    # Keep all selector variants for later benchmarking.
+    if "reward_model_score_np" in df.columns:
+        df = _compute_selector_variant_columns(df, gamma=gamma)
+
+        selected_col, selected_mode = _resolve_selector_column(
+            selector_mode, answer_only=answer_only
         )
-        if "policy_log_probs" in df.columns:
-            df["selector_logprobs"] = df["policy_log_probs_np"].apply(
-                lambda x: discounted_mean(x, gamma=0.95)
+        if selected_col not in df.columns:
+            fallback = (
+                "selector_variant_discounted"
+                if answer_only
+                else "selector_variant_mean"
             )
+            print(
+                f"[WARNING] selector_mode='{selected_mode}' resolved to '{selected_col}', "
+                f"which is unavailable. Falling back to '{fallback}'."
+            )
+            selected_col = fallback
+
+        df["selector"] = pd.to_numeric(df[selected_col], errors="coerce")
+        df["selector_source"] = selected_col
     elif "mean_rewards" in df.columns:
-        df["selector"] = df["mean_rewards"].copy()
-        if "policy_log_probs" in df.columns:
-            df["selector_logprobs"] = df["mean_log_probs"].copy()
+        df["selector"] = pd.to_numeric(df["mean_rewards"], errors="coerce")
+        df["selector_source"] = "mean_rewards_fallback"
+
+    if "policy_log_probs_np" in df.columns:
+        if answer_only:
+            df["selector_logprobs"] = df["policy_log_probs_np"].apply(
+                lambda x: discounted_mean(x, gamma=gamma)
+            )
+            df["selector_logprobs_source"] = f"discounted_mean_gamma_{gamma}"
+        else:
+            df["selector_logprobs"] = pd.to_numeric(
+                df["mean_log_probs"], errors="coerce"
+            )
+            df["selector_logprobs_source"] = "mean_log_probs"
     return df
 
 
@@ -645,6 +943,131 @@ def save_latex_table_txt_reranking(
     lines.append("Log Probability & " + _fmt_row("logprobs"))
     lines.append("Majority Voting & " + _fmt_row("majority"))
     lines.append("Weighted Majority & " + _fmt_row("majority_weighted"))
+    out_file = Path(out_file)
+    out_file.parent.mkdir(parents=True, exist_ok=True)
+    out_file.write_text("\n".join(lines))
+
+
+def compute_selector_variant_success_results(
+    df: pd.DataFrame,
+    ks: Iterable[int],
+    num_generations: int = 16,
+    selector_columns: Optional[List[str]] = None,
+) -> Dict[str, Dict[int, float]]:
+    """
+    Evaluate selector aggregators on success@k|N (Best-of-N reranking objective).
+    Returns a mapping: selector_column -> {k -> metric}.
+    """
+    if df.empty or "correctness_reward_func" not in df.columns:
+        return {}
+
+    df_small = df.copy()
+    if "generation_idx" in df_small.columns:
+        df_small = df_small[df_small["generation_idx"] < num_generations].copy()
+    if df_small.empty:
+        return {}
+
+    if selector_columns is None:
+        selector_columns = [
+            col for col, _ in SELECTOR_VARIANT_DISPLAY_ORDER if col in df_small.columns
+        ]
+    if not selector_columns:
+        return {}
+
+    all_correct_flags: List[List[int]] = []
+    all_scores_by_selector: Dict[str, List[List[float]]] = {
+        col: [] for col in selector_columns
+    }
+
+    grouped = _group_by_prompt(df_small, num_generations=num_generations)
+    for sub_df in grouped:
+        if sub_df.empty or "correctness_reward_func" not in sub_df.columns:
+            continue
+        flags = np.array(sub_df["correctness_reward_func"] == 2, dtype=int).tolist()
+        n = len(flags)
+        if n == 0:
+            continue
+
+        all_correct_flags.append(flags)
+        for col in selector_columns:
+            if col not in sub_df.columns:
+                all_scores_by_selector[col].append([0.0] * n)
+                continue
+            score_arr = pd.to_numeric(sub_df[col], errors="coerce").to_numpy(dtype=float)
+            if score_arr.size < n:
+                score_arr = np.pad(
+                    score_arr,
+                    (0, n - score_arr.size),
+                    mode="constant",
+                    constant_values=-np.inf,
+                )
+            elif score_arr.size > n:
+                score_arr = score_arr[:n]
+
+            score_arr = np.nan_to_num(
+                score_arr, nan=-np.inf, posinf=np.finfo(float).max, neginf=-np.inf
+            )
+            all_scores_by_selector[col].append(score_arr.tolist())
+
+    if not all_correct_flags:
+        return {}
+
+    results: Dict[str, Dict[int, float]] = {}
+    for col in selector_columns:
+        scores = all_scores_by_selector[col]
+        if len(scores) != len(all_correct_flags):
+            continue
+        results[col] = compute_success_at_k_from_scores(all_correct_flags, scores, ks)
+    return results
+
+
+def save_selector_variant_table_txt(
+    results: Dict[str, Dict[int, float]],
+    ks: Iterable[int],
+    out_file: str | Path,
+) -> None:
+    """
+    Save selector-aggregator benchmark (success@k|N) as a LaTeX-ready table.
+    """
+    if not results:
+        return
+
+    display_map = {k: v for k, v in SELECTOR_VARIANT_DISPLAY_ORDER}
+    sort_keys = sorted(results, key=lambda key: results[key].get(1, -1.0), reverse=True)
+
+    baseline_key = (
+        "selector_variant_discounted"
+        if "selector_variant_discounted" in results
+        else sort_keys[0]
+    )
+    baseline_p1 = results[baseline_key].get(1, float("nan"))
+
+    lines = [
+        r"\begin{tabular}{lccccc}",
+        r"\toprule",
+        r"Selector Aggregation & pass@1 & pass@3 & pass@5 & pass@10 & $\Delta$pass@1 \\",
+        r"\midrule",
+    ]
+
+    for key in sort_keys:
+        label = display_map.get(key, key.replace("selector_variant_", ""))
+        p1 = results[key].get(1, float("nan"))
+        p3 = results[key].get(3, float("nan"))
+        p5 = results[key].get(5, float("nan"))
+        p10 = results[key].get(10, float("nan"))
+        delta = p1 - baseline_p1 if np.isfinite(p1) and np.isfinite(baseline_p1) else np.nan
+        lines.append(
+            f"{_latex_escape(label)} & {p1:.4f} & {p3:.4f} & {p5:.4f} & {p10:.4f} & {delta:+.4f} \\\\"
+        )
+
+    lines.extend(
+        [
+            r"\bottomrule",
+            r"\end{tabular}",
+            f"% Baseline for delta: {baseline_key}",
+        ]
+    )
+
     out_file = Path(out_file)
     out_file.parent.mkdir(parents=True, exist_ok=True)
     out_file.write_text("\n".join(lines))
@@ -1503,18 +1926,45 @@ def compute_ece(labels: np.ndarray, probs: np.ndarray, n_bins: int = 10) -> floa
     return ece
 
 
+def _prepare_calibration_arrays(
+    labels: List[int], scores: List[float]
+) -> Tuple[np.ndarray, np.ndarray]:
+    y_true = np.asarray(labels, dtype=float).reshape(-1)
+    y_score = np.asarray(scores, dtype=float).reshape(-1)
+    n = min(len(y_true), len(y_score))
+    if n == 0:
+        return np.array([], dtype=int), np.array([], dtype=float)
+
+    y_true = y_true[:n]
+    y_score = y_score[:n]
+    mask = np.isfinite(y_true) & np.isfinite(y_score)
+    if not np.any(mask):
+        return np.array([], dtype=int), np.array([], dtype=float)
+
+    y_true = (y_true[mask] > 0).astype(int)
+    y_score = y_score[mask].astype(float)
+    return y_true, y_score
+
+
 def compute_calibration_metrics(
     labels: List[int], scores: List[float]
 ) -> Dict[str, float]:
     """
     Computes AUROC and ECE. Scores are converted to probabilities via sigmoid.
     """
-    y_true = np.array(labels)
-    # Convert logits to probabilities
-    y_prob = 1 / (1 + np.exp(-np.array(scores)))
+    y_true, y_score = _prepare_calibration_arrays(labels, scores)
+    if y_true.size == 0:
+        return {"AUROC": float("nan"), "ECE": float("nan")}
+
+    # Convert logits to probabilities; clip for numerical stability.
+    y_prob = 1 / (1 + np.exp(-np.clip(y_score, -80.0, 80.0)))
+    if np.unique(y_true).size < 2:
+        auroc = float("nan")
+    else:
+        auroc = float(roc_auc_score(y_true, y_prob))
 
     return {
-        "AUROC": float(roc_auc_score(y_true, y_prob)),
+        "AUROC": auroc,
         "ECE": float(compute_ece(y_true, y_prob)),
     }
 
@@ -1527,27 +1977,41 @@ def bootstrap_calibration_ci(
     seed: int = 42,
 ):
     rng = np.random.default_rng(seed)
-    n = len(labels)
+    y_true, y_score = _prepare_calibration_arrays(labels, scores)
+    n = len(y_true)
+    if n == 0:
+        return {
+            "AUROC": (float("nan"), float("nan"), float("nan")),
+            "ECE": (float("nan"), float("nan"), float("nan")),
+        }
+
     boot_results = {"AUROC": [], "ECE": []}
+    full_metrics = compute_calibration_metrics(y_true.tolist(), y_score.tolist())
 
     for _ in range(n_boot):
         idxs = rng.integers(0, n, size=n)
-        labels_bs = [labels[i] for i in idxs]
-        scores_bs = [scores[i] for i in idxs]
-
-        # Guard against single-class bootstrap samples which break AUROC
-        if len(set(labels_bs)) < 2:
-            continue
-
+        labels_bs = y_true[idxs].tolist()
+        scores_bs = y_score[idxs].tolist()
         metrics = compute_calibration_metrics(labels_bs, scores_bs)
-        boot_results["AUROC"].append(metrics["AUROC"])
-        boot_results["ECE"].append(metrics["ECE"])
+        if np.isfinite(metrics["AUROC"]):
+            boot_results["AUROC"].append(metrics["AUROC"])
+        if np.isfinite(metrics["ECE"]):
+            boot_results["ECE"].append(metrics["ECE"])
 
     ci = {}
     for metric in ["AUROC", "ECE"]:
-        lower = np.percentile(boot_results[metric], 100 * alpha / 2)
-        upper = np.percentile(boot_results[metric], 100 * (1 - alpha / 2))
-        mean = np.mean(boot_results[metric])
+        values = boot_results[metric]
+        if len(values) == 0:
+            fallback = full_metrics.get(metric, float("nan"))
+            if np.isfinite(fallback):
+                ci[metric] = (fallback, fallback, fallback)
+            else:
+                ci[metric] = (float("nan"), float("nan"), float("nan"))
+            continue
+
+        lower = float(np.percentile(values, 100 * alpha / 2))
+        upper = float(np.percentile(values, 100 * (1 - alpha / 2)))
+        mean = float(np.mean(values))
         ci[metric] = (mean, lower, upper)
     return ci
 
@@ -1582,6 +2046,13 @@ def run_calibration_analysis(df_dict: Dict[str, pd.DataFrame], out_dir: Path):
     all_calibration_results = {}
 
     for name, df in df_dict.items():
+        if "correctness_reward_func" not in df.columns or "selector" not in df.columns:
+            all_calibration_results[name] = {
+                "AUROC": (float("nan"), float("nan"), float("nan")),
+                "ECE": (float("nan"), float("nan"), float("nan")),
+            }
+            continue
+
         # 1. Prepare labels (1 for correct, 0 for wrong)
         labels = (df["correctness_reward_func"] == 2).astype(int).tolist()
 
@@ -1608,6 +2079,7 @@ def run_all_plots(
     df_grpo: pd.DataFrame,
     out_dir: str | Path,
     num_generations: int = 16,
+    reranking_generations: list[int] | None = None,
     make_token_figs: bool = True,
 ):
     out_dir = ensure_dir(out_dir)
@@ -1642,6 +2114,17 @@ def run_all_plots(
         Path(out_dir) / "pass_at_k_table_reward_weighted.txt",
     )
 
+    selector_variant_results = compute_selector_variant_success_results(
+        df_airl,
+        ks,
+        num_generations=num_generations,
+    )
+    save_selector_variant_table_txt(
+        selector_variant_results,
+        ks,
+        Path(out_dir) / f"pass_at_k_table_selector_variants_{num_generations}.txt",
+    )
+
     if _available_mmlu_categories(df_airl, df_sft, df_grpo):
         save_latex_table_txt_mmlu_pass_by_category_no_ci(
             df_airl,
@@ -1670,11 +2153,23 @@ def run_all_plots(
 
     # success@k|N for AIRL (expert reasoning)
 
+    requested_reranking_generations = reranking_generations or [num_generations]
+    valid_reranking_generations = []
+    for g in requested_reranking_generations:
+        if not isinstance(g, int):
+            continue
+        if g <= 0 or g > num_generations:
+            continue
+        if g in valid_reranking_generations:
+            continue
+        valid_reranking_generations.append(g)
+    if not valid_reranking_generations:
+        valid_reranking_generations = [num_generations]
+
     plot_success_at_k_given(
         df_airl,
         ks,
-        # [2,3,5,8,16],
-        [16],
+        valid_reranking_generations,
         out_dir,
         title=r"Expert Reasoning: pass@k$\mid$N comparison",
     )

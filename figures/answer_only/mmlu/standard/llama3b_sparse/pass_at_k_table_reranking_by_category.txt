@@ -2,102 +2,102 @@
 \toprule
 Category & Reranking Method & pass@1 & pass@3 & pass@5 & pass@10 \\
 \midrule
-biology & Random Reranking & 0.5876 & 0.6804 & 0.7010 & 0.7423 \\
-biology & Reasoning Reranking & 0.6289 & 0.6701 & 0.6804 & 0.7010 \\
-biology & Length Reranking & 0.5567 & 0.6392 & 0.6701 & 0.7320 \\
-biology & Log Probability & 0.5773 & 0.6392 & 0.6701 & 0.7113 \\
-biology & Majority Voting & 0.6289 & 0.6392 & 0.6392 & 0.6701 \\
-biology & Weighted Majority & 0.5979 & 0.6082 & 0.6186 & 0.6598 \\
+biology & Random Reranking & 0.6186 & 0.6907 & 0.7010 & 0.7113 \\
+biology & Reasoning Reranking & 0.6289 & 0.6701 & 0.6804 & 0.6907 \\
+biology & Length Reranking & 0.6186 & 0.6289 & 0.6598 & 0.6907 \\
+biology & Log Probability & 0.5876 & 0.6495 & 0.6701 & 0.7010 \\
+biology & Majority Voting & 0.6495 & 0.6495 & 0.6598 & 0.6598 \\
+biology & Weighted Majority & 0.6598 & 0.6598 & 0.6598 & 0.6598 \\
 \midrule
-business & Random Reranking & 0.2072 & 0.2793 & 0.3153 & 0.3784 \\
-business & Reasoning Reranking & 0.2793 & 0.3243 & 0.3333 & 0.3964 \\
-business & Length Reranking & 0.1892 & 0.2613 & 0.3063 & 0.3604 \\
-business & Log Probability & 0.2342 & 0.3063 & 0.3514 & 0.4234 \\
-business & Majority Voting & 0.2252 & 0.2342 & 0.2432 & 0.3153 \\
-business & Weighted Majority & 0.2432 & 0.2523 & 0.2523 & 0.3243 \\
+business & Random Reranking & 0.2523 & 0.2793 & 0.3514 & 0.4054 \\
+business & Reasoning Reranking & 0.2883 & 0.3243 & 0.3243 & 0.3784 \\
+business & Length Reranking & 0.2162 & 0.2793 & 0.2973 & 0.3333 \\
+business & Log Probability & 0.2342 & 0.3153 & 0.3514 & 0.3874 \\
+business & Majority Voting & 0.2523 & 0.2613 & 0.2613 & 0.2703 \\
+business & Weighted Majority & 0.2613 & 0.2703 & 0.2793 & 0.2883 \\
 \midrule
-chemistry & Random Reranking & 0.1712 & 0.2123 & 0.2534 & 0.3082 \\
-chemistry & Reasoning Reranking & 0.1507 & 0.1781 & 0.2123 & 0.2534 \\
-chemistry & Length Reranking & 0.1712 & 0.2192 & 0.2329 & 0.2808 \\
-chemistry & Log Probability & 0.1644 & 0.2123 & 0.2260 & 0.2671 \\
-chemistry & Majority Voting & 0.1712 & 0.1712 & 0.1781 & 0.2329 \\
-chemistry & Weighted Majority & 0.1575 & 0.1575 & 0.1575 & 0.2329 \\
+chemistry & Random Reranking & 0.1644 & 0.1918 & 0.2192 & 0.2466 \\
+chemistry & Reasoning Reranking & 0.1575 & 0.1986 & 0.2055 & 0.2329 \\
+chemistry & Length Reranking & 0.1575 & 0.1986 & 0.2192 & 0.2329 \\
+chemistry & Log Probability & 0.1575 & 0.1986 & 0.2192 & 0.2603 \\
+chemistry & Majority Voting & 0.1712 & 0.1712 & 0.1712 & 0.1918 \\
+chemistry & Weighted Majority & 0.1712 & 0.1712 & 0.1712 & 0.1712 \\
 \midrule
-computer science & Random Reranking & 0.2075 & 0.2264 & 0.2453 & 0.3774 \\
-computer science & Reasoning Reranking & 0.2264 & 0.3019 & 0.3208 & 0.3585 \\
-computer science & Length Reranking & 0.2264 & 0.2642 & 0.3019 & 0.3774 \\
-computer science & Log Probability & 0.2075 & 0.2642 & 0.3208 & 0.4340 \\
-computer science & Majority Voting & 0.2453 & 0.2453 & 0.2453 & 0.2830 \\
-computer science & Weighted Majority & 0.2264 & 0.2264 & 0.2453 & 0.3396 \\
+computer science & Random Reranking & 0.2453 & 0.3208 & 0.3396 & 0.3962 \\
+computer science & Reasoning Reranking & 0.2830 & 0.2830 & 0.3019 & 0.3396 \\
+computer science & Length Reranking & 0.2264 & 0.2830 & 0.3019 & 0.3396 \\
+computer science & Log Probability & 0.2075 & 0.2830 & 0.3396 & 0.3962 \\
+computer science & Majority Voting & 0.2075 & 0.2075 & 0.2075 & 0.3208 \\
+computer science & Weighted Majority & 0.2264 & 0.2264 & 0.2264 & 0.3019 \\
 \midrule
-economics & Random Reranking & 0.4098 & 0.5164 & 0.5328 & 0.5574 \\
-economics & Reasoning Reranking & 0.4262 & 0.4836 & 0.4918 & 0.5410 \\
-economics & Length Reranking & 0.4098 & 0.4672 & 0.5000 & 0.5656 \\
-economics & Log Probability & 0.4180 & 0.4672 & 0.5082 & 0.5492 \\
-economics & Majority Voting & 0.4918 & 0.4918 & 0.4918 & 0.5082 \\
-economics & Weighted Majority & 0.4508 & 0.4508 & 0.4672 & 0.5082 \\
+economics & Random Reranking & 0.4344 & 0.5246 & 0.5410 & 0.5738 \\
+economics & Reasoning Reranking & 0.4262 & 0.4672 & 0.4836 & 0.5492 \\
+economics & Length Reranking & 0.4098 & 0.5164 & 0.5164 & 0.5656 \\
+economics & Log Probability & 0.4180 & 0.4672 & 0.5328 & 0.5902 \\
+economics & Majority Voting & 0.4754 & 0.4754 & 0.4754 & 0.5082 \\
+economics & Weighted Majority & 0.4508 & 0.4508 & 0.4508 & 0.5000 \\
 \midrule
-engineering & Random Reranking & 0.2747 & 0.3297 & 0.3407 & 0.3956 \\
-engineering & Reasoning Reranking & 0.2967 & 0.3187 & 0.3407 & 0.3626 \\
-engineering & Length Reranking & 0.2857 & 0.3187 & 0.3626 & 0.3956 \\
-engineering & Log Probability & 0.2637 & 0.2967 & 0.3297 & 0.3956 \\
-engineering & Majority Voting & 0.2857 & 0.2857 & 0.2857 & 0.3187 \\
-engineering & Weighted Majority & 0.2747 & 0.2747 & 0.2857 & 0.3187 \\
+engineering & Random Reranking & 0.2967 & 0.3297 & 0.3297 & 0.3516 \\
+engineering & Reasoning Reranking & 0.2747 & 0.2967 & 0.3187 & 0.3297 \\
+engineering & Length Reranking & 0.2747 & 0.3407 & 0.3407 & 0.3516 \\
+engineering & Log Probability & 0.2747 & 0.3297 & 0.3516 & 0.3516 \\
+engineering & Majority Voting & 0.2967 & 0.2967 & 0.2967 & 0.3187 \\
+engineering & Weighted Majority & 0.2967 & 0.2967 & 0.2967 & 0.3077 \\
 \midrule
-health & Random Reranking & 0.3504 & 0.5043 & 0.5385 & 0.6239 \\
-health & Reasoning Reranking & 0.3590 & 0.3932 & 0.4530 & 0.5556 \\
-health & Length Reranking & 0.3162 & 0.4188 & 0.5385 & 0.6325 \\
-health & Log Probability & 0.3162 & 0.4530 & 0.5214 & 0.6325 \\
-health & Majority Voting & 0.3846 & 0.3846 & 0.3846 & 0.5214 \\
-health & Weighted Majority & 0.3761 & 0.3846 & 0.4103 & 0.5299 \\
+health & Random Reranking & 0.3590 & 0.4530 & 0.4786 & 0.5726 \\
+health & Reasoning Reranking & 0.3761 & 0.4188 & 0.4359 & 0.4957 \\
+health & Length Reranking & 0.3162 & 0.4188 & 0.4615 & 0.5128 \\
+health & Log Probability & 0.3504 & 0.4615 & 0.4786 & 0.5556 \\
+health & Majority Voting & 0.3675 & 0.3675 & 0.3675 & 0.4188 \\
+health & Weighted Majority & 0.3675 & 0.3675 & 0.3675 & 0.4359 \\
 \midrule
-history & Random Reranking & 0.4444 & 0.5185 & 0.5185 & 0.5556 \\
-history & Reasoning Reranking & 0.4444 & 0.4444 & 0.4444 & 0.5185 \\
-history & Length Reranking & 0.3704 & 0.4074 & 0.4444 & 0.4815 \\
-history & Log Probability & 0.3704 & 0.4444 & 0.4444 & 0.5185 \\
-history & Majority Voting & 0.4074 & 0.4074 & 0.4074 & 0.4444 \\
-history & Weighted Majority & 0.4074 & 0.4074 & 0.4074 & 0.4074 \\
+history & Random Reranking & 0.4074 & 0.4444 & 0.4815 & 0.5185 \\
+history & Reasoning Reranking & 0.4074 & 0.4074 & 0.4444 & 0.4444 \\
+history & Length Reranking & 0.3333 & 0.4074 & 0.4444 & 0.4815 \\
+history & Log Probability & 0.3704 & 0.4444 & 0.4444 & 0.4815 \\
+history & Majority Voting & 0.4444 & 0.4444 & 0.4444 & 0.4444 \\
+history & Weighted Majority & 0.4074 & 0.4444 & 0.4444 & 0.4444 \\
 \midrule
-law & Random Reranking & 0.2394 & 0.3380 & 0.4085 & 0.5070 \\
-law & Reasoning Reranking & 0.3099 & 0.3521 & 0.4225 & 0.4648 \\
-law & Length Reranking & 0.2817 & 0.3099 & 0.3803 & 0.4789 \\
-law & Log Probability & 0.2676 & 0.3662 & 0.3803 & 0.4930 \\
-law & Majority Voting & 0.2535 & 0.2676 & 0.2817 & 0.3662 \\
-law & Weighted Majority & 0.2817 & 0.2958 & 0.2958 & 0.3803 \\
+law & Random Reranking & 0.2817 & 0.3944 & 0.4225 & 0.4507 \\
+law & Reasoning Reranking & 0.2676 & 0.2958 & 0.3380 & 0.3803 \\
+law & Length Reranking & 0.2817 & 0.2817 & 0.3239 & 0.3944 \\
+law & Log Probability & 0.2958 & 0.3521 & 0.3803 & 0.4366 \\
+law & Majority Voting & 0.2535 & 0.2535 & 0.2535 & 0.3380 \\
+law & Weighted Majority & 0.2958 & 0.2958 & 0.3099 & 0.3380 \\
 \midrule
-math & Random Reranking & 0.1829 & 0.2914 & 0.3371 & 0.4057 \\
-math & Reasoning Reranking & 0.2057 & 0.2457 & 0.2914 & 0.3600 \\
-math & Length Reranking & 0.1429 & 0.1943 & 0.2514 & 0.3543 \\
-math & Log Probability & 0.1829 & 0.2400 & 0.2914 & 0.4000 \\
-math & Majority Voting & 0.1657 & 0.1657 & 0.1714 & 0.2514 \\
-math & Weighted Majority & 0.1829 & 0.1829 & 0.2000 & 0.2629 \\
+math & Random Reranking & 0.1771 & 0.2514 & 0.3143 & 0.4057 \\
+math & Reasoning Reranking & 0.2343 & 0.2629 & 0.2800 & 0.3429 \\
+math & Length Reranking & 0.1543 & 0.1943 & 0.2343 & 0.3143 \\
+math & Log Probability & 0.1771 & 0.2457 & 0.2857 & 0.3886 \\
+math & Majority Voting & 0.1486 & 0.1486 & 0.1486 & 0.2114 \\
+math & Weighted Majority & 0.1600 & 0.1600 & 0.1600 & 0.2229 \\
 \midrule
-other & Random Reranking & 0.3594 & 0.4922 & 0.5547 & 0.6484 \\
-other & Reasoning Reranking & 0.3594 & 0.4453 & 0.4844 & 0.5312 \\
-other & Length Reranking & 0.3203 & 0.4062 & 0.4766 & 0.5703 \\
-other & Log Probability & 0.3359 & 0.4453 & 0.4766 & 0.6094 \\
-other & Majority Voting & 0.3828 & 0.3906 & 0.3906 & 0.4766 \\
-other & Weighted Majority & 0.3906 & 0.4141 & 0.4141 & 0.4766 \\
+other & Random Reranking & 0.3594 & 0.4375 & 0.4922 & 0.5156 \\
+other & Reasoning Reranking & 0.4297 & 0.4531 & 0.4688 & 0.5078 \\
+other & Length Reranking & 0.3672 & 0.4531 & 0.4766 & 0.5469 \\
+other & Log Probability & 0.3516 & 0.4141 & 0.4609 & 0.5156 \\
+other & Majority Voting & 0.3516 & 0.3594 & 0.3594 & 0.4297 \\
+other & Weighted Majority & 0.3672 & 0.3672 & 0.3750 & 0.4141 \\
 \midrule
-philosophy & Random Reranking & 0.2000 & 0.3143 & 0.3857 & 0.4429 \\
-philosophy & Reasoning Reranking & 0.2286 & 0.2571 & 0.3143 & 0.3571 \\
-philosophy & Length Reranking & 0.2286 & 0.2714 & 0.3429 & 0.3857 \\
-philosophy & Log Probability & 0.2286 & 0.2571 & 0.3143 & 0.3857 \\
-philosophy & Majority Voting & 0.2286 & 0.2286 & 0.2286 & 0.3000 \\
-philosophy & Weighted Majority & 0.2571 & 0.2571 & 0.2571 & 0.3000 \\
+philosophy & Random Reranking & 0.2286 & 0.2857 & 0.3000 & 0.3571 \\
+philosophy & Reasoning Reranking & 0.2286 & 0.2571 & 0.2857 & 0.3429 \\
+philosophy & Length Reranking & 0.2143 & 0.2571 & 0.3000 & 0.3286 \\
+philosophy & Log Probability & 0.2143 & 0.2286 & 0.2571 & 0.3571 \\
+philosophy & Majority Voting & 0.2000 & 0.2000 & 0.2000 & 0.2429 \\
+philosophy & Weighted Majority & 0.2286 & 0.2286 & 0.2286 & 0.2714 \\
 \midrule
-physics & Random Reranking & 0.2059 & 0.2824 & 0.3412 & 0.4176 \\
-physics & Reasoning Reranking & 0.2412 & 0.2941 & 0.3059 & 0.3588 \\
-physics & Length Reranking & 0.2059 & 0.2647 & 0.3118 & 0.3765 \\
-physics & Log Probability & 0.2059 & 0.3000 & 0.3294 & 0.3765 \\
-physics & Majority Voting & 0.2412 & 0.2588 & 0.2647 & 0.3176 \\
-physics & Weighted Majority & 0.2353 & 0.2353 & 0.2471 & 0.3118 \\
+physics & Random Reranking & 0.2000 & 0.2706 & 0.2941 & 0.3294 \\
+physics & Reasoning Reranking & 0.2412 & 0.2706 & 0.3000 & 0.3294 \\
+physics & Length Reranking & 0.1941 & 0.2706 & 0.2941 & 0.3176 \\
+physics & Log Probability & 0.2059 & 0.2941 & 0.3118 & 0.3412 \\
+physics & Majority Voting & 0.2235 & 0.2353 & 0.2412 & 0.2588 \\
+physics & Weighted Majority & 0.2235 & 0.2235 & 0.2353 & 0.2588 \\
 \midrule
-psychology & Random Reranking & 0.3770 & 0.4590 & 0.4754 & 0.5410 \\
-psychology & Reasoning Reranking & 0.4262 & 0.4508 & 0.4590 & 0.5000 \\
-psychology & Length Reranking & 0.3361 & 0.3770 & 0.4344 & 0.5000 \\
-psychology & Log Probability & 0.3525 & 0.4180 & 0.4754 & 0.5246 \\
-psychology & Majority Voting & 0.3770 & 0.3934 & 0.4016 & 0.4344 \\
-psychology & Weighted Majority & 0.3934 & 0.4016 & 0.4016 & 0.4508 \\
+psychology & Random Reranking & 0.4098 & 0.4426 & 0.4754 & 0.4836 \\
+psychology & Reasoning Reranking & 0.4180 & 0.4262 & 0.4590 & 0.4754 \\
+psychology & Length Reranking & 0.3525 & 0.4098 & 0.4508 & 0.4836 \\
+psychology & Log Probability & 0.3607 & 0.4508 & 0.4672 & 0.4918 \\
+psychology & Majority Voting & 0.4098 & 0.4098 & 0.4098 & 0.4262 \\
+psychology & Weighted Majority & 0.4180 & 0.4180 & 0.4344 & 0.4508 \\
 \bottomrule
 \end{tabular}

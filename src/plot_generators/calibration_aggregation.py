@@ -11,10 +11,10 @@ except ModuleNotFoundError:
 ROOT_DIR = Path("figures/answer_only")
 
 ALGO_ORDER = [
-    ("sparse_new", r"\textit{Sparse}"),
-    ("partial_new", r"\textit{Step-wise}"),
-    ("partial_fixed_new", r"\textit{Interval}"),
-    ("full_new", r"\textit{Dense}"),
+    ("sparse", r"\textit{Sparse}"),
+    ("partial", r"\textit{Step-wise}"),
+    ("partial_fixed", r"\textit{Interval}"),
+    ("full", r"\textit{Dense}"),
 ]
 
 MODEL_ORDER = [
@@ -61,9 +61,9 @@ def format_calib_cell(val_str):
             return "-"
 
         # Multiply by 100 and round to nearest integer
-        mean_p = int(round(nums[0] * 100))
-        low_p = int(round(nums[1] * 100))
-        high_p = int(round(nums[2] * 100))
+        mean_p = round(nums[0] * 100, 1)
+        low_p = round(nums[1] * 100, 1)
+        high_p = round(nums[2] * 100, 1)
 
         return f"{mean_p} \\tiny\\textcolor{{gray}}{{[{low_p}, {high_p}]}}"
     except (ValueError, IndexError):
@@ -97,7 +97,7 @@ def main():
         for i, (algo_key, algo_name) in enumerate(ALGO_ORDER):
             row_cells = []
             for ds_key, _ in DATASETS:
-                ds_path = ROOT_DIR / ds_key
+                ds_path = ROOT_DIR / ds_key / "standard"
                 run_name = f"{model_key}_{algo_key}"
                 run_dir = resolve_run_dir(
                     ds_path, run_name, required_file="calibration_metrics_table.txt"

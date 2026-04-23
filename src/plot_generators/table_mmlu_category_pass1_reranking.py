@@ -1,4 +1,5 @@
 import argparse
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -32,6 +33,14 @@ METHOD_MAP = {
     "SFT": "SFT",
 }
 
+FLOAT_PATTERN = r"[-+]?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?"
+PASS_WITH_BOUNDS_RE = re.compile(
+    rf"^\s*({FLOAT_PATTERN})\s*\[\s*({FLOAT_PATTERN})\s*,\s*({FLOAT_PATTERN})\s*\]\s*$"
+)
+
+# (mean, optional half-width CI), both in probability units (0-1)
+Pass1Entry = Tuple[float, Optional[float]]
+
 
 def latex_escape(text: str) -> str:
     escaped = str(text)
@@ -52,13 +61,55 @@ def capitalize_category(name: str) -> str:
     return " ".join(part.capitalize() for part in name.split())
 
 
-def parse_category_pass_table(path: Path) -> Dict[str, Dict[str, float]]:
+def parse_pass1_entry(pass1_raw: str) -> Optional[Pass1Entry]:
+    """Parse pass@1 with optional CI bounds encoded as `mean [low, high]`."""
+    pass1_raw = pass1_raw.strip()
+    if not pass1_raw:
+        return None
+
+    match = PASS_WITH_BOUNDS_RE.match(pass1_raw)
+    if match:
+        mean_val = float(match.group(1))
+        low = float(match.group(2))
+        high = float(match.group(3))
+        if low <= high:
+            return mean_val, max(0.0, (high - low) / 2.0)
+        return mean_val, None
+
+    try:
+        return float(pass1_raw), None
+    except ValueError:
+        return None
+
+
+def parse_optional_ci_from_columns(
+    parts: List[str], mean_val: float
+) -> Optional[float]:
+    """
+    If rows contain explicit pass@1 lower/upper bound columns after pass@1,
+    parse them as half-width CI. Returns None when unavailable.
+    """
+    if len(parts) < 8:
+        return None
+
+    try:
+        low = float(parts[3].strip())
+        high = float(parts[4].strip())
+    except ValueError:
+        return None
+
+    if low <= mean_val <= high:
+        return max(0.0, (high - low) / 2.0)
+    return None
+
+
+def parse_category_pass_table(path: Path) -> Dict[str, Dict[str, Pass1Entry]]:
     """
     Parse rows from pass_at_k_table_by_category.txt.
-    Returns mapping: method_key -> {category -> pass@1_float}
+    Returns mapping: method_key -> {category -> (pass@1_mean, optional_half_width_ci)}
       method_key in {"GRPO", "SFT", "AIRL"}
     """
-    parsed: Dict[str, Dict[str, float]] = {"GRPO": {}, "SFT": {}, "AIRL": {}}
+    parsed: Dict[str, Dict[str, Pass1Entry]] = {"GRPO": {}, "SFT": {}, "AIRL": {}}
 
     with path.open("r", encoding="utf-8") as f:
         for raw_line in f:
@@ -77,18 +128,22 @@ def parse_category_pass_table(path: Path) -> Dict[str, Dict[str, float]]:
             if mapped is None:
                 continue
 
-            try:
-                pass1_val = float(pass1_str)
-            except ValueError:
+            parsed_entry = parse_pass1_entry(pass1_str)
+            if parsed_entry is None:
                 continue
+            mean_val, half_ci = parsed_entry
 
-            parsed[mapped][category] = pass1_val
+            if half_ci is None:
+                half_ci = parse_optional_ci_from_columns(parts, mean_val)
+
+            parsed[mapped][category] = (mean_val, half_ci)
 
     return parsed
 
 
 def format_cell(
     val: Optional[float],
+    half_ci: Optional[float] = None,
     is_best: bool = False,
     is_second: bool = False,
     is_collapsed: bool = False,
@@ -96,16 +151,21 @@ def format_cell(
     if val is None:
         return "-"
 
-    mean_disp = f"{val * 100:.0f}"
+    mean_disp = f"{val * 100:.1f}"
+    ci_disp = (
+        f" {{\\scriptsize\\color{{gray}}$\\pm$ {half_ci * 100:.1f}}}"
+        if half_ci is not None
+        else ""
+    )
 
     if is_collapsed:
-        return f"\\textcolor{{gray}}{{{mean_disp}$^*$}}"
+        return f"\\textcolor{{gray}}{{{mean_disp}$^*$}}{ci_disp}"
 
     if is_best:
-        return f"\\textbf{{{mean_disp}}}"
+        return f"\\textbf{{{mean_disp}}}{ci_disp}"
     if is_second:
-        return f"\\underline{{{mean_disp}}}"
-    return mean_disp
+        return f"\\underline{{{mean_disp}}}{ci_disp}"
+    return f"{mean_disp}{ci_disp}"
 
 
 def find_run_dirs(root_dir: Path) -> List[Path]:
@@ -125,7 +185,7 @@ def ordered_candidates_for_model(model_key: str, run_names: List[str]) -> List[s
 def first_existing_variant(
     model_key: str,
     algo_key: str,
-    parsed_by_run: Dict[str, Dict[str, Dict[str, float]]],
+    parsed_by_run: Dict[str, Dict[str, Dict[str, Pass1Entry]]],
 ) -> Optional[str]:
     exact_names = [
         f"{model_key}_{algo_key}",
@@ -163,7 +223,7 @@ def main() -> None:
         print(f"No run folders with {PASS_FILE} found under: {args.root_dir}")
         return
 
-    parsed_by_run: Dict[str, Dict[str, Dict[str, float]]] = {}
+    parsed_by_run: Dict[str, Dict[str, Dict[str, Pass1Entry]]] = {}
     all_categories: Set[str] = set()
 
     for run_dir in run_dirs:
@@ -178,8 +238,8 @@ def main() -> None:
         print(f"No category pass@1 rows found in: {args.root_dir}")
         return
 
-    # data[model][algo][category] = pass@1 float or None
-    data: Dict[str, Dict[str, Dict[str, Optional[float]]]] = {
+    # data[model][algo][category] = (pass@1 mean, optional half-width CI) or None
+    data: Dict[str, Dict[str, Dict[str, Optional[Pass1Entry]]]] = {
         model_key: {
             algo_key: {cat: None for cat in categories} for algo_key, _ in ALGO_ORDER
         }
@@ -237,19 +297,20 @@ def main() -> None:
             for algo_key, _ in ALGO_ORDER:
                 if algo_key == "GRPO":
                     continue
-                val = data[model_key][algo_key][cat]
-                if val is not None:
-                    means.append(val)
+                entry = data[model_key][algo_key][cat]
+                if entry is not None:
+                    means.append(entry[0])
 
             unique_sorted = sorted(set(means), reverse=True)
             best_val = unique_sorted[0] if unique_sorted else None
             second_val = unique_sorted[1] if len(unique_sorted) > 1 else None
 
             for algo_key, _ in ALGO_ORDER:
-                val = data[model_key][algo_key][cat]
-                if val is None:
+                entry = data[model_key][algo_key][cat]
+                if entry is None:
                     formatted_data[model_key][algo_key][cat] = "-"
                     continue
+                val, half_ci = entry
 
                 is_best = (
                     algo_key != "GRPO" and best_val is not None and val == best_val
@@ -261,6 +322,7 @@ def main() -> None:
 
                 formatted_data[model_key][algo_key][cat] = format_cell(
                     val,
+                    half_ci=half_ci,
                     is_best=is_best,
                     is_second=is_second,
                     is_collapsed=is_collapsed,
@@ -312,7 +374,9 @@ def main() -> None:
         r"\caption{\textbf{MMLU-Pro Pass@1 by Category (\%).} "
         r"Table layout matches the p1 table structure, with categories as columns. "
         r"\textbf{Bold} marks the best and underlining marks the second-best among SFT and AIRL variants. "
-        r"Verifiable reward is shown as reference; * marks values below 20\%.}"
+        r"Verifiable reward is shown as reference; * marks values below 20\%. "
+        r"When available, uncertainty is shown as mean $\pm$ half-width of the 95\% confidence interval "
+        r"(percentage points), rounded to one decimal place.}"
     )
     latex.append(r"\label{tab:mmlu_category_p1}")
     latex.append(r"\end{table*}")
