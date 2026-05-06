@@ -1,5 +1,7 @@
 import re
-from typing import List, Optional
+import logging
+from functools import lru_cache
+from typing import Any, List, Optional
 from difflib import SequenceMatcher
 from math_verify import verify
 
@@ -251,7 +253,7 @@ def medical_correctness_reward_func(prompts, completions, answer, **kwargs):
     rewards = []
     for predicted, solution in zip(extracted_responses, answer):
             # Use robust MC comparison (returns True/False)
-            match = mc_answer_equal(predicted, solution)
+            match = mc_answer_equal_2(predicted, solution)
             rewards.append(2.0 if match else 0.0)
     return rewards
 

@@ -28,8 +28,8 @@ except ModuleNotFoundError:
 
 # ================= CONFIGURATION =================
 _ROOT_CANDIDATES = [
-    Path("figures") / "transferability_ablation_temp05_fixed",
-    Path("figures") / "sft_reranking_temp05",
+    Path("figures") / "transferability_ablation_new",
+    Path("figures") / "sft_reranking_temp05_new",
 ]
 ROOT_DIR = next((p for p in _ROOT_CANDIDATES if p.exists()), _ROOT_CANDIDATES[0])
 
@@ -40,8 +40,8 @@ POLICY_MODEL = "llama8b"
 RM_MODELS = [
     #("llama3b", "Llama3.2-3B"),
     #("qwen3b", "Qwen2.5-3B"),
-    #("llama8b", "Llama3.1-8B"),
-    ("qwen7b", "Qwen2.5-7B"),
+    ("llama8b", "Llama3.1-8B"),
+    #("qwen7b", "Qwen2.5-7B"),
     ("qwen4b", "Qwen3-4B"),
 ]
 
@@ -207,62 +207,92 @@ def _load_transfer_matrices() -> dict[str, np.ndarray]:
     return matrices
 
 
+def _format_delta_cell(delta: float, diagonal: bool = False) -> str:
+    d = round(float(delta), 1)
+    d_text = f"{d:+.1f}"
+    if d > 0:
+        cell = f"\\textbf{{\\textcolor{{insightteal}}{{$\\uparrow$ {d_text}}}}}"
+    elif d < 0:
+        cell = f"\\textcolor{{purple}}{{$\\downarrow$ {d_text}}}"
+    else:
+        cell = f"{d_text}"
+
+    if diagonal:
+        return f"\\textit{{{cell}}}"
+    return cell
+
+
 def _render_latex_table(matrices: dict[str, np.ndarray]) -> str:
     latex = []
+    table_datasets = [("math", "GSM8K"), ("mmlu", "MMLU-Pro"), ("medicine", "MedReason")]
+    ds_index = {k: i for i, (k, _) in enumerate(DATASETS)}
+
+    col_spec = "l " + " ".join(["c c c"] * len(RM_MODELS))
+
+    cmidrules = []
+    for idx in range(len(RM_MODELS)):
+        start = 2 + 3 * idx
+        end = start + 2
+        cmidrules.append(fr"\cmidrule(lr){{{start}-{end}}}")
+
     latex.append(r"\begin{table*}[h!]")
+    latex.append(r"\scriptsize")
+    latex.append(r"\renewcommand{\arraystretch}{1.16}")
+    latex.append(r"\setlength{\tabcolsep}{3.8pt}")
     latex.append(r"\centering")
     latex.append(r"\resizebox{\textwidth}{!}{%")
-    
-    latex.append(r"\begin{tabular}{l rrr rrr rrr}")
+    latex.append(fr"\begin{{tabular}}{{{col_spec}}}")
     latex.append(r"\toprule")
 
-    # Header Row 1: Backbones
-    header_row1 = [r"\multicolumn{1}{c}{\texttt{Qwen2.5-7B} }"]
+    header_row1 = [r"\textbf{Policy Dataset}"]
     for _, model_name in RM_MODELS:
-        header_row1.append(f"\\multicolumn{{3}}{{c}}{{ \\texttt{{{model_name}}} }}")
+        header_row1.append(
+            f"\\multicolumn{{3}}{{c}}{{\\textbf{{\\texttt{{{model_name}}}}}}}"
+        )
     latex.append(" & ".join(header_row1) + r" \\")
+    latex.append(" ".join(cmidrules))
 
-    # Header Row 2: Reward Datasets
-    header_row2 = [r"\textit{(interval)}"]
+    header_row2 = [r""]
     for _ in RM_MODELS:
-        for _, ds_name in DATASETS:
-            header_row2.append(f"\\scriptsize \\textsc{{{ds_name}}}")
+        for _, ds_name in table_datasets:
+            header_row2.append(f"\\textbf{{\\textsc{{{ds_name}}}}}")
     latex.append(" & ".join(header_row2) + r" \\")
-    latex.append(r"\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}")
+    latex.append(r"\midrule")
 
-    # --- Data Rows ---
-    for i, (p_ds_key, p_ds_name) in enumerate(DATASETS):
+    for p_ds_key, p_ds_name in table_datasets:
         row_cells = []
         row_cells.append(f"\\textsc{{{p_ds_name}}}")
+        i = ds_index[p_ds_key]
 
         for rm_key, _ in RM_MODELS:
-            for r_ds_key, _ in DATASETS:
-                d = matrices.get(rm_key, np.full((len(DATASETS), len(DATASETS)), np.nan))[
-                    i, [k for k, _ in DATASETS].index(r_ds_key)
-                ]
+            matrix = matrices.get(
+                rm_key, np.full((len(DATASETS), len(DATASETS)), np.nan)
+            )
+            for r_ds_key, _ in table_datasets:
+                j = ds_index[r_ds_key]
+                d = matrix[i, j]
 
                 if np.isnan(d):
                     row_cells.append("-")
                 else:
-                    # Formatting logic
-                    color = "insightteal" if d >= 0 else "purple"
-                    arrow = "$\\uparrow$" if d >= 0 else "$\\downarrow$"
-                    val_text = f"{abs(d):.1f}"
-
-                    cell_str = f"\\textcolor{{{color}}}{{{arrow} {val_text}}}"
-
-                    if p_ds_key == r_ds_key:
-                        cell_str = f"\\textit{{{cell_str}}}"
-
-                    row_cells.append(cell_str)
+                    row_cells.append(
+                        _format_delta_cell(float(d), diagonal=(p_ds_key == r_ds_key))
+                    )
 
         latex.append(" & ".join(row_cells) + r" \\")
 
     latex.append(r"\bottomrule")
     latex.append(r"\end{tabular}}")
+    latex.append(r"\vspace{0.6em}")
 
-    caption = f"\\caption[{{Reward Model Transferability (Best-of-{NUM_GENERATIONS} $\\Delta$ over SFT Pass@1)}}]{{\\textbf{{Reward Model Transferability (Best-of-{NUM_GENERATIONS} $\\Delta$ over SFT Pass@1).}} Generations are sourced from \\texttt{{Qwen2.5-7B}} SFT models. We score them using Reward Models trained on different task distributions. Diagonal entries (italic) represent in-distribution performance. Values are rounded to one decimal place.}}"
+    caption = (
+        f"\\caption{{\\textbf{{Best-of-{NUM_GENERATIONS} transfer reranking deltas (\\%).}} "
+        r"Each cell reports $\Delta$ (reward-guided reranking minus SFT random reranking) using the same sampled generations. "
+        r"Columns group reward-model backbones; rows are policy-task datasets. "
+        r"Diagonal entries (italic) indicate in-distribution transfer.}"
+    )
     latex.append(caption)
+    latex.append(r"\label{tab:transfer_matrix_main}")
     latex.append(r"\end{table*}")
     return "\n".join(latex)
 

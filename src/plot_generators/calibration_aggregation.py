@@ -12,14 +12,14 @@ ROOT_DIR = Path("figures/answer_only")
 
 ALGO_ORDER = [
     ("sparse", r"\textit{Sparse}"),
-    ("partial", r"\textit{Step-wise}"),
+    #("partial", r"\textit{Step-wise}"),
     ("partial_fixed", r"\textit{Interval}"),
     ("full", r"\textit{Dense}"),
 ]
 
 MODEL_ORDER = [
-    ("qwen3b", r"\texttt{Qwen2.5-3B}"),
-    ("llama3b", r"\texttt{Llama3.2-3B}"),
+    #("qwen3b", r"\texttt{Qwen2.5-3B}"),
+    #("llama3b", r"\texttt{Llama3.2-3B}"),
     ("qwen7b", r"\texttt{Qwen2.5-7B}"),
     ("llama8b", r"\texttt{Llama3.1-8B}"),
     ("qwen4b", r"\texttt{Qwen3-4B}"),

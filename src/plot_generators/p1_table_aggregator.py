@@ -22,6 +22,12 @@ ALGO_ORDER = [
     ("full", "Ours (\\textit{Dense})"),
     # ('ovr', 'Ours (\\textit{Step-wise + OVR})')
 ]
+MAIN_TABLE_ORDER = [
+    ("SFT", "SFT"),
+    ("sparse", r"\textit{Sparse}"),
+    ("partial_fixed", r"\textit{Interval}"),
+    ("full", r"\textit{Dense}"),
+]
 
 # Model Order (Now used for Sub-Headers)
 MODEL_ORDER = [
@@ -62,7 +68,9 @@ def build_panel_caption(caption_body, model_order, panel_idx, panel_total):
     return rf"\caption{{{caption_body}{panel_note}}}"
 
 
-def build_p1_latex_table(formatted_data, algo_order, caption, label, model_order=None):
+def build_p1_latex_table_generic(
+    formatted_data, algo_order, caption, label, model_order=None
+):
     """Builds a transposed Pass@1 LaTeX table for the selected algorithms."""
     active_model_order = model_order if model_order is not None else MODEL_ORDER
 
@@ -121,6 +129,97 @@ def build_p1_latex_table(formatted_data, algo_order, caption, label, model_order
     latex.append(r"\bottomrule")
     latex.append(r"\end{tabular}%")
     latex.append(r"}")
+    latex.append(caption)
+    latex.append(label)
+    latex.append(r"\end{table*}")
+    return latex
+
+
+def build_p1_latex_table_main(formatted_data, caption, label, model_order=None):
+    """Builds the main Pass@1 LaTeX table in the Method/Granularity style."""
+    active_model_order = model_order if model_order is not None else MODEL_ORDER
+
+    latex = []
+    latex.append(r"% Requires \usepackage{booktabs}, \usepackage{multirow}, \usepackage{arydshln}")
+    latex.append(r"\begin{table*}[h!]")
+    latex.append(r"\scriptsize")
+    latex.append(r"\renewcommand{\arraystretch}{1.16}")
+    latex.append(r"\setlength{\tabcolsep}{3.8pt}")
+    latex.append(r"\centering")
+    latex.append(r"\resizebox{\textwidth}{!}{%")
+
+    num_dataset_cols = len(DATASET_COLUMNS)
+    num_model_cols = len(active_model_order)
+    total_columns = 2 + num_dataset_cols * num_model_cols
+    latex.append(
+        r"\begin{tabular}{"
+        + " ".join(["l", "l"] + ["c"] * (total_columns - 2))
+        + r"}"
+    )
+    latex.append(r"\toprule")
+
+    dataset_group_header = " & ".join(
+        [
+            rf"\multicolumn{{{num_model_cols}}}{{c}}{{{dataset_label}}}"
+            for _dataset_key, dataset_label in DATASET_COLUMNS
+        ]
+    )
+    latex.append(
+        r"\textbf{Method} & \textbf{Granularity} & " + dataset_group_header + r" \\"
+    )
+
+    cmidrules = []
+    for idx, _ in enumerate(DATASET_COLUMNS):
+        start = 3 + idx * num_model_cols
+        end = start + num_model_cols - 1
+        cmidrules.append(rf"\cmidrule(lr){{{start}-{end}}}")
+    latex.append("".join(cmidrules))
+
+    model_row = " & ".join(
+        [
+            rf"\textbf{{\tiny{model_name}}}"
+            for _dataset_key, _dataset_label in DATASET_COLUMNS
+            for _model_key, model_name in active_model_order
+        ]
+    )
+    latex.append(r"& & " + model_row + r" \\")
+    latex.append(r"\midrule")
+
+    sft_cells = [
+        formatted_data[model_key]["SFT"][dataset]
+        for dataset, _dataset_label in DATASET_COLUMNS
+        for model_key, _model_name in active_model_order
+    ]
+    latex.append(r"%\rowcolor{black!6}")
+    latex.append(f"SFT &  & {' & '.join(sft_cells)} \\\\")
+    latex.append(rf"\cdashline{{1-{total_columns}}}[0.5pt/1.8pt]")
+
+    rairl_rows = [
+        ("sparse", r"\textit{Sparse}"),
+        ("partial_fixed", r"\textit{Interval}"),
+        ("full", r"\textit{Dense}"),
+    ]
+
+    for idx, (algo_key, granularity) in enumerate(rairl_rows):
+        row_cells = [
+            formatted_data[model_key][algo_key][dataset]
+            for dataset, _dataset_label in DATASET_COLUMNS
+            for model_key, _model_name in active_model_order
+        ]
+        if idx == 0:
+            latex.append(
+                rf"\multirow{{{len(rairl_rows)}}}{{*}}{{R-AIRL}} & {granularity} & "
+                + " & ".join(row_cells)
+                + r" \\"
+            )
+        else:
+            latex.append(
+                rf"& {granularity} & " + " & ".join(row_cells) + r" \\"
+            )
+
+    latex.append(r"\bottomrule")
+    latex.append(r"\end{tabular}}")
+    latex.append(r"\vspace{0.6em}")
     latex.append(caption)
     latex.append(label)
     latex.append(r"\end{table*}")
@@ -338,34 +437,21 @@ def main():
                 data[model_key][algo_key][dataset] = extract_all_k(variant_file, "AIRL")
 
     # --- Step 2: Analyze Rankings & Formatting ---
-    # Main table uses all methods in ALGO_ORDER.
-    formatted_data_main = build_formatted_data(data, ALGO_ORDER)
+    formatted_data_main = build_formatted_data(data, MAIN_TABLE_ORDER)
 
-    # --- Step 3: Generate Cleaner LaTeX ---
-    main_caption_body = (
-        r"\textbf{Pass@1 Performance (\%).} \textbf{Bold} indicates the best performance compared between SFT and our methods. Verifiable reward is provided as a reference upper bound. * symbolises an adversarial mode collapse (results grayed out). Values are reported as mean $\pm$ half-width of the 95\% confidence interval (in percentage points)."
+    # --- Step 3: Generate Main LaTeX Table ---
+    main_caption = (
+        r"\caption{\textbf{Held-out pass@1.} \textbf{Bold} indicates the best performance, and \underline{underlined} the second best, compared between SFT and our methods in the demonstration-only setting. Values are reported as mean $\pm$ half-width of the 95\% confidence interval bootstrapped over the test set.}"
     )
+    main_label = r"\label{tab:p1_results_main}"
+    main_table = build_p1_latex_table_main(
+        formatted_data_main,
+        main_caption,
+        main_label,
+        model_order=MODEL_ORDER,
+    )
+    main_table.append("")
     model_panels = chunk_items(MODEL_ORDER, MODELS_PER_TABLE)
-    main_table = []
-    for panel_idx, model_panel in enumerate(model_panels, start=1):
-        panel_caption = build_panel_caption(
-            main_caption_body, model_panel, panel_idx, len(model_panels)
-        )
-        if panel_idx == 1:
-            panel_label = r"\label{tab:p1_results}"
-        else:
-            panel_label = rf"\label{{tab:p1_results_panel{panel_idx}}}"
-
-        main_table.extend(
-            build_p1_latex_table(
-                formatted_data_main,
-                ALGO_ORDER,
-                panel_caption,
-                panel_label,
-                model_order=model_panel,
-            )
-        )
-        main_table.append("")
 
     algo_name_by_key = {algo_key: algo_name for algo_key, algo_name in ALGO_ORDER}
     variant_comparison_tables = []
@@ -394,7 +480,7 @@ def main():
                 )
 
             variant_comparison_tables.extend(
-                build_p1_latex_table(
+                build_p1_latex_table_generic(
                     subset_formatted_data,
                     subset_order,
                     panel_caption,

@@ -28,3 +28,11 @@ See `configs/index.yaml` for a compact canonical mapping used for quick reruns.
 - For local runs, override paths at launch time, e.g. with Hydra CLI overrides:
   - `training.output_dir=./outputs/<run_name>`
   - `model.warmup_reward_dir=...` (if required)
+
+
+PYTHONPATH=. python src/plot_generators/table_localisation.py \
+  --root-dir outputs/localisation \
+  --window 3 \
+  --bootstrap-samples 5000 \
+  --bootstrap-alpha 0.05 \
+  --bootstrap-seed 42

@@ -30,7 +30,7 @@ MODEL_ORDER = [
     ("qwen4b", r"\texttt{Qwen3-4B}"),
 ]
 
-DATASETS = ["math", "medicine", "mmlu"]
+DATASETS = ["math", "mmlu", "medicine"]
 VALUE_PATTERN = r"(\d+\.\d+\s*\[\s*\d+\.\d+,\s*\d+\.\d+\s*\])"
 
 
@@ -89,7 +89,7 @@ def get_mean(val_str):
         return -100.0
 
 
-def format_cell(val_str, is_best=False, is_second=False):
+def format_cell(val_str):
     """
     Formats: 79 [76, 81] as mean ± half-width (percentage points).
     """
@@ -129,15 +129,8 @@ def format_cell(val_str, is_best=False, is_second=False):
     if mean_val < 15.0:
         return f"\\textcolor{{gray}}{{{mean_disp}$^*$ \\tiny {ci_disp}}}"
 
-    # 4. Apply Highlights
-    fmt_mean = mean_disp
-    # if is_best:
-    #     fmt_mean = f"\\textbf{{{mean_disp}}}"
-    # elif is_second:
-    #     fmt_mean = f"\\underline{{{mean_disp}}}"
-
     # Inline format: Mean ± CI half-width
-    return f"{fmt_mean} \\tiny\\textcolor{{gray}}{{{ci_disp}}}"
+    return f"{mean_disp} {{\\scriptsize\\color{{gray}}{ci_disp}}}"
 
 
 def format_delta(base_str, rew_str):
@@ -201,50 +194,28 @@ def main():
                     res["Random"] = pass1_airl
                 data[model_key][algo_key][dataset] = res
 
-    # --- Step 2: Ranking Logic (Best Reward per Model/Dataset) ---
-    for model_key, _ in MODEL_ORDER:
-        for dataset in DATASETS:
-            means = []
-            for algo_key, _ in ALGO_ORDER:
-                val = data[model_key][algo_key][dataset]["Reward"]
-                m = get_mean(val)
-                if m > -1:
-                    means.append(m)
-
-            unique = sorted(list(set(means)), reverse=True)
-            best = unique[0] if unique else -99
-            second = unique[1] if len(unique) > 1 else -99
-
-            for algo_key, _ in ALGO_ORDER:
-                val = data[model_key][algo_key][dataset]["Reward"]
-                m = get_mean(val)
-                data[model_key][algo_key][dataset]["is_best"] = m == best and m > -1
-                data[model_key][algo_key][dataset]["is_second"] = m == second and m > -1
-
-    # --- Step 3: Generate LaTeX ---
+    # --- Step 2: Generate LaTeX ---
     latex = []
     latex.append(
-        r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}"
+        r"% Requires \usepackage{booktabs}, \usepackage{xcolor}, \usepackage{multirow}, \usepackage{arydshln}"
     )
-    latex.append(r"\begin{table*}[t]")
-    latex.append(r"\centering")
+    latex.append(r"\begin{table*}[h!]")
     latex.append(r"\scriptsize")
+    latex.append(r"\renewcommand{\arraystretch}{1.16}")
+    latex.append(r"\setlength{\tabcolsep}{3.8pt}")
+    latex.append(r"\centering")
     latex.append(r"\resizebox{\textwidth}{!}{%")
 
-    # Cols: Backbone | Method | GSM(Pass@1, Rew, Delta) | Med(Pass@1, Rew, Delta) | MMLU(Pass@1, Rew, Delta)
-    # Total 10 columns
-    latex.append(r"\begin{tabular}{ll ccc ccc ccc}")
+    # Columns: Method | Granularity | GSM8K(3) | MMLU-Pro(3) | MedReason(3)
+    latex.append(r"\begin{tabular}{l l c c c c c c c c c}")
     latex.append(r"\toprule")
 
-    # Header 1: Datasets
     latex.append(
-        r"& & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} & \multicolumn{3}{c}{\textbf{\textsc{MMLU-Pro}}} \\"
+        r"\textbf{Method} & \textbf{Granularity} & \multicolumn{3}{c}{\textbf{\textsc{GSM8K}}} & \multicolumn{3}{c}{\textbf{\textsc{MMLU-Pro}}} & \multicolumn{3}{c}{\textbf{\textsc{MedReason}}} \\"
     )
     latex.append(r"\cmidrule(lr){3-5} \cmidrule(lr){6-8} \cmidrule(lr){9-11}")
-
-    # Header 2: Metrics
     latex.append(
-        r"\textbf{Backbone} & \textbf{Method} & Pass@1 & Reward & $\Delta$ (pp) & Pass@1 & Reward & $\Delta$ (pp) & Pass@1 & Reward & $\Delta$ (pp)\\"
+        r"& & \textbf{Random} & \textbf{Reward} & $\mathbf{\Delta}$ & \textbf{Random} & \textbf{Reward} & $\mathbf{\Delta}$ & \textbf{Random} & \textbf{Reward} & $\mathbf{\Delta}$ \\"
     )
     latex.append(r"\midrule")
 
@@ -258,41 +229,27 @@ def main():
             # GSM8K Data
             gsm_entry = data[model_key][algo_key]["math"]
             gsm_rand = format_cell(gsm_entry["Random"])
-            gsm_rew = format_cell(
-                gsm_entry["Reward"],
-                gsm_entry.get("is_best"),
-                gsm_entry.get("is_second"),
-            )
+            gsm_rew = format_cell(gsm_entry["Reward"])
             gsm_delta = format_delta(gsm_entry["Random"], gsm_entry["Reward"])
             row_cells.extend([gsm_rand, gsm_rew, gsm_delta])
-
-            # MedReason Data
-            med_entry = data[model_key][algo_key]["medicine"]
-            med_rand = format_cell(med_entry["Random"])
-            med_rew = format_cell(
-                med_entry["Reward"],
-                med_entry.get("is_best"),
-                med_entry.get("is_second"),
-            )
-            med_delta = format_delta(med_entry["Random"], med_entry["Reward"])
-            row_cells.extend([med_rand, med_rew, med_delta])
 
             # MMLU-Pro Data
             mmlu_entry = data[model_key][algo_key]["mmlu"]
             mmlu_rand = format_cell(mmlu_entry["Random"])
-            mmlu_rew = format_cell(
-                mmlu_entry["Reward"],
-                mmlu_entry.get("is_best"),
-                mmlu_entry.get("is_second"),
-            )
+            mmlu_rew = format_cell(mmlu_entry["Reward"])
             mmlu_delta = format_delta(mmlu_entry["Random"], mmlu_entry["Reward"])
             row_cells.extend([mmlu_rand, mmlu_rew, mmlu_delta])
 
-            # Backbone Label (Multirow)
+            # MedReason Data
+            med_entry = data[model_key][algo_key]["medicine"]
+            med_rand = format_cell(med_entry["Random"])
+            med_rew = format_cell(med_entry["Reward"])
+            med_delta = format_delta(med_entry["Random"], med_entry["Reward"])
+            row_cells.extend([med_rand, med_rew, med_delta])
+
+            # Method Label (Multirow)
             if first_row:
-                model_col = (
-                    f"\\multirow{{{num_algos}}}{{*}}{{\\textbf{{{model_name}}}}}"
-                )
+                model_col = f"\\multirow{{{num_algos}}}{{*}}{{{model_name}}}"
             else:
                 model_col = ""
 
@@ -304,15 +261,15 @@ def main():
 
         # Rule between models
         if model_key != MODEL_ORDER[-1][0]:
-            latex.append(r"\midrule")
+            latex.append(r"\cdashline{1-11}[0.5pt/1.8pt]")
 
     latex.append(r"\bottomrule")
-    latex.append(r"\end{tabular}%")
-    latex.append(r"}")
+    latex.append(r"\end{tabular}}")
+    latex.append(r"\vspace{0.6em}")
     latex.append(
-        r"\caption{\textbf{Best-of-N Reranking Performance (\%).} Comparison of standard Pass@1 baseline (from the corresponding \texttt{pass\_at\_k\_table.txt}) vs. Reward Model reranking. Values are percentages. \textbf{Bold} is best, \underline{underline} is second best. $\Delta$ indicates percentage-point improvement over Pass@1. \textcolor{insightteal}{Blue} is positive, \textcolor{purple}{purple} is negative. * symbolises an adversarial mode collapse (results grayed out).}"
+        r"\caption{\textbf{Best-of-16 reranking performance (\%).} Reward-guided reranking is compared against random selection from the same sample set (baseline pass@1 in expectation). $\Delta$ reports percentage-point change (reward minus random).}"
     )
-    latex.append(r"\label{tab:reranking_long}")
+    latex.append(r"\label{tab:reranking_main}")
     latex.append(r"\end{table*}")
 
     output_file = os.path.join(ROOT_DIR, "reranking_results_main.txt")

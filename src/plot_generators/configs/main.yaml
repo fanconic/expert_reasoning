@@ -5,7 +5,7 @@ answer_only_modes:
 
 domains:
   math: /mnt/pdata/caf83/icml_math/outputs
-  medicine: /mnt/pdata/caf83/icml_medicine/outputs
+  medicine: /mnt/pdata/caf83/neurips2026/medicine/outputs
   mmlu: /mnt/pdata/caf83/icml_mmlu/outputs
   aime: /mnt/pdata/caf83/icml_aime/outputs
   aime_2024: /mnt/pdata/caf83/icml_aime/outputs
@@ -25,6 +25,7 @@ preferred_jsonl_files:
   - eval_results_new.jsonl
   - debug.jsonl
   - eval_results.jsonl
+  - eval_results_medical_kd.jsonl
 
 airl_eval_file_from_label: false
 

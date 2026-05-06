@@ -9,14 +9,22 @@ SYSTEM_PROMPT = (
     "<think> reasoning process here </think><answer> answer here </answer>"
 )
 
-SYSTEM_PROMPT_MEDREASON = (
-    "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
-    "first thinks about the reasoning process in the mind and then provides the user with the answer. The reasoning "
-    "process and answer are enclosed within <think> </think> and <answer> </answer> tags, respectively, i.e., "
-    "<think> reasoning process here </think><answer> answer here </answer>"
-    "The answer only includes the final answer, without any explanation, and is one of the options provided in the question, without the letter label, i.e."
-    "Question ... Answer Options: \nA. answer1 \nB. answer2 \nC. answer3 \nD. \n<think> reasoning process here </think><answer> answer </answer>"
-)
+SYSTEM_PROMPT_MEDREASON = """You are an expert medical AI. You must analyze clinical scenarios and adhere strictly to this output format:
+
+1. Enclose your step-by-step reasoning within `<think>` and `</think>` tags. Keep your reasoning strictly <500 words.
+2. Immediately after, output your final conclusion within `<answer>` and `</answer>` tags.
+   The content must be exactly in the format: `<LETTER>. <ANSWER_TEXT>`, where:
+   - `<LETTER>` is one of A, B, C, D
+   - `<ANSWER_TEXT>` is the exact option text corresponding to that letter
+
+Example:
+<think>
+[Your step-by-step clinical reasoning]
+</think>
+<answer>
+C. Hyperthyroidism
+</answer>
+"""
 
 SYSTEM_PROMPT_SCIENCEQA = (
     "A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant "
@@ -481,7 +489,7 @@ def get_medical_grpo(
         Dataset: Processed dataset with prompts formatted for model input
                 and extracted answers.
     """
-    data = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/medreason_corrupted_full")[split]
+    data = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/medreason_corrupted_full_token_filtered_no_violations")[split]
     # optionally subsample
     if ratio < 1.0:
         data = data.select(range(int(len(data) * ratio)))
@@ -512,7 +520,7 @@ def get_medical_distillation(
       - target: str containing <think>…</think><answer>…</answer>
     """
     # this curated set has both the question and the full COT+boxed answer
-    ds = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/medreason_corrupted_full")[split]
+    ds = load_from_disk("/mnt/pdata/caf83/data/expert_reasoning/medreason_corrupted_full_token_filtered_no_violations")[split]
     # optionally subsample
     if ratio < 1.0:
         ds = ds.select(range(int(len(ds) * ratio)))

@@ -995,7 +995,7 @@ class AIRLTrainer(GRPOTrainer):
             logits_pos = self.reward_model(**batch_pos).logits[..., 0]
             y_pos = torch.ones_like(logits_pos) * (1.0 - self.eps)
 
-            if self.dense_rewards in ["full", "partial"]:
+            if self.dense_rewards in ["full", "partial", "partial_fixed"]:
                 base_mask = _completion_mask(batch_pos, pos_prompts[i:j])
                 if self.dense_rewards == "full":
                     mask = base_mask
@@ -1031,7 +1031,7 @@ class AIRLTrainer(GRPOTrainer):
             logits_neg = self.reward_model(**batch_neg).logits[..., 0]
             y_neg = torch.ones_like(logits_neg) * self.eps
             
-            if self.dense_rewards in ["full", "partial"]:
+            if self.dense_rewards in ["full", "partial", "partial_fixed"]:
                 base_mask = _completion_mask(batch_neg, neg_prompts[i:j])
                 if self.dense_rewards == "full":
                     mask = base_mask

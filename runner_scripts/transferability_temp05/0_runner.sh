@@ -8,33 +8,50 @@ RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 : "${DENSITY:=partial_fixed}"
 
 ASSIGNED_TASKS=(
-    # "math math qwen3b"
-    # "math medicine llama3b"
-    # "math mmlu llama8b"
-    # "medicine medicine qwen3b"
-    # "medicine mmlu llama3b"
-    # "mmlu math llama8b"
-    "mmlu mmlu llama8b"
-    "mmlu medicine llama8b"
-    "mmlu math llama8b"
-    "medicine mmlu llama8b"
-    "medicine medicine llama8b"
-    "medicine math llama8b"
-    "math mmlu llama8b"
+    # "math math llama8b"
+    # "math mmlu qwen3b"
+    # "medicine math llama3b"
+    # "medicine medicine llama8b"
+    # "mmlu math qwen3b"
+    # "mmlu medicine llama3b"
+    # "mmlu mmlu llama8b"
+    # "medicine medicine qwen4b"
+    # "math mmlu qwen4b"
+    # "mmlu mmlu qwen7b"
+    # "mmlu medicine qwen7b"
+    # "mmlu math qwen7b"
+    # "medicine mmlu qwen7b"
+    # "medicine medicine qwen7b"
+    # "medicine math qwen7b"
+    # "math mmlu qwen7b"
+    # "math medicine qwen7b"
+    # "math math qwen7b"
+
+    "math medicine qwen4b"
+    "medicine medicine qwen4b"
+    "mmlu medicine qwen4b"
     "math medicine llama8b"
-    "math math llama8b"
+    "medicine medicine llama8b"
+    "mmlu medicine llama8b"
+    # "medicine math qwen4b"
+    # "medicine math llama8b"
+    # "medicine mmlu qwen4b"
+    # "medicine mmlu llama8b"
+
+    # "math math qwen4b"
+    # "math mmlu qwen4b"
 )
 
 REWARD_FLAGS=("model.reward_lb=-5.0" "model.reward_ub=5.0" "model.clip_reward_model=true")
 FAILED_RUNS=()
-LAUNCHED=0
-BASE_SFT_MODEL="qwen4b_sft"
+LAUNCHED=
+BASE_SFT_MODEL="qwen7b_sft"
 
 dataset_outputs_root() {
     local dataset="$1"
     case "$dataset" in
         math) echo "/mnt/pdata/caf83/icml_math/outputs" ;;
-        medicine) echo "/mnt/pdata/caf83/icml_medicine/outputs" ;;
+        medicine) echo "/mnt/pdata/caf83/neurips2026/medicine/outputs" ;;
         mmlu) echo "/mnt/pdata/caf83/icml_mmlu/outputs" ;;
         *)
             echo "Unknown dataset: ${dataset}" >&2
@@ -84,14 +101,15 @@ run_transfer_eval() {
     local POLICY_DATASET_NAME
     POLICY_DATASET_NAME="$(dataset_kd_name "${POLICY_DATASET}")" || return
 
+    local REWARD_MODEL_DIR="${POLICY_ROOT}/${REWARD_ARCH}_${DENSITY}/best_model"
     local POLICY_MODEL_DIR="${POLICY_ROOT}/${BASE_SFT_MODEL}/best_model"
     local TRACE_FILE="${POLICY_MODEL_DIR}/eval_results_${POLICY_DATASET}_${BASE_SFT_MODEL}_t0p5.jsonl"
 
     local WNAME="${REWARD_ARCH}_${DENSITY}"
-    local TRANSFER_LABEL="transfer_${REWARD_ARCH}_${DENSITY}_P_${POLICY_DATASET}_R_${REWARD_DATASET}_t0p5"
+    local TRANSFER_LABEL="transfer_${REWARD_ARCH}_${DENSITY}_P_${POLICY_DATASET}_R_${REWARD_DATASET}"
     local OUT_DIR="${POLICY_ROOT}/${TRANSFER_LABEL}/best_model"
     local OUTFILE="${OUT_DIR}/eval_results_new.jsonl"
-    local MIRROR_FILE="${POLICY_MODEL_DIR}/${TRANSFER_LABEL}.jsonl"
+    local MIRROR_FILE="${POLICY_MODEL_DIR}/${TRANSFER_LABEL}_t0p5.jsonl"
     local LABEL="${TRANSFER_LABEL}_t0p5"
 
     mkdir -p "${OUT_DIR}"
@@ -104,6 +122,7 @@ run_transfer_eval() {
         "model.dense_rewards=${DENSE_VAL}"
         "${REWARD_FLAGS[@]}"
         "dataset.name=${POLICY_DATASET_NAME}"
+        "model.name=${REWARD_MODEL_DIR}"
         "model.policy_name=${POLICY_MODEL_DIR}"
         "sampling.temperature=0.5"
         "++eval.mode=pregenerated_policy_and_reward"

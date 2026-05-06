@@ -17,27 +17,40 @@ ASSIGNED_TASKS=(
     # "mmlu mmlu llama8b"
     # "medicine medicine qwen4b"
     # "math mmlu qwen4b"
-    "mmlu mmlu qwen7b"
-    "mmlu medicine qwen7b"
-    "mmlu math qwen7b"
-    "medicine mmlu qwen7b"
-    "medicine medicine qwen7b"
-    "medicine math qwen7b"
-    "math mmlu qwen7b"
-    "math medicine qwen7b"
-    "math math qwen7b"
+    # "mmlu mmlu qwen7b"
+    # "mmlu medicine qwen7b"
+    # "mmlu math qwen7b"
+    # "medicine mmlu qwen7b"
+    # "medicine medicine qwen7b"
+    # "medicine math qwen7b"
+    # "math mmlu qwen7b"
+    # "math medicine qwen7b"
+    # "math math qwen7b"
+
+    # "math medicine qwen4b"
+    # "medicine medicine qwen4b"
+    # "mmlu medicine qwen4b"
+    # "math medicine llama8b"
+    # "medicine medicine llama8b"
+    # "mmlu medicine llama8b"
+    # "medicine math qwen4b"
+    # "medicine math llama8b"
+    # "medicine mmlu qwen4b"
+    # "medicine mmlu llama8b"
+
+    "mmlu mmlu llama8b"
 )
 
 REWARD_FLAGS=("model.reward_lb=-5.0" "model.reward_ub=5.0" "model.clip_reward_model=true")
 FAILED_RUNS=()
 LAUNCHED=
-BASE_SFT_MODEL="llama8b_sft"
+BASE_SFT_MODEL="qwen7b_sft"
 
 dataset_outputs_root() {
     local dataset="$1"
     case "$dataset" in
         math) echo "/mnt/pdata/caf83/icml_math/outputs" ;;
-        medicine) echo "/mnt/pdata/caf83/icml_medicine/outputs" ;;
+        medicine) echo "/mnt/pdata/caf83/neurips2026/medicine/outputs" ;;
         mmlu) echo "/mnt/pdata/caf83/icml_mmlu/outputs" ;;
         *)
             echo "Unknown dataset: ${dataset}" >&2
@@ -94,7 +107,7 @@ run_transfer_eval() {
     local TRANSFER_LABEL="transfer_${REWARD_ARCH}_${DENSITY}_P_${POLICY_DATASET}_R_${REWARD_DATASET}"
     local OUT_DIR="${POLICY_ROOT}/${TRANSFER_LABEL}/best_model"
     local OUTFILE="${OUT_DIR}/eval_results_new.jsonl"
-    local MIRROR_FILE="${POLICY_MODEL_DIR}/${TRANSFER_LABEL}.jsonl"
+    local MIRROR_FILE="${POLICY_MODEL_DIR}/${TRANSFER_LABEL}_t0p5.jsonl"
     local LABEL="${TRANSFER_LABEL}_t0p5"
 
     mkdir -p "${OUT_DIR}"
