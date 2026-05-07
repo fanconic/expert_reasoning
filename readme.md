@@ -31,13 +31,11 @@ conda activate unsloth_env
 ## Data and Paths
 Many configs reference cluster paths under `/mnt/pdata/...`. For local runs, override paths at launch time (especially `training.output_dir` and any dataset/model path overrides).
 
-## How Experiments Were Run (NeurIPS Archive)
+## How Experiments Were Run
 This repository contains both:
 - single-run Hydra entrypoints (`train_*.py`, `evaluate.py`) for local debugging
 - paper-scale orchestration scripts under `runner_scripts/` (multi-GPU, staged pipeline)
 
-The archived paper outputs are in `figures/archive/`, and the paper PDF is stored as:
-- `figures/archive/NeurIPS_expert_reasoning (1).pdf`
 
 ### 1) Single-Run Commands (Local Smoke Tests)
 Examples (Hydra-based):
