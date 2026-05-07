@@ -1,7 +1,9 @@
 import argparse
 import json
 import math
+import re
 import textwrap
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ if "MPLCONFIGDIR" not in __import__("os").environ:
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 from transformers import AutoTokenizer
 
 try:
@@ -29,6 +32,11 @@ DEFAULT_RUNS = {
     "qwen4b": "qwen4b_full_localisation_expert",
     "qwen7b": "qwen7b_full_localisation_expert",
     "llama8b": "llama8b_full_localisation_expert",
+}
+MODEL_LABELS = {
+    "qwen4b": "Qwen3-4B",
+    "qwen7b": "Qwen2.5-7B",
+    "llama8b": "Llama3.1-8B",
 }
 
 
@@ -80,6 +88,87 @@ def _format_metrics(row: dict[str, Any]) -> str:
 def _truncate_wrapped(text: str, width: int, max_chars: int) -> str:
     clipped = text if len(text) <= max_chars else text[: max_chars - 3] + "..."
     return textwrap.fill(clipped, width=width)
+
+
+def _wrapped_excerpt(
+    text: str,
+    width: int,
+    max_chars: int,
+    max_lines: int,
+    preserve_newlines: bool = True,
+) -> str:
+    clipped = text if len(text) <= max_chars else text[: max_chars - 3] + "..."
+    lines: list[str] = []
+    raw_blocks = clipped.splitlines() if preserve_newlines else [clipped]
+    for block in raw_blocks:
+        wrapped = textwrap.wrap(
+            block,
+            width=max(20, int(width)),
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        if not wrapped:
+            wrapped = [""]
+        lines.extend(wrapped)
+    if len(lines) > max_lines:
+        lines = lines[: max_lines]
+        last = lines[-1].rstrip()
+        if not last.endswith("..."):
+            if len(last) >= 3:
+                last = last[: max(1, len(last) - 3)].rstrip() + "..."
+            else:
+                last = "..."
+        lines[-1] = last
+    return "\n".join(lines)
+
+
+def _highlight_corrupted_text_spans(
+    clean_text: str,
+    pert_text: str,
+    max_spans: int = 8,
+) -> tuple[str, int]:
+    clean_words = re.findall(r"\S+", clean_text)
+    pert_words = re.findall(r"\S+", pert_text)
+    matcher = SequenceMatcher(a=clean_words, b=pert_words, autojunk=False)
+
+    changed_idx: list[int] = []
+    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        if tag in {"replace", "insert"} and j2 > j1:
+            changed_idx.extend(range(j1, j2))
+    if not changed_idx:
+        return pert_text, 0
+
+    matches = list(re.finditer(r"\S+", pert_text))
+    if not matches:
+        return pert_text, 0
+
+    valid = sorted({i for i in changed_idx if 0 <= i < len(matches)})
+    if not valid:
+        return pert_text, 0
+
+    groups: list[tuple[int, int]] = []
+    start = valid[0]
+    prev = valid[0]
+    for i in valid[1:]:
+        if i == prev + 1:
+            prev = i
+        else:
+            groups.append((start, prev))
+            start = i
+            prev = i
+    groups.append((start, prev))
+    groups = groups[: max(1, int(max_spans))]
+
+    inserts: list[tuple[int, str]] = []
+    for s, e in groups:
+        inserts.append((matches[s].start(), "[["))
+        inserts.append((matches[e].end(), "]]"))
+    inserts.sort(reverse=True, key=lambda x: x[0])
+
+    out = pert_text
+    for pos, tok in inserts:
+        out = out[:pos] + tok + out[pos:]
+    return out, len(groups)
 
 
 def _load_run_bundle(root: Path, run_name: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -260,6 +349,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--text-wrap-width", type=int, default=90)
     parser.add_argument("--text-max-chars", type=int, default=1400)
     parser.add_argument(
+        "--prompt-max-lines",
+        type=int,
+        default=8,
+        help="Maximum wrapped lines for the prompt text box.",
+    )
+    parser.add_argument(
+        "--trace-max-lines",
+        type=int,
+        default=11,
+        help="Maximum wrapped lines for each trace text box.",
+    )
+    parser.add_argument(
+        "--manuscript-style",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use cleaner manuscript-oriented layout with dedicated text row.",
+    )
+    parser.add_argument(
+        "--show-metrics",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Overlay per-panel metric text on each trajectory subplot.",
+    )
+    parser.add_argument(
         "--trace-transform",
         type=str,
         default="raw",
@@ -341,11 +454,35 @@ def main() -> None:
     canonical = selected["qwen7b"]
     clean_text = canonical["clean_text"]
     pert_text = canonical["pert_text"]
+    pert_text_highlighted, n_highlight_groups = _highlight_corrupted_text_spans(
+        clean_text=clean_text,
+        pert_text=pert_text,
+        max_spans=10,
+    )
     prompt_text = _prompt_text(canonical.get("prompt", []))
 
-    # Figure: top text panes + bottom triptych.
-    fig, axes = plt.subplots(1, 3, figsize=(22, 8), sharey=True)
-    fig.subplots_adjust(top=0.58, left=0.05, right=0.99, bottom=0.08, wspace=0.12)
+    # Figure: manuscript-style top text row + bottom reward triptych.
+    if args.manuscript_style:
+        fig = plt.figure(figsize=(18.5, 7.9))
+        gs = fig.add_gridspec(
+            nrows=2,
+            ncols=3,
+            height_ratios=[1.00, 1.85],
+            hspace=0.20,
+            wspace=0.20,
+        )
+        text_axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
+        axes = []
+        for i in range(3):
+            if i == 0:
+                axes.append(fig.add_subplot(gs[1, i]))
+            else:
+                axes.append(fig.add_subplot(gs[1, i], sharey=axes[0]))
+        fig.subplots_adjust(top=0.96, left=0.045, right=0.995, bottom=0.095)
+    else:
+        fig, axes = plt.subplots(1, 3, figsize=(22, 8), sharey=True)
+        fig.subplots_adjust(top=0.92, left=0.05, right=0.99, bottom=0.08, wspace=0.12)
+        text_axes = []
 
     transformed_selected: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     all_vals = []
@@ -374,70 +511,160 @@ def main() -> None:
     y_min -= pad
     y_max += pad
 
+    clean_color = "#1f77b4"
+    corrupt_color = "#d62728"
+
     for ax, model_key in zip(axes, ["qwen4b", "qwen7b", "llama8b"]):
         row = selected[model_key]
         clean, pert = transformed_selected[model_key]
-        changed = [int(p) for p in (row.get("changed_token_positions", []) or [])]
+        changed = sorted({int(p) for p in (row.get("changed_token_positions", []) or [])})
 
         x_clean = np.arange(len(clean))
         x_pert = np.arange(len(pert))
 
-        ax.plot(x_clean, clean, color="C0", linewidth=1.6, label="Clean")
-        ax.plot(x_pert, pert, color="C1", linewidth=1.6, label="Corrupted")
-        for p in changed:
-            ax.axvline(p, color="crimson", alpha=0.15, linewidth=1.0)
+        ax.plot(x_clean, clean, color=clean_color, linewidth=2.0, label="Clean", zorder=3)
+        ax.plot(x_pert, pert, color=corrupt_color, linewidth=2.0, label="Corrupted", zorder=3)
+        if changed:
+            first_changed = int(changed[0])
+            for p in changed[1:]:
+                ax.axvline(p, color="#dc2626", alpha=0.10, linewidth=0.9, linestyle="--", zorder=1)
+            ax.axvspan(first_changed - 0.5, first_changed + 0.5, color="#ef4444", alpha=0.20, zorder=1)
+            ax.axvline(first_changed, color="#991b1b", alpha=0.98, linewidth=2.1, zorder=2)
 
         ax.set_ylim(y_min, y_max)
         ax.set_xlabel("Token index")
         ax.set_title(
-            f"{model_key}\n{_format_metrics(row)}",
-            fontsize=10,
+            MODEL_LABELS.get(model_key, model_key),
+            fontsize=12.5,
+            pad=7,
+            fontweight="semibold",
         )
-        ax.grid(alpha=0.22, linestyle="--", linewidth=0.6)
+        if args.show_metrics:
+            ax.text(
+                0.015,
+                0.985,
+                _format_metrics(row),
+                transform=ax.transAxes,
+                va="top",
+                ha="left",
+                fontsize=8.2,
+                color="#1f2937",
+                bbox={
+                    "boxstyle": "round,pad=0.22",
+                    "facecolor": "#ffffff",
+                    "edgecolor": "#d1d5db",
+                    "alpha": 0.90,
+                },
+            )
+        ax.grid(alpha=0.18, linestyle="--", linewidth=0.7, zorder=0)
+        ax.tick_params(axis="both", labelsize=10)
+        for spine in ax.spines.values():
+            spine.set_linewidth(0.9)
+            spine.set_color("#9ca3af")
 
-    axes[0].set_ylabel("Normalized Reward (z)" if args.trace_transform == "zscore_smooth" else "Reward")
-    axes[0].legend(loc="upper right", fontsize=9, frameon=True)
+    axes[0].set_ylabel("Normalized Reward (z)" if args.trace_transform == "zscore_smooth" else "Reward", fontsize=11.5)
 
-    clean_block = _truncate_wrapped(clean_text, args.text_wrap_width, args.text_max_chars)
-    pert_block = _truncate_wrapped(pert_text, args.text_wrap_width, args.text_max_chars)
-    prompt_block = _truncate_wrapped(prompt_text, args.text_wrap_width, min(500, args.text_max_chars))
-
-    fig.text(
-        0.02,
-        0.98,
-        "Prompt:\n" + prompt_block,
-        va="top",
-        ha="left",
-        fontsize=9,
-        bbox={"boxstyle": "round,pad=0.35", "facecolor": "#f6f8fa", "edgecolor": "#d0d7de"},
+    prompt_width = max(44, args.text_wrap_width - 18)
+    trace_width = max(50, args.text_wrap_width - 10)
+    clean_block = _wrapped_excerpt(
+        clean_text,
+        width=trace_width,
+        max_chars=args.text_max_chars,
+        max_lines=args.trace_max_lines,
+        preserve_newlines=True,
     )
-    fig.text(
-        0.35,
-        0.98,
-        "Clean trace:\n" + clean_block,
-        va="top",
-        ha="left",
-        fontsize=8.7,
-        family="monospace",
-        bbox={"boxstyle": "round,pad=0.35", "facecolor": "#f8fff8", "edgecolor": "#9dd89d"},
+    pert_block = _wrapped_excerpt(
+        pert_text_highlighted,
+        width=trace_width,
+        max_chars=args.text_max_chars,
+        max_lines=args.trace_max_lines,
+        preserve_newlines=True,
     )
-    fig.text(
-        0.67,
-        0.98,
-        "Corrupted trace:\n" + pert_block,
-        va="top",
-        ha="left",
-        fontsize=8.7,
-        family="monospace",
-        bbox={"boxstyle": "round,pad=0.35", "facecolor": "#fff8f8", "edgecolor": "#e2a8a8"},
+    prompt_block = _wrapped_excerpt(
+        prompt_text,
+        width=prompt_width,
+        max_chars=min(600, args.text_max_chars),
+        max_lines=args.prompt_max_lines,
+        preserve_newlines=True,
     )
 
-    fig.suptitle(
-        f"Token Reward Comparison [{args.trace_transform}] | "
-        f"key=(prompt={prompt_idx}, severity={severity}, variant={variant_idx})",
-        y=0.62,
-        fontsize=13,
-    )
+    if args.manuscript_style:
+        corrupt_title = "Corrupted Trace"
+        if n_highlight_groups > 0:
+            corrupt_title += " (edits: [[...]] )"
+        text_specs = [
+            ("Prompt", prompt_block, "#f8fafc", "#cbd5e1", "sans-serif", 10.2),
+            ("Clean Trace", clean_block, "#f0fdf4", "#86efac", "monospace", 9.4),
+            (corrupt_title, pert_block, "#fff1f2", "#fda4af", "monospace", 9.4),
+        ]
+        for ax, (title, body, bg, edge, family, fs) in zip(text_axes, text_specs):
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_facecolor(bg)
+            for spine in ax.spines.values():
+                spine.set_visible(True)
+                spine.set_linewidth(1.0)
+                spine.set_color(edge)
+            ax.set_title(title, loc="left", fontsize=11.7, pad=5, fontweight="semibold")
+            ax.text(
+                0.015,
+                0.97,
+                body,
+                va="top",
+                ha="left",
+                fontsize=fs,
+                family=family,
+                color="#111827",
+                transform=ax.transAxes,
+                clip_on=True,
+            )
+
+        legend_handles = [
+            Line2D([0], [0], color=clean_color, lw=2.2, label="Clean"),
+            Line2D([0], [0], color=corrupt_color, lw=2.2, label="Corrupted"),
+            Line2D([0], [0], color="#991b1b", lw=2.2, label="First perturbation token"),
+        ]
+        axes[0].legend(
+            handles=legend_handles,
+            loc="upper left",
+            fontsize=10.0,
+            frameon=True,
+            framealpha=0.90,
+            edgecolor="#d1d5db",
+        )
+    else:
+        axes[0].legend(loc="upper right", fontsize=9, frameon=True)
+        fig.text(
+            0.02,
+            0.98,
+            "Prompt:\n" + prompt_block,
+            va="top",
+            ha="left",
+            fontsize=9,
+            bbox={"boxstyle": "round,pad=0.35", "facecolor": "#f6f8fa", "edgecolor": "#d0d7de"},
+        )
+        fig.text(
+            0.35,
+            0.98,
+            "Clean trace:\n" + clean_block,
+            va="top",
+            ha="left",
+            fontsize=8.7,
+            family="monospace",
+            bbox={"boxstyle": "round,pad=0.35", "facecolor": "#f8fff8", "edgecolor": "#9dd89d"},
+        )
+        fig.text(
+            0.67,
+            0.98,
+            "Corrupted trace:\n" + pert_block,
+            va="top",
+            ha="left",
+            fontsize=8.7,
+            family="monospace",
+            bbox={"boxstyle": "round,pad=0.35", "facecolor": "#fff8f8", "edgecolor": "#e2a8a8"},
+        )
 
     stem = f"{args.prefix}_p{prompt_idx}_s{severity}_v{variant_idx}"
     out_png = args.output_dir / f"{stem}.png"
