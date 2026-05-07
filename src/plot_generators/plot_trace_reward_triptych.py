@@ -13,6 +13,7 @@ if "MPLCONFIGDIR" not in __import__("os").environ:
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
+from matplotlib.offsetbox import AnchoredOffsetbox, HPacker, TextArea, VPacker
 from transformers import AutoTokenizer
 
 try:
@@ -120,6 +121,87 @@ def _wrapped_excerpt(
                 last = "..."
         lines[-1] = last
     return "\n".join(lines)
+
+
+def _truncate_lines_with_ellipsis(text: str, max_lines: int) -> str:
+    lines = text.splitlines()
+    if max_lines <= 0:
+        return "..."
+    if len(lines) <= max_lines:
+        return text
+    kept = lines[:max_lines]
+    last = kept[-1].rstrip()
+    if not last.endswith("..."):
+        last = (last + "...") if last else "..."
+    kept[-1] = last
+    return "\n".join(kept)
+
+
+def _max_lines_for_axis(fig: plt.Figure, ax: plt.Axes, fontsize: float) -> int:
+    # Approximate line capacity inside the text box area.
+    fig_h_in = float(fig.get_size_inches()[1])
+    ax_h_frac = float(ax.get_position().height)
+    ax_h_in = max(1e-6, fig_h_in * ax_h_frac)
+    usable_h_in = ax_h_in * 0.80
+    line_h_in = max(1e-6, (float(fontsize) / 72.0) * 1.32)
+    return max(1, int(math.floor(usable_h_in / line_h_in)))
+
+
+def _render_highlighted_text_in_box(
+    ax: plt.Axes,
+    text_with_markup: str,
+    *,
+    fontsize: float,
+    family: str,
+    base_color: str = "#111827",
+    highlight_color: str = "#b91c1c",
+) -> None:
+    """
+    Render text that uses [[...]] markup for highlighted spans with inline color.
+    """
+    lines = text_with_markup.splitlines()
+    line_boxes = []
+    for line in lines:
+        parts = []
+        cursor = 0
+        for m in re.finditer(r"\[\[(.*?)\]\]", line):
+            if m.start() > cursor:
+                parts.append((line[cursor : m.start()], False))
+            parts.append((m.group(1), True))
+            cursor = m.end()
+        if cursor < len(line):
+            parts.append((line[cursor:], False))
+        if not parts:
+            parts = [("", False)]
+
+        seg_boxes = []
+        for seg_text, is_hi in parts:
+            if seg_text == "":
+                seg_text = " "
+            seg_boxes.append(
+                TextArea(
+                    seg_text,
+                    textprops={
+                        "fontsize": float(fontsize),
+                        "family": family,
+                        "color": highlight_color if is_hi else base_color,
+                        "fontweight": "semibold" if is_hi else "normal",
+                    },
+                )
+            )
+        line_boxes.append(HPacker(children=seg_boxes, align="baseline", pad=0, sep=0))
+
+    vbox = VPacker(children=line_boxes, align="left", pad=0, sep=0)
+    anchored = AnchoredOffsetbox(
+        loc="upper left",
+        child=vbox,
+        pad=0.0,
+        borderpad=0.0,
+        frameon=False,
+        bbox_to_anchor=(0.015, 0.97),
+        bbox_transform=ax.transAxes,
+    )
+    ax.add_artist(anchored)
 
 
 def _highlight_corrupted_text_spans(
@@ -361,6 +443,18 @@ def parse_args() -> argparse.Namespace:
         help="Maximum wrapped lines for each trace text box.",
     )
     parser.add_argument(
+        "--prompt-box-font-size",
+        type=float,
+        default=11.6,
+        help="Font size for prompt text box content.",
+    )
+    parser.add_argument(
+        "--trace-box-font-size",
+        type=float,
+        default=10.8,
+        help="Font size for clean/corrupted trace text box content.",
+    )
+    parser.add_argument(
         "--manuscript-style",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -564,8 +658,9 @@ def main() -> None:
 
     axes[0].set_ylabel("Normalized Reward (z)" if args.trace_transform == "zscore_smooth" else "Reward", fontsize=11.5)
 
-    prompt_width = max(44, args.text_wrap_width - 18)
-    trace_width = max(50, args.text_wrap_width - 10)
+    # Slightly narrower wrapping so larger manuscript fonts stay fully inside boxes.
+    prompt_width = max(32, args.text_wrap_width - 30)
+    trace_width = max(40, args.text_wrap_width - 24)
     clean_block = _wrapped_excerpt(
         clean_text,
         width=trace_width,
@@ -591,11 +686,32 @@ def main() -> None:
     if args.manuscript_style:
         corrupt_title = "Corrupted Trace"
         if n_highlight_groups > 0:
-            corrupt_title += " (edits: [[...]] )"
+            corrupt_title += " (red = edited)"
         text_specs = [
-            ("Prompt", prompt_block, "#f8fafc", "#cbd5e1", "sans-serif", 10.2),
-            ("Clean Trace", clean_block, "#f0fdf4", "#86efac", "monospace", 9.4),
-            (corrupt_title, pert_block, "#fff1f2", "#fda4af", "monospace", 9.4),
+            (
+                "Prompt",
+                prompt_block,
+                "#f8fafc",
+                "#cbd5e1",
+                "sans-serif",
+                float(args.prompt_box_font_size),
+            ),
+            (
+                "Clean Trace",
+                clean_block,
+                "#f0fdf4",
+                "#86efac",
+                "monospace",
+                float(args.trace_box_font_size),
+            ),
+            (
+                corrupt_title,
+                pert_block,
+                "#fff1f2",
+                "#fda4af",
+                "monospace",
+                float(args.trace_box_font_size),
+            ),
         ]
         for ax, (title, body, bg, edge, family, fs) in zip(text_axes, text_specs):
             ax.set_xlim(0, 1)
@@ -608,18 +724,37 @@ def main() -> None:
                 spine.set_linewidth(1.0)
                 spine.set_color(edge)
             ax.set_title(title, loc="left", fontsize=11.7, pad=5, fontweight="semibold")
-            ax.text(
-                0.015,
-                0.97,
-                body,
-                va="top",
-                ha="left",
-                fontsize=fs,
-                family=family,
-                color="#111827",
-                transform=ax.transAxes,
-                clip_on=True,
-            )
+
+            # Auto-fit text vertically: reduce font a bit if needed, then truncate.
+            fs_use = float(fs)
+            max_fit = _max_lines_for_axis(fig, ax, fs_use)
+            line_count = len(body.splitlines())
+            while line_count > max_fit and fs_use > 8.4:
+                fs_use -= 0.4
+                max_fit = _max_lines_for_axis(fig, ax, fs_use)
+            body_fit = _truncate_lines_with_ellipsis(body, max_fit)
+            if title.startswith("Corrupted Trace"):
+                _render_highlighted_text_in_box(
+                    ax,
+                    body_fit,
+                    fontsize=fs_use,
+                    family=family,
+                    base_color="#111827",
+                    highlight_color="#b91c1c",
+                )
+            else:
+                ax.text(
+                    0.015,
+                    0.97,
+                    body_fit,
+                    va="top",
+                    ha="left",
+                    fontsize=fs_use,
+                    family=family,
+                    color="#111827",
+                    transform=ax.transAxes,
+                    clip_on=True,
+                )
 
         legend_handles = [
             Line2D([0], [0], color=clean_color, lw=2.2, label="Clean"),
