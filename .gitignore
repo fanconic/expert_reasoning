@@ -27,6 +27,8 @@ grpo_trainer_lora_model*
 # C extensions
 *.so
 tests/
+!tests/
+!tests/test_airl_segment_utils.py
 docs/REPO_CLEANUP_PLAN.md
 
 # Distribution / packaging
@@ -195,4 +197,3 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-

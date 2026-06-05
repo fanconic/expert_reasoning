@@ -30,6 +30,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_from_disk
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from transformers import AutoTokenizer
 
 

@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - base
+  - _self_
+
+model:
+  critic_type: standard
+  reward_mode: standard
+  dense_rewards: "partial_fixed"
+  dense_partial_fixed_n: 15
+  critic_density: interval
+  policy_reward_density: sequence
+  segment_tokens: 15
+
+wandb:
+  run_name: qwen7b_interval_original_base_kl0p01_ebs256

@@ -31,6 +31,12 @@ from typing import Any, Dict, List, Optional, Union, Callable
 import os
 import random
 import re
+from src.utils.transformers_compat import (
+    configure_pytorch_transformers_runtime,
+    ensure_transformers_cache_alias,
+)
+
+configure_pytorch_transformers_runtime()
 
 # Third-party imports
 from peft import set_peft_model_state_dict
@@ -50,6 +56,9 @@ from transformers import (
     is_wandb_available,
     get_scheduler
 )
+
+ensure_transformers_cache_alias()
+
 from trl import GRPOTrainer
 from transformers.utils import is_peft_available
 from trl.data_utils import apply_chat_template, is_conversational
@@ -68,7 +77,29 @@ from collections import deque
 
 # Local imports
 from src.config.irl_config import IRLConfig
-from unsloth_compiled_cache.UnslothGRPOTrainer import UnslothEfficientGRPO, grpo_compute_loss_slow, align_logprobs_with_mask
+from src.training.airl_segment_utils import (
+    SegmentLayout,
+    assert_all_finite,
+    broadcast_segment_values_to_tokens,
+    fixed_interval_boundary_mask,
+    gather_token_positions,
+    masked_mean,
+    normalize_segments_by_group,
+    segment_layout_from_boundaries,
+    sum_tokens_by_segment,
+)
+try:
+    from unsloth_compiled_cache.UnslothGRPOTrainer import (
+        UnslothEfficientGRPO,
+        align_logprobs_with_mask,
+        grpo_compute_loss_slow,
+    )
+except ImportError:
+    from src.training.UnslothGRPOTrainer import (
+        UnslothEfficientGRPO,
+        align_logprobs_with_mask,
+        grpo_compute_loss_slow,
+    )
 
 # Conditional imports
 if is_vllm_available():
@@ -307,6 +338,27 @@ def backfill_rewards(rewards, mask):
     
     return result
 
+
+def binary_auroc_from_logits(pos_logits: torch.Tensor, neg_logits: torch.Tensor) -> float:
+    """Compute AUROC for discriminator logits without making sklearn required."""
+    pos = pos_logits.detach().float().view(-1).cpu().numpy()
+    neg = neg_logits.detach().float().view(-1).cpu().numpy()
+    if pos.size == 0 or neg.size == 0:
+        return float("nan")
+    scores = np.concatenate([pos, neg])
+    labels = np.concatenate([np.ones_like(pos), np.zeros_like(neg)])
+    try:
+        from sklearn.metrics import roc_auc_score
+
+        return float(roc_auc_score(labels, scores))
+    except Exception:
+        order = np.argsort(scores)
+        ranks = np.empty_like(order, dtype=np.float64)
+        ranks[order] = np.arange(1, scores.size + 1, dtype=np.float64)
+        pos_ranks = ranks[labels == 1]
+        return float((pos_ranks.sum() - pos.size * (pos.size + 1) / 2) / (pos.size * neg.size))
+
+
 def switch_label_if_correct_func(
     prompts_neg: List[Any], 
     completions_neg: List[Any], 
@@ -443,6 +495,28 @@ class AIRLTrainer(GRPOTrainer):
         self.classifier_loss = args.classifier_loss
         self.normalise_rewards = args.normalise_rewards
         self.expert_error_rate = args.expert_error_rate
+        self.critic_type = getattr(args, "critic_type", "standard")
+        self.reward_mode = getattr(args, "reward_mode", "standard")
+        self.critic_density = getattr(args, "critic_density", "sequence")
+        self.policy_reward_density = getattr(args, "policy_reward_density", "sequence")
+        self.segment_tokens = int(getattr(args, "segment_tokens", 15))
+        self.airl_gamma = float(getattr(args, "airl_gamma", 1.0))
+        self.h_head_lr_mult = float(getattr(args, "h_head_lr_mult", 0.5))
+        self.h_l2_penalty = float(getattr(args, "h_l2_penalty", 1e-4) or 0.0)
+        self.shape_l2_penalty = float(getattr(args, "shape_l2_penalty", 1e-4) or 0.0)
+        self.shape_clamp = getattr(args, "shape_clamp", None)
+        self.lambda_shape = float(getattr(args, "lambda_shape", 1.0))
+        self.use_segment_local_advantage = bool(getattr(args, "use_segment_local_advantage", False))
+        self.lambda_local = float(getattr(args, "lambda_local", 0.05))
+        self.local_signal = getattr(args, "local_signal", "drop_f")
+        self.clipped_delta_f_min = float(getattr(args, "clipped_delta_f_min", -2.0))
+        self.clipped_delta_f_max = float(getattr(args, "clipped_delta_f_max", 2.0))
+        self.log_segment_example = bool(getattr(args, "log_segment_example", False))
+        self.debug_check_segment_finite = bool(getattr(args, "debug_check_segment_finite", True))
+        self._segment_example_logged = False
+        self._last_segment_local = None
+        if self.policy_reward_density == "token" and self.critic_type == "airl_segment":
+            raise ValueError("policy_reward_density='token' is not supported for critic_type='airl_segment'. Use 'sequence' or 'interval'.")
         
         # This is used for later propagation in the unlsoth code, if we calculate dense rewards.
         self.batch_max_left_pad = None
@@ -484,7 +558,8 @@ class AIRLTrainer(GRPOTrainer):
         opt_cls, opt_kwargs = Trainer.get_optimizer_cls_and_kwargs(tmp_args)
         opt_kwargs["lr"] = args.reward_learning_rate
         opt_kwargs["weight_decay"] = getattr(args, "reward_weight_decay", opt_kwargs.get("weight_decay", 0.0))
-        self.reward_optimizer = opt_cls(self.reward_model.parameters(), **opt_kwargs)
+        reward_params = self._reward_optimizer_params(args.reward_learning_rate)
+        self.reward_optimizer = opt_cls(reward_params, **opt_kwargs)
         self.reward_optimizer.zero_grad()
         self.reward_model.to(self.accelerator.device)  # harmless if already on device
         self.reward_model, self.reward_optimizer = self.accelerator.prepare(
@@ -522,6 +597,72 @@ class AIRLTrainer(GRPOTrainer):
         if self.buffer_size > 0:
             self.neg_replay_buffer = deque(maxlen=self.buffer_size * self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps) 
             self.pos_replay_buffer = deque(maxlen=self.buffer_size * self.args.per_device_train_batch_size * self.args.gradient_accumulation_steps)  # Keep enough positives for balanced sampling
+
+    def _unwrapped_reward_model(self):
+        if hasattr(self, "accelerator"):
+            try:
+                return self.accelerator.unwrap_model(self.reward_model)
+            except Exception:
+                pass
+        return self.reward_model
+
+    def _find_reward_head(self, names):
+        if isinstance(names, str):
+            names = [names]
+
+        def safe_getattr(obj, name):
+            try:
+                return getattr(obj, name)
+            except Exception:
+                return None
+
+        seen = set()
+        stack = [self.reward_model, self._unwrapped_reward_model()]
+        while stack:
+            obj = stack.pop()
+            if obj is None or id(obj) in seen:
+                continue
+            seen.add(id(obj))
+            for name in names:
+                found = safe_getattr(obj, name)
+                if found is not None:
+                    return found
+            for child_name in ("base_model", "model", "module"):
+                child = safe_getattr(obj, child_name)
+                if child is not None:
+                    stack.append(child)
+
+        unwrapped = self._unwrapped_reward_model()
+        if hasattr(unwrapped, "named_modules"):
+            suffixes = tuple(f".{name}" for name in names)
+            for module_name, module in unwrapped.named_modules():
+                if module_name in names or module_name.endswith(suffixes):
+                    return module
+        return None
+
+    def _reward_optimizer_params(self, reward_learning_rate: float):
+        if self.critic_type != "airl_segment":
+            return self.reward_model.parameters()
+
+        h_head = self._find_reward_head("h_head")
+        if h_head is None:
+            logger.warning("AIRL segment critic requested but h_head was not found; using one reward LR group.")
+            return self.reward_model.parameters()
+
+        h_param_ids = {id(p) for p in h_head.parameters()}
+        h_params = [p for p in h_head.parameters() if p.requires_grad]
+        base_params = [
+            p
+            for p in self.reward_model.parameters()
+            if p.requires_grad and id(p) not in h_param_ids
+        ]
+
+        param_groups = []
+        if base_params:
+            param_groups.append({"params": base_params, "lr": reward_learning_rate})
+        if h_params:
+            param_groups.append({"params": h_params, "lr": reward_learning_rate * self.h_head_lr_mult})
+        return param_groups if param_groups else self.reward_model.parameters()
 
     # -----------------------------------------------------------------------
     # Core overwrites overrides
@@ -862,6 +1003,524 @@ class AIRLTrainer(GRPOTrainer):
         every_n_mask[torch.arange(bs, device=device),last_indices] |= base_completion_mask.any(dim=1)
         return every_n_mask
 
+    def _airl_segment_boundary_mask(self, full_batch, base_completion_mask):
+        """Return segment boundaries for the AIRL segment critic."""
+        if self.dense_rewards == "partial":
+            return self._sentence_boundary_mask(full_batch, base_completion_mask)
+        if self.dense_rewards == "partial_fixed":
+            n = getattr(self.args, "dense_partial_fixed_n", None) or self.segment_tokens
+            return fixed_interval_boundary_mask(base_completion_mask, int(n))
+        return fixed_interval_boundary_mask(base_completion_mask, self.segment_tokens)
+
+    def _tokenize_texts(self, tokenizer, texts: list[str], device):
+        return tokenizer(
+            text=texts,
+            return_tensors="pt",
+            padding="max_length",
+            padding_side="right",
+            add_special_tokens=False,
+            truncation=True,
+            max_length=self.max_length,
+        ).to(device)
+
+    def _prompt_only_texts(self, prompts_chunk, tokenizer, is_chat: bool):
+        empty = [[{"role": "assistant", "content": ""}]] * len(prompts_chunk)
+        return build_texts(prompts_chunk, empty, tokenizer, is_chat=is_chat)
+
+    def _completion_mask_from_tokenized(self, batch, prompts_chunk, tokenizer, is_chat: bool):
+        prompt_batch = self._tokenize_texts(
+            tokenizer,
+            self._prompt_only_texts(prompts_chunk, tokenizer, is_chat),
+            batch["input_ids"].device,
+        )
+        prompt_lens = prompt_batch["attention_mask"].sum(dim=1)
+        attn = batch["attention_mask"].bool()
+        idx = torch.arange(attn.size(1), device=attn.device).unsqueeze(0)
+        return attn & (idx >= prompt_lens.unsqueeze(1))
+
+    def _apply_scalar_head(self, head, hidden_states: torch.Tensor) -> torch.Tensor:
+        out = head(hidden_states)
+        if isinstance(out, (tuple, list)):
+            out = out[0]
+        if hasattr(out, "logits"):
+            out = out.logits
+        if out.ndim >= 1 and out.shape[-1] == 1:
+            out = out.squeeze(-1)
+        return out
+
+    def _reward_hidden_states(self, batch):
+        outputs = self.reward_model(
+            **batch,
+            output_hidden_states=True,
+            return_dict=True,
+        )
+        hidden_states = getattr(outputs, "hidden_states", None)
+        if hidden_states is None:
+            raise RuntimeError(
+                "AIRL segment critic requires reward_model outputs.hidden_states. "
+                "Ensure the reward backbone supports output_hidden_states=True."
+            )
+        return hidden_states[-1]
+
+    def _align_policy_segment_logps(
+        self,
+        reward_valid_mask: torch.Tensor,
+        policy_seg_logps: torch.Tensor,
+        policy_valid_mask: torch.Tensor,
+    ):
+        aligned = torch.zeros_like(reward_valid_mask, dtype=policy_seg_logps.dtype)
+        seq_logps = (policy_seg_logps * policy_valid_mask.to(policy_seg_logps.dtype)).sum(dim=1)
+        mismatches = 0
+        for b in range(reward_valid_mask.size(0)):
+            r_count = int(reward_valid_mask[b].sum().item())
+            p_count = int(policy_valid_mask[b].sum().item())
+            if r_count == 0:
+                continue
+            if r_count == p_count:
+                aligned[b, :r_count] = policy_seg_logps[b, :r_count]
+            else:
+                aligned[b, :r_count] = seq_logps[b] / float(max(r_count, 1))
+                mismatches += 1
+        return aligned.detach(), mismatches
+
+    def _policy_segment_logps(self, prompts, completions, is_chat: bool, reward_valid_mask: torch.Tensor):
+        """Compute detached policy log probability sums aligned to reward segments."""
+        device = self.accelerator.device
+        texts = build_texts(prompts, completions, self.policy_tokenizer, is_chat=is_chat)
+        batch = self._tokenize_texts(self.policy_tokenizer, texts, device)
+        completion_mask = self._completion_mask_from_tokenized(
+            batch, prompts, self.policy_tokenizer, is_chat
+        )
+
+        with torch.no_grad():
+            outputs = self.model(**batch)
+            logits = outputs.logits[:, :-1, :]
+            labels = batch["input_ids"][:, 1:]
+            token_logps = torch.log_softmax(logits.float(), dim=-1).gather(
+                -1, labels.unsqueeze(-1)
+            ).squeeze(-1)
+            full_logps = torch.zeros(
+                batch["input_ids"].shape,
+                dtype=token_logps.dtype,
+                device=device,
+            )
+            full_logps[:, 1:] = token_logps
+            full_logps = full_logps * completion_mask.to(full_logps.dtype)
+
+        boundary_mask = self._airl_segment_boundary_mask(batch, completion_mask)
+        policy_layout = segment_layout_from_boundaries(boundary_mask, completion_mask)
+        policy_seg_logps = sum_tokens_by_segment(full_logps, policy_layout)
+        return self._align_policy_segment_logps(
+            reward_valid_mask,
+            policy_seg_logps,
+            policy_layout.valid_mask,
+        )
+
+    def _airl_segment_forward_chunk(
+        self,
+        prompts,
+        completions,
+        *,
+        is_chat: bool,
+        include_policy_logps: bool,
+    ):
+        device = self.accelerator.device
+        texts = build_texts(prompts, completions, self.reward_tokenizer, is_chat=is_chat)
+        batch = self._tokenize_texts(self.reward_tokenizer, texts, device)
+        completion_mask = self._completion_mask_from_tokenized(
+            batch, prompts, self.reward_tokenizer, is_chat
+        )
+        boundary_mask = self._airl_segment_boundary_mask(batch, completion_mask)
+        layout = segment_layout_from_boundaries(boundary_mask, completion_mask)
+
+        hidden_states = self._reward_hidden_states(batch)
+        g_head = self._find_reward_head(["lm_head", "classifier", "score", "g_head"])
+        h_head = self._find_reward_head("h_head")
+        if g_head is None or h_head is None:
+            raise RuntimeError(
+                "AIRL segment critic requires a scalar g/lm/classifier head and h_head."
+            )
+
+        end_hidden = gather_token_positions(hidden_states, layout.ends)
+        prev_hidden = gather_token_positions(hidden_states, layout.prev_indices)
+        next_hidden = gather_token_positions(hidden_states, layout.next_indices)
+
+        g = self._apply_scalar_head(g_head, end_hidden)
+        h_prev = self._apply_scalar_head(h_head, prev_hidden)
+        h_next = self._apply_scalar_head(h_head, next_hidden)
+        shape = self.airl_gamma * h_next - h_prev
+        if self.shape_clamp is not None:
+            clamp = float(self.shape_clamp)
+            shape = torch.clamp(shape, min=-clamp, max=clamp)
+        f = g + shape
+
+        valid_mask = layout.valid_mask
+        g = torch.where(valid_mask, g, torch.zeros_like(g))
+        h_prev = torch.where(valid_mask, h_prev, torch.zeros_like(h_prev))
+        h_next = torch.where(valid_mask, h_next, torch.zeros_like(h_next))
+        shape = torch.where(valid_mask, shape, torch.zeros_like(shape))
+        f = torch.where(valid_mask, f, torch.zeros_like(f))
+
+        if include_policy_logps:
+            log_pi_seg, mismatches = self._policy_segment_logps(
+                prompts, completions, is_chat, valid_mask
+            )
+            log_pi_seg = log_pi_seg.to(device=f.device, dtype=f.dtype)
+        else:
+            log_pi_seg = torch.zeros_like(f)
+            mismatches = 0
+
+        if self.debug_check_segment_finite:
+            for name, value in {
+                "g": g,
+                "h_prev": h_prev,
+                "h_next": h_next,
+                "shape": shape,
+                "f": f,
+                "log_pi_seg": log_pi_seg,
+            }.items():
+                assert_all_finite(name, torch.where(valid_mask, value, torch.zeros_like(value)))
+
+        positions = torch.arange(completion_mask.size(1), device=device).unsqueeze(0)
+        completion_lens = completion_mask.long().sum(dim=1)
+        start_fallback = torch.zeros_like(completion_lens)
+        completion_starts = torch.where(
+            completion_lens > 0,
+            torch.where(completion_mask, positions, completion_mask.size(1)).min(dim=1).values,
+            start_fallback,
+        )
+
+        return {
+            "g": g,
+            "h_prev": h_prev,
+            "h_next": h_next,
+            "shape": shape,
+            "f": f,
+            "log_pi_seg": log_pi_seg.detach(),
+            "valid_mask": valid_mask,
+            "layout": layout,
+            "completion_starts": completion_starts,
+            "completion_lens": completion_lens,
+            "policy_segment_mismatches": mismatches,
+        }
+
+    def _pad_segments(self, value: torch.Tensor, max_segments: int, fill_value: float = 0.0):
+        if value.size(1) == max_segments:
+            return value
+        pad_shape = (value.size(0), max_segments - value.size(1))
+        pad = torch.full(
+            pad_shape,
+            fill_value=fill_value,
+            dtype=value.dtype,
+            device=value.device,
+        )
+        return torch.cat([value, pad], dim=1)
+
+    def _concat_airl_segment_chunks(self, chunks):
+        max_segments = max(chunk["valid_mask"].size(1) for chunk in chunks)
+        tensor_keys = ["g", "h_prev", "h_next", "shape", "f", "log_pi_seg", "valid_mask"]
+        out = {}
+        for key in tensor_keys:
+            fill = False if chunks[0][key].dtype == torch.bool else 0.0
+            out[key] = torch.cat(
+                [self._pad_segments(chunk[key], max_segments, fill) for chunk in chunks],
+                dim=0,
+            )
+
+        layout = SegmentLayout(
+            starts=torch.cat([self._pad_segments(chunk["layout"].starts, max_segments, 0) for chunk in chunks], dim=0),
+            ends=torch.cat([self._pad_segments(chunk["layout"].ends, max_segments, 0) for chunk in chunks], dim=0),
+            prev_indices=torch.cat([self._pad_segments(chunk["layout"].prev_indices, max_segments, 0) for chunk in chunks], dim=0),
+            next_indices=torch.cat([self._pad_segments(chunk["layout"].next_indices, max_segments, 0) for chunk in chunks], dim=0),
+            valid_mask=out["valid_mask"],
+        )
+        out["layout"] = layout
+        out["completion_starts"] = torch.cat([chunk["completion_starts"] for chunk in chunks], dim=0)
+        out["completion_lens"] = torch.cat([chunk["completion_lens"] for chunk in chunks], dim=0)
+        out["policy_segment_mismatches"] = sum(chunk["policy_segment_mismatches"] for chunk in chunks)
+        return out
+
+    def _airl_segment_components(self, prompts, completions, *, is_chat: bool, include_policy_logps: bool):
+        chunks = []
+        micro_bs = max(1, int(getattr(self, "max_micro_batch", 1)))
+        for i in range(0, len(completions), micro_bs):
+            j = min(i + micro_bs, len(completions))
+            chunks.append(
+                self._airl_segment_forward_chunk(
+                    prompts[i:j],
+                    completions[i:j],
+                    is_chat=is_chat,
+                    include_policy_logps=include_policy_logps,
+                )
+            )
+        return self._concat_airl_segment_chunks(chunks)
+
+    def _airl_segment_values_for_mode(self, components):
+        if self.reward_mode == "mean_g":
+            values = components["g"]
+        elif self.reward_mode in ("standard", "mean_f"):
+            values = components["f"]
+        elif self.reward_mode == "mean_g_plus_shape":
+            values = components["g"] + self.lambda_shape * components["shape"]
+        else:
+            raise ValueError(f"Unknown AIRL segment reward_mode: {self.reward_mode}")
+        if self.clip_reward_model:
+            values = torch.clamp(values, self.reward_lb, self.reward_ub)
+        return torch.where(components["valid_mask"], values, torch.zeros_like(values))
+
+    def _airl_segment_sequence_reward(self, components):
+        valid_mask = components["valid_mask"]
+        segment_values = self._airl_segment_values_for_mode(components)
+        reward = masked_mean(segment_values, valid_mask, dim=1)
+
+        if self.clip_reward_model:
+            reward = torch.clamp(reward, self.reward_lb, self.reward_ub)
+        return reward
+
+    def _record_airl_segment_metrics(self, components, mode: str):
+        valid_mask = components["valid_mask"]
+        if not valid_mask.any():
+            return
+
+        for name in ("g", "shape", "f", "h_prev", "h_next"):
+            values = components[name]
+            self._metrics[mode][f"airl_segment/{name}_mean"].append(values[valid_mask].mean().item())
+            self._metrics[mode][f"airl_segment/{name}_std"].append(values[valid_mask].std(unbiased=False).item())
+
+        g_abs = components["g"][valid_mask].abs().mean().clamp_min(1e-8)
+        shape_abs = components["shape"][valid_mask].abs().mean()
+        self._metrics[mode]["airl_segment/shape_to_g_abs_ratio"].append((shape_abs / g_abs).item())
+        self._metrics[mode]["airl_segment/policy_segment_mismatches"].append(
+            float(components.get("policy_segment_mismatches", 0))
+        )
+
+    def _store_segment_local_info(self, components):
+        starts = components["layout"].starts - components["completion_starts"].unsqueeze(1)
+        ends = components["layout"].ends - components["completion_starts"].unsqueeze(1)
+        starts = starts.clamp_min(0)
+        ends = ends.clamp_min(0)
+        max_len = int(components["completion_lens"].max().item()) if components["completion_lens"].numel() else 1
+        rel_layout = SegmentLayout(
+            starts=starts,
+            ends=ends,
+            prev_indices=(starts - 1).clamp_min(0),
+            next_indices=ends,
+            valid_mask=components["valid_mask"],
+        )
+        self._last_segment_local = {
+            "layout": rel_layout,
+            "g": components["g"].detach(),
+            "shape": components["shape"].detach(),
+            "f": components["f"].detach(),
+            "segment_reward": self._airl_segment_values_for_mode(components).detach(),
+            "seq_len": max(max_len, 1),
+        }
+
+    def _normalise_segment_signal_by_group(self, signal: torch.Tensor, valid_mask: torch.Tensor):
+        return normalize_segments_by_group(
+            signal,
+            valid_mask,
+            group_size=max(1, int(self.num_generations_with_expert)),
+        )
+
+    def _segment_local_signal(self, local: dict[str, torch.Tensor]):
+        if self.local_signal == "g":
+            return local["g"], 1.0
+        if self.local_signal == "clipped_delta_f":
+            f = local["f"]
+            prev_f = torch.cat([f[:, :1], f[:, :-1]], dim=1)
+            return torch.clamp(
+                f - prev_f,
+                min=self.clipped_delta_f_min,
+                max=self.clipped_delta_f_max,
+            ), 1.0
+        if self.local_signal == "drop_f":
+            f = local["f"]
+            prev_f = torch.cat([f[:, :1], f[:, :-1]], dim=1)
+            return torch.clamp(prev_f - f, min=0.0), -1.0
+        raise ValueError(f"Unknown local_signal: {self.local_signal}")
+
+    def _apply_interval_policy_advantages(self, sequence_advantages: torch.Tensor):
+        local = self._last_segment_local
+        if local is None:
+            return sequence_advantages
+
+        valid_mask = local["layout"].valid_mask
+        segment_values = local["segment_reward"].to(sequence_advantages.device)
+        interval_advantages = self._normalise_segment_signal_by_group(segment_values, valid_mask)
+
+        if self.use_segment_local_advantage:
+            signal, sign = self._segment_local_signal(local)
+            normed_signal = self._normalise_segment_signal_by_group(signal, valid_mask)
+            interval_advantages = interval_advantages + sign * self.lambda_local * normed_signal
+
+        interval_advantages = torch.where(valid_mask, interval_advantages, torch.zeros_like(interval_advantages))
+        self._metrics["train" if self.model.training else "eval"]["airl_segment/interval_advantage_mean"].append(
+            interval_advantages[valid_mask].mean().item() if valid_mask.any() else 0.0
+        )
+        self._metrics["train" if self.model.training else "eval"]["airl_segment/interval_advantage_std"].append(
+            interval_advantages[valid_mask].std(unbiased=False).item() if valid_mask.any() else 0.0
+        )
+        return broadcast_segment_values_to_tokens(
+            interval_advantages,
+            local["layout"],
+            seq_len=local["seq_len"],
+            fill_value=0.0,
+        )
+
+    def _apply_segment_local_advantages(self, sequence_advantages: torch.Tensor):
+        local = self._last_segment_local
+        if local is None:
+            return sequence_advantages
+
+        valid_mask = local["layout"].valid_mask
+        signal, sign = self._segment_local_signal(local)
+        normed = self._normalise_segment_signal_by_group(signal, valid_mask)
+        segment_advantages = sequence_advantages.unsqueeze(1) + sign * self.lambda_local * normed
+
+        segment_advantages = torch.where(
+            valid_mask,
+            segment_advantages,
+            sequence_advantages.unsqueeze(1).expand_as(segment_advantages),
+        )
+        return broadcast_segment_values_to_tokens(
+            segment_advantages,
+            local["layout"],
+            seq_len=local["seq_len"],
+            fill_value=0.0,
+        )
+
+    def _print_airl_segment_example(self, completions, components):
+        if self._segment_example_logged or not self.log_segment_example or not self.accelerator.is_main_process:
+            return
+        valid = components["valid_mask"][0]
+        if not valid.any():
+            return
+        text = completions[0][0]["content"] if isinstance(completions[0], list) else str(completions[0])
+        print("\n=== AIRL segment debug example ===")
+        print(text[:2000])
+        for idx in torch.nonzero(valid, as_tuple=False).flatten().tolist():
+            print(
+                f"segment={idx} "
+                f"g={components['g'][0, idx].item():.4f} "
+                f"shape={components['shape'][0, idx].item():.4f} "
+                f"f={components['f'][0, idx].item():.4f}"
+            )
+        print("=== end AIRL segment debug example ===\n")
+        self._segment_example_logged = True
+
+    def _update_airl_segment_reward_model_step(
+        self,
+        neg_prompts: list[Dict[str, str]],
+        neg_completions: list[str],
+        pos_prompts: list[Dict[str, str]],
+        pos_completions: list[str],
+        *,
+        do_step: bool = True,
+        log_prefix: str = "disc",
+        is_chat: bool = False,
+    ) -> dict[str, float]:
+        if len(pos_completions) == 0:
+            raise ValueError("Empty pos_completions in _update_airl_segment_reward_model_step.")
+        if len(neg_completions) == 0:
+            raise ValueError("Empty neg_completions in _update_airl_segment_reward_model_step.")
+
+        pos_components = self._airl_segment_components(
+            pos_prompts,
+            pos_completions,
+            is_chat=is_chat,
+            include_policy_logps=True,
+        )
+        neg_components = self._airl_segment_components(
+            neg_prompts,
+            neg_completions,
+            is_chat=is_chat,
+            include_policy_logps=True,
+        )
+
+        pos_valid = pos_components["valid_mask"]
+        neg_valid = neg_components["valid_mask"]
+        logits_pos = pos_components["f"] - pos_components["log_pi_seg"]
+        logits_neg = neg_components["f"] - neg_components["log_pi_seg"]
+
+        y_pos = torch.ones_like(logits_pos) * (1.0 - self.eps)
+        y_neg = torch.ones_like(logits_neg) * self.eps
+        pos_loss_elt = F.binary_cross_entropy_with_logits(logits_pos, y_pos, reduction="none")
+        neg_loss_elt = F.binary_cross_entropy_with_logits(logits_neg, y_neg, reduction="none")
+
+        pos_cnt = pos_valid.sum().to(logits_pos.dtype).clamp_min(1.0)
+        neg_cnt = neg_valid.sum().to(logits_neg.dtype).clamp_min(1.0)
+        bce_pos = (pos_loss_elt * pos_valid.to(pos_loss_elt.dtype)).sum() / pos_cnt
+        bce_neg = (neg_loss_elt * neg_valid.to(neg_loss_elt.dtype)).sum() / neg_cnt
+        loss = 0.5 * (bce_pos + bce_neg)
+
+        penalty = logits_pos.new_tensor(0.0)
+        for components, valid in ((pos_components, pos_valid), (neg_components, neg_valid)):
+            valid_f = valid.to(logits_pos.dtype)
+            denom = valid_f.sum().clamp_min(1.0)
+            if self.h_l2_penalty:
+                h_penalty = ((components["h_prev"] ** 2 + components["h_next"] ** 2) * valid_f).sum() / (2.0 * denom)
+                penalty = penalty + self.h_l2_penalty * h_penalty
+            if self.shape_l2_penalty:
+                shape_penalty = ((components["shape"] ** 2) * valid_f).sum() / denom
+                penalty = penalty + self.shape_l2_penalty * shape_penalty
+
+        total_loss = loss + penalty
+        if do_step:
+            self.reward_optimizer.zero_grad()
+            self.accelerator.backward(total_loss)
+            reward_max_grad_norm = getattr(self.args, "max_grad_norm", None)
+            if reward_max_grad_norm is not None:
+                self.accelerator.clip_grad_norm_(self.reward_model.parameters(), float(reward_max_grad_norm))
+            self.reward_optimizer.step()
+            if hasattr(self, "reward_scheduler") and self.reward_scheduler is not None:
+                self.reward_scheduler.step()
+
+        logits_pos_det = logits_pos.detach()[pos_valid]
+        logits_neg_det = logits_neg.detach()[neg_valid]
+        p_pos = torch.sigmoid(logits_pos_det)
+        p_neg = torch.sigmoid(logits_neg_det)
+        acc_pos = (p_pos >= 0.5).float().mean() if p_pos.numel() else logits_pos.new_tensor(0.0)
+        acc_neg = (p_neg < 0.5).float().mean() if p_neg.numel() else logits_neg.new_tensor(0.0)
+        acc = 0.5 * (acc_pos + acc_neg)
+
+        def gmean(x: torch.Tensor) -> float:
+            return self.accelerator.gather(x.detach()).mean().item()
+
+        def masked_scalar_mean(components, key):
+            values = components[key]
+            valid = components["valid_mask"]
+            if not valid.any():
+                return float("nan")
+            return values.detach()[valid].float().mean().item()
+
+        current_reward_lr = self.reward_optimizer.param_groups[0]["lr"]
+        h_lr = self.reward_optimizer.param_groups[-1]["lr"] if len(self.reward_optimizer.param_groups) > 1 else current_reward_lr
+
+        return {
+            f"{log_prefix}/loss": gmean(total_loss),
+            f"{log_prefix}/bce_pos": gmean(bce_pos),
+            f"{log_prefix}/bce_neg": gmean(bce_neg),
+            f"{log_prefix}/penalty": gmean(penalty),
+            f"{log_prefix}/lr": current_reward_lr,
+            f"{log_prefix}/h_lr": h_lr,
+            f"{log_prefix}/acc": gmean(acc),
+            f"{log_prefix}/acc_pos": gmean(acc_pos),
+            f"{log_prefix}/acc_neg": gmean(acc_neg),
+            f"{log_prefix}/auroc": binary_auroc_from_logits(logits_pos_det, logits_neg_det),
+            f"{log_prefix}/disc_logit_pos_mean": logits_pos_det.float().mean().item() if logits_pos_det.numel() else float("nan"),
+            f"{log_prefix}/disc_logit_neg_mean": logits_neg_det.float().mean().item() if logits_neg_det.numel() else float("nan"),
+            f"{log_prefix}/g_pos_mean": masked_scalar_mean(pos_components, "g"),
+            f"{log_prefix}/g_neg_mean": masked_scalar_mean(neg_components, "g"),
+            f"{log_prefix}/shape_pos_mean": masked_scalar_mean(pos_components, "shape"),
+            f"{log_prefix}/shape_neg_mean": masked_scalar_mean(neg_components, "shape"),
+            f"{log_prefix}/f_pos_mean": masked_scalar_mean(pos_components, "f"),
+            f"{log_prefix}/f_neg_mean": masked_scalar_mean(neg_components, "f"),
+            f"{log_prefix}/policy_segment_mismatches": float(
+                pos_components["policy_segment_mismatches"] + neg_components["policy_segment_mismatches"]
+            ),
+        }
+
 
     @profiling_decorator
     def _update_reward_model_step(
@@ -886,6 +1545,17 @@ class AIRLTrainer(GRPOTrainer):
         Pairwise margin (optional) is computed per-prompt by reshaping negatives to (B, K)
         and comparing each positive to an aggregate negative (mean/max).
         """
+        if self.critic_type == "airl_segment":
+            return self._update_airl_segment_reward_model_step(
+                neg_prompts,
+                neg_completions,
+                pos_prompts,
+                pos_completions,
+                do_step=do_step,
+                log_prefix=log_prefix,
+                is_chat=is_chat,
+            )
+
         device = self.accelerator.device
 
         B = len(pos_completions)
@@ -1275,11 +1945,14 @@ class AIRLTrainer(GRPOTrainer):
     @profiling_decorator
     def _calculate_rewards(self, inputs, prompts, completions, completion_ids_list):
         device = self.accelerator.device
+        segment_critic = self.critic_type == "airl_segment"
+        use_dense_reward_tensor = bool(self.dense_rewards) and not segment_critic
+        self._last_segment_local = None
         
         # 1. ESTABLISH GROUND TRUTH (The Policy's Output)
         # We trust the Policy's output lengths as the absolute truth.
         completion_lens = torch.tensor([len(x) for x in completion_ids_list], device=device, dtype=torch.long)
-        seq_len = completion_lens.max().item() if self.dense_rewards else 1
+        seq_len = completion_lens.max().item() if use_dense_reward_tensor else 1
         
         # Shape: (Batch, Num_Funcs, Seq_Len)
         rewards_per_func = torch.zeros(len(prompts), len(self.reward_funcs), seq_len, device=device)
@@ -1291,7 +1964,7 @@ class AIRLTrainer(GRPOTrainer):
 
         # 3. GLOBAL MASK (Valid for all branches)
         # True where indices < completion_len, False where padding.
-        if self.dense_rewards:
+        if use_dense_reward_tensor:
             output_mask = torch.arange(seq_len, device=device)[None, :] < completion_lens[:, None]
 
         for i, (reward_func, reward_processing_class, reward_func_name) in enumerate(
@@ -1301,6 +1974,23 @@ class AIRLTrainer(GRPOTrainer):
                 
                 # === BRANCH A: NEURAL REWARD MODEL ===
                 if isinstance(reward_func, nn.Module):
+                    if segment_critic and i == 0:
+                        with torch.no_grad():
+                            components = self._airl_segment_components(
+                                prompts,
+                                completions,
+                                is_chat=is_conversational(inputs[0]),
+                                include_policy_logps=False,
+                            )
+                            reward_val = self._airl_segment_sequence_reward(components)
+                        rewards_per_func[:, i, 0] = reward_val
+                        mode = "train" if self.model.training else "eval"
+                        self._record_airl_segment_metrics(components, mode)
+                        if self.policy_reward_density == "interval" or self.use_segment_local_advantage:
+                            self._store_segment_local_info(components)
+                        self._print_airl_segment_example(completions, components)
+                        continue
+
                     # OPTIMIZATION: We no longer need 'prompt_texts'. We only need the full conversation.
                     full_texts = build_texts(prompts, completions, reward_processing_class, is_conversational(inputs[0]))
 
@@ -1311,7 +2001,7 @@ class AIRLTrainer(GRPOTrainer):
                     ).to(device)
 
                     with torch.inference_mode():
-                        if self.dense_rewards:
+                        if use_dense_reward_tensor:
                             # logits: (B, Full_Len)
                             reward_logits = reward_func(**reward_inputs).logits[:, :, 0] / self.disc_temperature
                             if self.clip_reward_model:
@@ -1370,7 +2060,7 @@ class AIRLTrainer(GRPOTrainer):
                     output_rewards = [r if r is not None else torch.nan for r in output_rewards]
                     output_tensor = torch.tensor(output_rewards, dtype=torch.float32, device=device)
 
-                    if self.dense_rewards:
+                    if use_dense_reward_tensor:
                         # Expand (B) -> (B, L)
                         expanded_rewards = output_tensor.unsqueeze(1).repeat(1, seq_len)
                         masked_rewards = expanded_rewards.clone()
@@ -1379,7 +2069,7 @@ class AIRLTrainer(GRPOTrainer):
                     else:
                         rewards_per_func[:, i, 0] = output_tensor
 
-        if not self.dense_rewards:
+        if not use_dense_reward_tensor:
             rewards_per_func = rewards_per_func.squeeze(-1)
 
         # Gather the reward per function: this part is crucial, because the rewards are normalized per group and the
@@ -1488,6 +2178,19 @@ class AIRLTrainer(GRPOTrainer):
         )
 
         advantages = advantages[process_slice]
+
+        if (
+            self.critic_type == "airl_segment"
+            and self.policy_reward_density == "interval"
+            and advantages.ndim == 1
+        ):
+            advantages = self._apply_interval_policy_advantages(advantages)
+        elif (
+            self.critic_type == "airl_segment"
+            and self.use_segment_local_advantage
+            and advantages.ndim == 1
+        ):
+            advantages = self._apply_segment_local_advantages(advantages)
 
         return advantages, all_process_advantages, mean_grouped_rewards, std_rewards, is_std_zero
 
@@ -1920,7 +2623,7 @@ class AIRLTrainer(GRPOTrainer):
         # Reward optimizer state dict (so we can resume properly)
         if getattr(self, "reward_optimizer", None) is not None:
             torch.save(
-                self.reward_optimizer.state_dict(), reward_dir / "reward_optimizer.pt"
+                self.reward_optimizer.state_dict(), os.path.join(reward_dir, "reward_optimizer.pt")
             )
             
     def compute_loss(

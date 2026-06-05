@@ -1,0 +1,24 @@
+# @package _global_
+defaults:
+  - base
+  - _self_
+
+model:
+  critic_type: standard
+  reward_mode: standard
+  dense_rewards: "partial_fixed"
+  dense_partial_fixed_n: 15
+  policy_learning_rate: 5e-7
+  reward_learning_rate: 1e-6
+  reward_updates_per_policy_step: 3
+
+training:
+  gradient_accumulation_steps: 16
+  beta: 0.001
+  buffer_size: 100
+
+sampling:
+  num_generations: 8
+
+wandb:
+  run_name: qwen3b_stabilized_interval

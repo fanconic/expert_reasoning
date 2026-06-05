@@ -3,6 +3,10 @@ import os
 import random
 import torch
 import json
+from src.utils.transformers_compat import ensure_transformers_cache_alias
+
+ensure_transformers_cache_alias()
+
 from trl.trainer.grpo_trainer import apply_chat_template
 
 def set_seed(seed: int):

@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - mean_g_plus_shape
+  - _self_
+
+model:
+  policy_reward_density: interval
+  lambda_shape: 0.3
+
+wandb:
+  run_name: qwen3b_airl_segment_interval_mean_g_plus_shape

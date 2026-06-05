@@ -1,0 +1,107 @@
+# @package _global_
+seed: 42
+unsloth: true
+
+model:
+  # Qwen2.5 7B AIRL runs share the same reward backbone. SFT variants only
+  # override policy_name so the discriminator still starts from the base model.
+  policy_name: "Qwen/Qwen2.5-7B-Instruct"
+  reward_name: "Qwen/Qwen2.5-7B-Instruct"
+  name: ${model.policy_name}
+  warmup_reward_dir:
+  pretrained: false
+  max_prompt_length: 300
+  max_completion_length: 824
+  load_in_4bit: true
+  fast_inference: ${unsloth}
+  policy_gpu_memory_utilization: 0.4
+  reward_gpu_memory_utilization: 0.4
+  lora_rank: 256
+  use_gradient_checkpointing: true
+  policy_lora_rank: 256
+  policy_learning_rate: 5e-7
+  add_expert_to_policy_optim: false
+  add_expert_to_policy_balanced: false
+  reward_lora_rank: 256
+  reward_learning_rate: 1e-6
+  disc_label_smoothing: 0.1
+  dense_rewards: "partial_fixed"
+  dense_partial_fixed_n: 15
+  dense_gamma: 0.9
+  advantage_calculation: "average_dense"
+  use_outcome_rewards: false
+  reward_updates_per_policy_step: 3
+  disc_temperature: 1
+  classifier_loss: "bce"
+  clip_reward_model: true
+  reward_lb: -5.0
+  reward_ub: 5.0
+  response_only: false
+  num_neg_perturbations_per_expert: 1
+  neg_perturb_fns: [flip_operator_in_one_step, corrupt_answer_nearby_number, corrupt_numbers]
+  switch_label_if_correct: true
+  neg_sample_weight: 1.0
+  disc_pairwise_margin: 0.0
+  critic_type: standard
+  reward_mode: standard
+  critic_density: interval
+  policy_reward_density: sequence
+  segment_tokens: 15
+  airl_gamma: 1.0
+  h_head_lr_mult: 0.5
+  h_l2_penalty: 1e-4
+  shape_l2_penalty: 1e-4
+  shape_clamp:
+  lambda_shape: 1.0
+  use_segment_local_advantage: false
+  lambda_local: 0.05
+  local_signal: drop_f
+  clipped_delta_f_min: -2.0
+  clipped_delta_f_max: 2.0
+  log_segment_example: false
+  debug_check_segment_finite: true
+
+dataset:
+  name: "gsm8k_kd"
+  split: "train"
+  train_ratio: 1
+  val_ratio: 0.1
+
+training:
+  reward_warmup_steps: 250
+  standard_grpo: false
+  warmup_ratio: 0.1
+  adam_beta1: 0.9
+  adam_beta2: 0.99
+  weight_decay: 0.1
+  lr_scheduler_type: "cosine"
+  optim: "paged_adamw_8bit"
+  logging_steps: 10
+  max_grad_norm: 1.0
+  output_dir: "/mnt/pdata/caf83/icml_math/outputs/${wandb.run_name}"
+  report_to: "wandb"
+  per_device_train_batch_size: 16
+  max_micro_batch: 4
+  gradient_accumulation_steps: 16
+  max_steps: 500
+  epochs: 2
+  beta: 0.01
+  buffer_size: 100
+
+sampling:
+  temperature: 1.0
+  top_p: 0.95
+  num_generations: 8
+
+eval:
+  do_eval: true
+  eval_strategy: "steps"
+  eval_steps: 100
+  per_device_eval_batch_size: 32
+  eval_accumulation_steps: 2
+  prediction_loss_only: false
+
+wandb:
+  project: "expert_reasoning_math_icml"
+  entity: eth_dlad_team32
+  run_name: qwen7b_airl_interval_base

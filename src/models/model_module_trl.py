@@ -1,6 +1,10 @@
 from typing import Tuple
 import os
 
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 import torch
 from peft import (
     PeftModel,
@@ -21,6 +25,36 @@ try:
     from transformers import BitsAndBytesConfig
 except ImportError:
     BitsAndBytesConfig = None
+
+
+def _model_hidden_size(model):
+    if hasattr(model.config, "hidden_size"):
+        return model.config.hidden_size
+    if hasattr(model.config, "text_config") and hasattr(model.config.text_config, "hidden_size"):
+        return model.config.text_config.hidden_size
+    raise AttributeError("Could not infer hidden size for reward model heads.")
+
+
+def _attach_airl_segment_heads_trl(reward_model):
+    """Attach the segment potential head to a standard HF reward model."""
+    hidden_size = _model_hidden_size(reward_model)
+    device = next(reward_model.parameters()).device
+    dtype = next(reward_model.parameters()).dtype
+    reward_model.h_head = torch.nn.Linear(
+        in_features=hidden_size,
+        out_features=1,
+        bias=False,
+        device=device,
+        dtype=dtype,
+    )
+    if hasattr(reward_model, "classifier"):
+        reward_model.g_head = reward_model.classifier
+    elif hasattr(reward_model, "score"):
+        reward_model.g_head = reward_model.score
+    elif hasattr(reward_model, "lm_head"):
+        reward_model.g_head = reward_model.lm_head
+    reward_model.config.num_labels = 1
+    return reward_model
 
 
 def irl_load_model_and_tokenizer_trl(
@@ -58,13 +92,19 @@ def irl_load_model_and_tokenizer_trl(
     """
     policy_model_name = config.model.policy_name
     reward_model_name = config.model.reward_name
+    checkpoint = getattr(config.model, "name", policy_model_name)
     max_seq_length = config.model.max_prompt_length + config.model.max_completion_length
     load_in_4bit = config.model.load_in_4bit
     lora_rank = config.model.lora_rank
     random_state = config.seed
     use_grad_ckpt = config.model.use_gradient_checkpointing
+    airl_segment = getattr(config.model, "critic_type", "standard") == "airl_segment"
     
-    reward_model_class = AutoModelForTokenClassification if config.model.dense_rewards else AutoModelForSequenceClassification
+    reward_model_class = (
+        AutoModelForTokenClassification
+        if config.model.dense_rewards or airl_segment
+        else AutoModelForSequenceClassification
+    )
 
     torch.manual_seed(random_state)
 
@@ -162,6 +202,8 @@ def irl_load_model_and_tokenizer_trl(
         num_labels=1,
     )
     reward_model.config.pad_token_id = reward_tokenizer.pad_token_id
+    if airl_segment:
+        reward_model = _attach_airl_segment_heads_trl(reward_model)
 
     if load_in_4bit:
         reward_model = prepare_model_for_kbit_training(
@@ -183,6 +225,7 @@ def irl_load_model_and_tokenizer_trl(
             bias="none",
             task_type=TaskType.SEQ_CLS,  # Use sequence classification for reward model
             target_modules=target_modules,
+            modules_to_save=["classifier", "h_head"] if airl_segment else None,
             inference_mode=False,
         )
         reward_model = get_peft_model(reward_model, reward_lora_config)

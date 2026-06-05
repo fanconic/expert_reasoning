@@ -1,7 +1,14 @@
 import numpy as np
 from torch.utils.data import DataLoader
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from transformers import TrainerCallback, TrainerState, TrainerControl
-from vllm import SamplingParams
+try:
+    from vllm import SamplingParams
+except ModuleNotFoundError:
+    SamplingParams = object
 import wandb
 from tqdm import tqdm
 import os

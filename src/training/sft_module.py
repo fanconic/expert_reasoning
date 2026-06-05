@@ -1,7 +1,17 @@
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from trl import SFTConfig, SFTTrainer
 
 
-from vllm import SamplingParams
+try:
+    from vllm import SamplingParams
+except ModuleNotFoundError:
+    class SamplingParams:
+        def __init__(self, *args, **kwargs):
+            raise ImportError("vLLM is required for SFT generation evaluation.")
+
 from src.training.callbacks import GenerationEvalCallback
 
 

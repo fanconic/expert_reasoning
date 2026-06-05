@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+  - interval_mean_f
+  - _self_
+
+model:
+  policy_reward_density: interval
+  use_segment_local_advantage: true
+  local_signal: drop_f
+  lambda_local: 0.05
+
+wandb:
+  run_name: qwen3b_airl_segment_interval_drop_f_local

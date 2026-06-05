@@ -3,6 +3,10 @@
 import torch
 import torch.nn.functional as F
 from typing import Dict, List, Tuple, Any, Optional
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from transformers import PreTrainedTokenizerBase
 from  trl.data_utils import apply_chat_template
 

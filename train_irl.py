@@ -9,16 +9,22 @@ wandb.login()
 import os
 
 
+def _is_main_process() -> bool:
+    return int(os.environ.get("RANK", "0")) == 0
+
+
 @hydra.main(config_path="configs", config_name="config_irl_train", version_base="1.3")
 def main(cfg: DictConfig):
-    print("IRL Training Configuration:\n", OmegaConf.to_yaml(cfg))
+    if _is_main_process():
+        print("IRL Training Configuration:\n", OmegaConf.to_yaml(cfg))
     
     # Create output directory if it doesn't exist and save config
     os.makedirs(cfg.training.output_dir, exist_ok=True)
-    config_save_path = os.path.join(cfg.training.output_dir, "training_config.yaml")
-    with open(config_save_path, 'w') as f:
-        OmegaConf.save(config=cfg, f=f)
-    print(f"Configuration saved to: {config_save_path}")
+    if _is_main_process():
+        config_save_path = os.path.join(cfg.training.output_dir, "training_config.yaml")
+        with open(config_save_path, 'w') as f:
+            OmegaConf.save(config=cfg, f=f)
+        print(f"Configuration saved to: {config_save_path}")
     
     if cfg.unsloth:
         from src.models.model_module import irl_load_model_and_tokenizer
@@ -34,7 +40,7 @@ def main(cfg: DictConfig):
 
     set_seed(cfg.seed)
     # Initialize wandb
-    if cfg.training.report_to == "wandb":
+    if cfg.training.report_to == "wandb" and _is_main_process():
         wandb_config = OmegaConf.to_container(cfg, resolve=True)
         wandb.init(
             project=cfg.wandb.project,

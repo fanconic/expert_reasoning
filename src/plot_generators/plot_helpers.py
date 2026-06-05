@@ -26,6 +26,10 @@ import pandas as pd
 import seaborn as sns
 import matplotlib as mpl
 from sklearn.metrics import roc_auc_score
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from transformers import AutoTokenizer
 from collections import Counter
 

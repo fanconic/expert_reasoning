@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+  - original_base
+  - _self_
+
+model:
+  critic_type: airl_segment
+  reward_mode: mean_g
+  critic_density: interval
+  policy_reward_density: sequence
+  segment_tokens: 15
+  airl_gamma: 1.0
+  h_head_lr_mult: 0.5
+  h_l2_penalty: 1e-4
+  shape_l2_penalty: 1e-4
+  shape_clamp:
+  lambda_shape: 1.0
+  use_segment_local_advantage: false
+
+wandb:
+  run_name: qwen7b_interval_mean_g_base_kl0p01_ebs256

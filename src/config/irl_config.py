@@ -15,6 +15,10 @@ import warnings
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from trl.trainer import GRPOConfig
 
 __all__ = ["AIRLConfig"]
@@ -207,6 +211,91 @@ class IRLConfig(GRPOConfig):
     )
     buffer_size: int = field(
         default=0, metadata={"help": "Size of the replay buffer"}
+    )
+
+    # ------------------------------------------------------------------
+    # === AIRL segment critic ===
+    critic_type: str = field(
+        default="standard",
+        metadata={
+            "help": "Reward critic implementation. Use 'standard' for existing behavior or 'airl_segment' for the two-head segment critic."
+        },
+    )
+    reward_mode: str = field(
+        default="standard",
+        metadata={
+            "help": "Policy reward aggregation for the AIRL segment critic: standard, mean_g, mean_f, or mean_g_plus_shape."
+        },
+    )
+    critic_density: str = field(
+        default="sequence",
+        metadata={
+            "help": "Where critic scores are produced: sequence, interval, or token. AIRL segment critic uses interval."
+        },
+    )
+    policy_reward_density: str = field(
+        default="sequence",
+        metadata={
+            "help": "How GRPO consumes rewards: sequence, interval, or token. Interval broadcasts segment advantages only to tokens in that segment."
+        },
+    )
+    segment_tokens: int = field(
+        default=15,
+        metadata={
+            "help": "Fallback fixed interval size for segment critic boundaries when explicit interval boundaries are unavailable."
+        },
+    )
+    airl_gamma: float = field(
+        default=1.0,
+        metadata={"help": "Discount applied to h_next in AIRL shaping: f = g + gamma * h_next - h_prev."},
+    )
+    h_head_lr_mult: float = field(
+        default=0.5,
+        metadata={"help": "Learning-rate multiplier for the AIRL segment h_head parameter group."},
+    )
+    h_l2_penalty: float = field(
+        default=1e-4,
+        metadata={"help": "Optional L2 penalty on AIRL segment potential h values."},
+    )
+    shape_l2_penalty: float = field(
+        default=1e-4,
+        metadata={"help": "Optional L2 penalty on AIRL segment shaping values."},
+    )
+    shape_clamp: Optional[float] = field(
+        default=None,
+        metadata={"help": "If set, clamp shape_k to [-shape_clamp, shape_clamp]."},
+    )
+    lambda_shape: float = field(
+        default=1.0,
+        metadata={"help": "Weight for mean(shape_k) in reward_mode='mean_g_plus_shape'."},
+    )
+    use_segment_local_advantage: bool = field(
+        default=False,
+        metadata={"help": "Whether to add segment-local auxiliary advantages to sequence-level GRPO advantages."},
+    )
+    lambda_local: float = field(
+        default=0.05,
+        metadata={"help": "Weight for segment-local auxiliary advantages."},
+    )
+    local_signal: str = field(
+        default="drop_f",
+        metadata={"help": "Segment-local signal: g, clipped_delta_f, or drop_f."},
+    )
+    clipped_delta_f_min: float = field(
+        default=-2.0,
+        metadata={"help": "Lower clamp for local_signal='clipped_delta_f'."},
+    )
+    clipped_delta_f_max: float = field(
+        default=2.0,
+        metadata={"help": "Upper clamp for local_signal='clipped_delta_f'."},
+    )
+    log_segment_example: bool = field(
+        default=False,
+        metadata={"help": "Print one decoded segment example with g/shape/f values for debugging."},
+    )
+    debug_check_segment_finite: bool = field(
+        default=True,
+        metadata={"help": "Raise if AIRL segment diagnostic tensors contain NaNs or infinities."},
     )
 
     # ------------------------------------------------------------------

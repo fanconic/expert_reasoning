@@ -1,3 +1,7 @@
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from trl import GRPOConfig, GRPOTrainer
 from src.training.callbacks import SaveBestByMetricCallback
 

@@ -90,7 +90,25 @@ def run_irl_training(
         greater_is_better=True,  # Set to False if lower is better for your metric
         warmup_reward_dir=getattr(cfg.model, "warmup_reward_dir", None),
         dense_partial_fixed_n=getattr(cfg.model, "dense_partial_fixed_n", None),
-        buffer_size=getattr(cfg.training, "buffer_size", 0)
+        buffer_size=getattr(cfg.training, "buffer_size", 0),
+        critic_type=getattr(cfg.model, "critic_type", "standard"),
+        reward_mode=getattr(cfg.model, "reward_mode", "standard"),
+        critic_density=getattr(cfg.model, "critic_density", "sequence"),
+        policy_reward_density=getattr(cfg.model, "policy_reward_density", "sequence"),
+        segment_tokens=getattr(cfg.model, "segment_tokens", 15),
+        airl_gamma=getattr(cfg.model, "airl_gamma", 1.0),
+        h_head_lr_mult=getattr(cfg.model, "h_head_lr_mult", 0.5),
+        h_l2_penalty=getattr(cfg.model, "h_l2_penalty", 1e-4),
+        shape_l2_penalty=getattr(cfg.model, "shape_l2_penalty", 1e-4),
+        shape_clamp=getattr(cfg.model, "shape_clamp", None),
+        lambda_shape=getattr(cfg.model, "lambda_shape", 1.0),
+        use_segment_local_advantage=getattr(cfg.model, "use_segment_local_advantage", False),
+        lambda_local=getattr(cfg.model, "lambda_local", 0.05),
+        local_signal=getattr(cfg.model, "local_signal", "drop_f"),
+        clipped_delta_f_min=getattr(cfg.model, "clipped_delta_f_min", -2.0),
+        clipped_delta_f_max=getattr(cfg.model, "clipped_delta_f_max", 2.0),
+        log_segment_example=getattr(cfg.model, "log_segment_example", False),
+        debug_check_segment_finite=getattr(cfg.model, "debug_check_segment_finite", True),
     )
 
     def formatting_prompt_func(examples):

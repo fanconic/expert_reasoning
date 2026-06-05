@@ -1,7 +1,12 @@
 import re
 import random
 import logging
-from src.azure.azure_connection import client, DEPLOYMENT
+
+try:
+    from src.azure.azure_connection import client, DEPLOYMENT
+except ModuleNotFoundError:
+    client = None
+    DEPLOYMENT = None
 
 # Suppress noisy INFO-level HTTP logs from Azure/httpx/urllib3 so lines like
 # "INFO HTTP 200 OK" are not printed to stdout.
@@ -339,6 +344,11 @@ def corrupt_with_chatgpt_wrong_reasoning(question: str, text: str) -> str:
     """
     
     
+    if client is None or DEPLOYMENT is None:
+        raise RuntimeError(
+            "corrupt_with_chatgpt_wrong_reasoning requires src.azure.azure_connection."
+        )
+
     # Extract reasoning and answer
     reasoning_match = re.search(r"<think>\s*(.*?)\s*</think>", text, flags=re.DOTALL)
     answer_match = re.search(r"<answer>\s*(.*?)\s*</answer>", text, flags=re.DOTALL)

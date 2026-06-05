@@ -1,6 +1,50 @@
+from src.utils.transformers_compat import configure_pytorch_transformers_runtime
+
+configure_pytorch_transformers_runtime()
+
 from unsloth import FastLanguageModel
 import torch
 from peft import PeftModel
+
+
+def _model_hidden_size(model):
+    """Return the transformer hidden size across common HF/Unsloth configs."""
+    if hasattr(model.config, "hidden_size"):
+        return model.config.hidden_size
+    if hasattr(model.config, "text_config") and hasattr(model.config.text_config, "hidden_size"):
+        return model.config.text_config.hidden_size
+    raise AttributeError("Could not infer hidden size for reward model heads.")
+
+
+def attach_airl_segment_heads(reward_model):
+    """Attach scalar AIRL segment heads to a reward backbone.
+
+    The existing dense reward path uses `lm_head` as a scalar token head. The
+    segment critic keeps that convention for `g` and adds a separate `h_head`
+    for the potential term.
+    """
+    hidden_size = _model_hidden_size(reward_model)
+    device = next(reward_model.parameters()).device
+    dtype = next(reward_model.parameters()).dtype
+
+    reward_model.lm_head = torch.nn.Linear(
+        in_features=hidden_size,
+        out_features=1,
+        bias=False,
+        device=device,
+        dtype=dtype,
+    )
+    reward_model.g_head = reward_model.lm_head
+    reward_model.h_head = torch.nn.Linear(
+        in_features=hidden_size,
+        out_features=1,
+        bias=False,
+        device=device,
+        dtype=dtype,
+    )
+    reward_model.config.num_labels = 1
+    return reward_model
+
 
 def load_model_and_tokenizer(config):
     """
@@ -95,6 +139,7 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
     fast_inference = config.model.fast_inference
     policy_gpu_memory_utilization = config.model.policy_gpu_memory_utilization
     reward_gpu_memory_utilization = config.model.reward_gpu_memory_utilization
+    airl_segment = getattr(config.model, "critic_type", "standard") == "airl_segment"
     
     policy_model, policy_tokenizer = FastLanguageModel.from_pretrained(
         model_name=policy_model_name,
@@ -125,7 +170,7 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
     
     
     # Reward model and tokenizer
-    if not config.model.dense_rewards:
+    if not config.model.dense_rewards and not airl_segment:
         reward_model, reward_tokenizer = FastLanguageModel.from_pretrained(
             model_name=reward_model_name,
             max_seq_length=max_seq_length,
@@ -144,14 +189,20 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
             max_lora_rank=reward_lora_rank,
             gpu_memory_utilization=reward_gpu_memory_utilization
         )
-        try:
-            hidden_size = reward_model.config.hidden_size
-        except:
-            hidden_size = reward_model.config.text_config.hidden_size
-        reward_model.lm_head = torch.nn.Linear(
-            in_features=hidden_size, out_features=1, bias=False, device="cuda"
-        )
-        reward_model.config.num_labels = 1
+        if airl_segment:
+            reward_model = attach_airl_segment_heads(reward_model)
+        else:
+            hidden_size = _model_hidden_size(reward_model)
+            device = next(reward_model.parameters()).device
+            dtype = next(reward_model.parameters()).dtype
+            reward_model.lm_head = torch.nn.Linear(
+                in_features=hidden_size,
+                out_features=1,
+                bias=False,
+                device=device,
+                dtype=dtype,
+            )
+            reward_model.config.num_labels = 1
     
     
     if pretrained:
@@ -186,7 +237,11 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
             lora_alpha=reward_lora_rank * 2,
             use_gradient_checkpointing="unsloth",
             random_state=random_state,
-            modules_to_save=["lm_head"] if config.model.dense_rewards else None
+            modules_to_save=(
+                ["lm_head", "h_head"]
+                if airl_segment
+                else (["lm_head"] if config.model.dense_rewards else None)
+            )
         )
     
     if hasattr(reward_model, "gradient_checkpointing_disable"):

@@ -1,0 +1,10 @@
+# @package _global_
+defaults:
+  - mean_g
+  - _self_
+
+model:
+  policy_reward_density: interval
+
+wandb:
+  run_name: qwen3b_airl_segment_interval_mean_g

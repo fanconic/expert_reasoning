@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - mean_g_base
+  - _self_
+
+model:
+  policy_name: ${oc.env:SFT_POLICY_DIR,/mnt/pdata/caf83/icml_math/outputs/qwen7b_sft/best_model}
+  name: ${model.policy_name}
+
+wandb:
+  run_name: qwen7b_interval_mean_g_sft_kl0p01_ebs256

@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+  - mean_g
+  - _self_
+
+model:
+  reward_mode: mean_g_plus_shape
+  lambda_shape: 0.3
+
+wandb:
+  run_name: qwen3b_airl_segment_mean_g_plus_shape

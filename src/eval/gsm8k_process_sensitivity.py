@@ -27,17 +27,26 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Callable, Dict, List, Sequence
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.utils.transformers_compat import (
+    configure_pytorch_transformers_runtime,
+    ensure_transformers_cache_alias,
+)
+
+configure_pytorch_transformers_runtime()
+
 import numpy as np
 import torch
 from omegaconf import OmegaConf
 from unsloth import FastLanguageModel
 from peft import PeftModel
+
+ensure_transformers_cache_alias()
+
 from trl.trainer.grpo_trainer import apply_chat_template
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.data.dataset import get_dataset
 from src.eval.eval_mode_utils import (

@@ -1,6 +1,12 @@
 # evaluate.py
 import os
 import inspect
+from src.utils.transformers_compat import (
+    configure_pytorch_transformers_runtime,
+    ensure_transformers_cache_alias,
+)
+
+configure_pytorch_transformers_runtime()
 
 os.environ["UNSLOTH_COMPILE_OVERWRITE"] = "0"
 from unsloth import FastLanguageModel
@@ -45,9 +51,26 @@ from src.eval.eval_mode_utils import (
     eval_mode_uses_pregenerated,
     resolve_pregenerated_jsonl_path,
 )
-from vllm import SamplingParams
-import vllm.envs as vllm_envs
+from src.training.airl_segment_utils import (
+    fixed_interval_boundary_mask,
+    gather_token_positions,
+    masked_mean,
+    segment_layout_from_boundaries,
+)
+try:
+    from vllm import SamplingParams
+    import vllm.envs as vllm_envs
+except ModuleNotFoundError:
+    SamplingParams = None
+
+    class _MissingVLLMEnvs:
+        VLLM_USE_V1 = False
+
+    vllm_envs = _MissingVLLMEnvs()
 import wandb
+
+ensure_transformers_cache_alias()
+
 from trl.trainer.grpo_trainer import maybe_apply_chat_template, apply_chat_template
 
 # --- NEW IMPORTS FOR GUIDANCE ---
@@ -849,6 +872,51 @@ def score_with_policy_model(
     return final_log_probs
 
 
+def _find_model_head(model, names):
+    if isinstance(names, str):
+        names = [names]
+
+    def safe_getattr(obj, name):
+        try:
+            return getattr(obj, name)
+        except Exception:
+            return None
+
+    seen = set()
+    stack = [model]
+    while stack:
+        obj = stack.pop()
+        if obj is None or id(obj) in seen:
+            continue
+        seen.add(id(obj))
+        for name in names:
+            found = safe_getattr(obj, name)
+            if found is not None:
+                return found
+        for child_name in ("base_model", "model", "module"):
+            child = safe_getattr(obj, child_name)
+            if child is not None:
+                stack.append(child)
+
+    if hasattr(model, "named_modules"):
+        suffixes = tuple(f".{name}" for name in names)
+        for module_name, module in model.named_modules():
+            if module_name in names or module_name.endswith(suffixes):
+                return module
+    return None
+
+
+def _apply_scalar_head(head, hidden_states):
+    out = head(hidden_states)
+    if isinstance(out, (tuple, list)):
+        out = out[0]
+    if hasattr(out, "logits"):
+        out = out.logits
+    if out.ndim >= 1 and out.shape[-1] == 1:
+        out = out.squeeze(-1)
+    return out
+
+
 # ==========================================
 # 3. Helper for Scoring (Existing)
 # ==========================================
@@ -865,6 +933,12 @@ def score_with_reward_model(
     reward_lb=-5.0,
     reward_ub=5.0,
     dense_partial_fixed_n=10,
+    critic_type="standard",
+    reward_mode="standard",
+    segment_tokens=15,
+    airl_gamma=1.0,
+    lambda_shape=1.0,
+    shape_clamp=None,
 ):
     # --- Optimization 1: Enable Unsloth Inference Kernels ---
     FastLanguageModel.for_inference(reward_model)
@@ -932,27 +1006,93 @@ def score_with_reward_model(
         ).to(device)
 
         with torch.inference_mode():
-            # Model Forward Pass
-            # logits shape: [micro_batch, dynamic_seq_len] or [micro_batch]
-            reward_outputs = reward_model(**batch_inputs)
-            reward_logits = reward_outputs.logits.squeeze(-1)
-
             current_batch_max_len = batch_inputs["input_ids"].shape[1]
-
-            # Handle Non-Dense (Scalar) Rewards
-            if not dense_reward:
-                # --- Optimization 3: Use expand instead of repeat (Memory View) ---
-                reward_logits = reward_logits.unsqueeze(1).expand(
-                    -1, current_batch_max_len
-                )
-
-            if clip_reward_model:
-                reward_logits = torch.clamp(reward_logits, min=reward_lb, max=reward_ub)
 
             # Calculate indices
             completion_lens = batch_completions["attention_mask"].sum(dim=1).long()
             full_lens = batch_inputs["attention_mask"].sum(dim=1).long()
             start_indices = (full_lens - completion_lens).clamp(min=0)
+
+            if critic_type == "airl_segment":
+                reward_outputs = reward_model(
+                    **batch_inputs,
+                    output_hidden_states=True,
+                    return_dict=True,
+                )
+                hidden_states = reward_outputs.hidden_states[-1]
+                idx = torch.arange(current_batch_max_len, device=device).unsqueeze(0)
+                completion_mask = batch_inputs["attention_mask"].bool() & (
+                    idx >= start_indices.unsqueeze(1)
+                )
+
+                if dense_reward == "partial":
+                    boundary_mask = sentence_boundary_mask(
+                        reward_tokenizer,
+                        batch_inputs,
+                        completion_mask,
+                        device,
+                    )
+                elif dense_reward == "partial_fixed":
+                    boundary_mask = fixed_interval_boundary_mask(
+                        completion_mask,
+                        dense_partial_fixed_n,
+                    )
+                else:
+                    boundary_mask = fixed_interval_boundary_mask(
+                        completion_mask,
+                        segment_tokens,
+                    )
+
+                layout = segment_layout_from_boundaries(boundary_mask, completion_mask)
+                g_head = _find_model_head(reward_model, ["lm_head", "classifier", "score", "g_head"])
+                h_head = _find_model_head(reward_model, "h_head")
+                if g_head is None or h_head is None:
+                    raise RuntimeError(
+                        "AIRL segment eval scoring requires a scalar g/lm/classifier head and h_head."
+                    )
+
+                end_hidden = gather_token_positions(hidden_states, layout.ends)
+                prev_hidden = gather_token_positions(hidden_states, layout.prev_indices)
+                next_hidden = gather_token_positions(hidden_states, layout.next_indices)
+                g = _apply_scalar_head(g_head, end_hidden)
+                h_prev = _apply_scalar_head(h_head, prev_hidden)
+                h_next = _apply_scalar_head(h_head, next_hidden)
+                shape = airl_gamma * h_next - h_prev
+                if shape_clamp is not None:
+                    clamp = float(shape_clamp)
+                    shape = torch.clamp(shape, min=-clamp, max=clamp)
+                f = g + shape
+                valid_mask = layout.valid_mask
+                g = torch.where(valid_mask, g, torch.zeros_like(g))
+                shape = torch.where(valid_mask, shape, torch.zeros_like(shape))
+                f = torch.where(valid_mask, f, torch.zeros_like(f))
+                mean_g = masked_mean(g, valid_mask, dim=1)
+                mean_shape = masked_mean(shape, valid_mask, dim=1)
+                mean_f = masked_mean(f, valid_mask, dim=1)
+                if reward_mode == "mean_g":
+                    reward_scalar = mean_g
+                elif reward_mode == "mean_g_plus_shape":
+                    reward_scalar = mean_g + lambda_shape * mean_shape
+                else:
+                    reward_scalar = mean_f
+                reward_logits = reward_scalar.unsqueeze(1).expand(
+                    -1, current_batch_max_len
+                )
+            else:
+                # Model Forward Pass
+                # logits shape: [micro_batch, dynamic_seq_len] or [micro_batch]
+                reward_outputs = reward_model(**batch_inputs)
+                reward_logits = reward_outputs.logits.squeeze(-1)
+
+                # Handle Non-Dense (Scalar) Rewards
+                if not dense_reward:
+                    # --- Optimization 3: Use expand instead of repeat (Memory View) ---
+                    reward_logits = reward_logits.unsqueeze(1).expand(
+                        -1, current_batch_max_len
+                    )
+
+            if clip_reward_model:
+                reward_logits = torch.clamp(reward_logits, min=reward_lb, max=reward_ub)
 
             # Generate gather indices
             # We must clamp to seq_len because the final output expects fixed width
@@ -1162,6 +1302,8 @@ def main(cfg: DictConfig):
 
     # Generation parameters
     n = cfg.sampling.n_samples
+    if SamplingParams is None:
+        raise ImportError("vLLM is required for evaluation generation.")
     sampling_params = SamplingParams(
         n=n,
         seed=cfg.seed,
@@ -1327,6 +1469,12 @@ def main(cfg: DictConfig):
                 reward_lb=cfg.model.reward_lb,
                 reward_ub=cfg.model.reward_ub,
                 dense_partial_fixed_n=cfg.model.dense_partial_fixed_n,
+                critic_type=getattr(cfg.model, "critic_type", "standard"),
+                reward_mode=getattr(cfg.model, "reward_mode", "standard"),
+                segment_tokens=getattr(cfg.model, "segment_tokens", 15),
+                airl_gamma=getattr(cfg.model, "airl_gamma", 1.0),
+                lambda_shape=getattr(cfg.model, "lambda_shape", 1.0),
+                shape_clamp=getattr(cfg.model, "shape_clamp", None),
             )
         else:
             batch_scores = _zero_scores_like(completions)
