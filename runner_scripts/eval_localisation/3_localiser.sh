@@ -6,7 +6,7 @@ RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 
 # Shared defaults (override at launch if needed)
 : "${TRACE_JSONL:=/mnt/pdata/caf83/icml_math/outputs/qwen7b_sft/best_model/eval_results_math_qwen7b_sft_t0p5.jsonl}"
-: "${OUTPUT_ROOT:=/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/outputs/localisation}"
+: "${OUTPUT_ROOT:=/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/localisation}"
 : "${MAX_EXAMPLES:=1300}"  # Empty => use full split.
 : "${START_INDEX:=0}"
 : "${MAX_SEVERITY:=5}"

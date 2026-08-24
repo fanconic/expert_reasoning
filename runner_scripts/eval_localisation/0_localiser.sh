@@ -1,4 +1,4 @@
-d#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -u
 
 export GPU_NUM="0"
@@ -6,7 +6,7 @@ RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 
 # Shared defaults (override at launch if needed)
 : "${TRACE_JSONL:=/mnt/pdata/caf83/icml_math/outputs/qwen7b_sft/best_model/eval_results_math_qwen7b_sft_t0p5.jsonl}"
-: "${OUTPUT_ROOT:=/mnt/pdata/caf83/icml_math/outputs/localisation}"
+: "${OUTPUT_ROOT:=/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/localisation}"
 : "${MAX_EXAMPLES:=1319}"
 : "${START_INDEX:=0}"
 : "${MAX_SEVERITY:=3}"
@@ -20,6 +20,7 @@ RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 : "${PREGENERATED_GENERATION_IDX:=0}"
 : "${CLEAN_CORRECT_POLICY:=require}"
 : "${PERTURB_FNS:=flip_operator_in_one_step corrupt_numbers}"
+: "${QWEN7B_FULL_REWARD_CHECKPOINT:=/mnt/pdata/caf83/neurips2026/math/outputs/qwen7b_full_rebuttal_restart/checkpoint-100}"
 
 IFS=' ' read -r -a PERTURB_FN_ARR <<< "${PERTURB_FNS}"
 
@@ -66,6 +67,9 @@ run_localiser() {
     config_path="$(model_config_path "${model}")" || return
 
     local checkpoint_dir="/mnt/pdata/caf83/icml_math/outputs/${model}_${density}/best_model"
+    if [[ "${model}" == "qwen7b" && "${density}" == "full" ]]; then
+        checkpoint_dir="${QWEN7B_FULL_REWARD_CHECKPOINT}"
+    fi
     if [[ ! -f "${checkpoint_dir}/reward_model/adapter_config.json" ]]; then
         FAILED_RUNS+=("${model}_${density} (missing_checkpoint=${checkpoint_dir})")
         echo "Skipping ${model}_${density}: missing checkpoint ${checkpoint_dir}"
