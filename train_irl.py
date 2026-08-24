@@ -42,12 +42,19 @@ def main(cfg: DictConfig):
     # Initialize wandb
     if cfg.training.report_to == "wandb" and _is_main_process():
         wandb_config = OmegaConf.to_container(cfg, resolve=True)
-        wandb.init(
+        wandb_kwargs = dict(
             project=cfg.wandb.project,
             entity=cfg.wandb.entity,
             config=wandb_config,
             name=cfg.wandb.run_name,
         )
+        wandb_id = getattr(cfg.wandb, "id", None)
+        if wandb_id:
+            wandb_kwargs["id"] = wandb_id
+        wandb_resume = getattr(cfg.wandb, "resume", None)
+        if wandb_resume:
+            wandb_kwargs["resume"] = wandb_resume
+        wandb.init(**wandb_kwargs)
 
     # Load training, validation, and test datasets (assuming you have these available)
     no_system = getattr(cfg.dataset, "no_system", False)

@@ -1,0 +1,828 @@
+{
+  "dataset": "expert_step",
+  "dataset_title": "Expert-trace edited GSM8K errors",
+  "root_dir": "outputs/localisation/expert_step_perturbations/scores",
+  "window": 7,
+  "stride": 15,
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metadata": {
+    "row_counts": [
+      1281
+    ],
+    "target_sources": [
+      "target_char_span"
+    ]
+  },
+  "methods": [
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.405152224824356,
+          "ci_halfwidth": 0.02693208430913349,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": -0.14207731633514709,
+          "ci_halfwidth": 0.05767151328461129,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.37614859944374734,
+          "ci_halfwidth": 0.006431120307878235,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.005076982460909795,
+          "ci_halfwidth": 0.004088483142736647,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval, expanded",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.5089773614363778,
+          "ci_halfwidth": 0.02732240437158473,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.11172114782763519,
+          "ci_halfwidth": 0.05459786030849952,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4011337241187516,
+          "ci_halfwidth": 0.009623223728397912,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.04803382884858409,
+          "ci_halfwidth": 0.013213753927890103,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.8688524590163934,
+          "ci_halfwidth": 0.018735362997658045,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.764617857389682,
+          "ci_halfwidth": 0.034083480948716605,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.47290460228969455,
+          "ci_halfwidth": 0.00670788597326924,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.16369699675141364,
+          "ci_halfwidth": 0.005585163135096327,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.46682279469164717,
+          "ci_halfwidth": 0.02693208430913349,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": -0.07429308180817129,
+          "ci_halfwidth": 0.06099758216221341,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.43187191083949206,
+          "ci_halfwidth": 0.006984767874945924,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.09834590535748734,
+          "ci_halfwidth": 0.004633389176835256,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.5690866510538641,
+          "ci_halfwidth": 0.026541764246682253,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.18115159574794842,
+          "ci_halfwidth": 0.05626920450077397,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4161824045435334,
+          "ci_halfwidth": 0.0070925017659485,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.05357028033634151,
+          "ci_halfwidth": 0.005303809378793663,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval, expanded",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.6487119437939111,
+          "ci_halfwidth": 0.026932084309133464,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.31594014461500775,
+          "ci_halfwidth": 0.054863864471942525,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4095876093380688,
+          "ci_halfwidth": 0.009576874323766166,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.04224055320027537,
+          "ci_halfwidth": 0.013566401374401939,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.8095238095238095,
+          "ci_halfwidth": 0.021077283372365363,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.6424811658117027,
+          "ci_halfwidth": 0.04114424146780099,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.47357035114588364,
+          "ci_halfwidth": 0.006928151893195206,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.14893194715545816,
+          "ci_halfwidth": 0.005500259396450449,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.7353629976580797,
+          "ci_halfwidth": 0.02420960187353627,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.4928745543576691,
+          "ci_halfwidth": 0.05037014942375426,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4647099366328544,
+          "ci_halfwidth": 0.007440051698487021,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.13638683489956904,
+          "ci_halfwidth": 0.005595243252081064,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.6034348165495707,
+          "ci_halfwidth": 0.026941842310694797,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.2748291267957232,
+          "ci_halfwidth": 0.05174700693886712,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4113337945562958,
+          "ci_halfwidth": 0.007168650034946211,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.054045968150934154,
+          "ci_halfwidth": 0.005013406471907237,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval, expanded",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.6916471506635441,
+          "ci_halfwidth": 0.025390320062451177,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.40577724743960397,
+          "ci_halfwidth": 0.053801501463525164,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4177054456188658,
+          "ci_halfwidth": 0.01060228716876635,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.0634468336890382,
+          "ci_halfwidth": 0.01558275831945866,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.49804839968774395,
+          "ci_halfwidth": 0.028493364558938333,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.059512898160495376,
+          "ci_halfwidth": 0.05512608828998121,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4582857376375892,
+          "ci_halfwidth": 0.007171161907970819,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.13195718291858205,
+          "ci_halfwidth": 0.004751914673680233,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.2419984387197502,
+          "ci_halfwidth": 0.02341920374707261,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": -0.42577216855043604,
+          "ci_halfwidth": 0.04958323803398185,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.4362410585753525,
+          "ci_halfwidth": 0.007525121110203203,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.09784683643599713,
+          "ci_halfwidth": 0.0042541163563876785,
+          "n": 1281
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "token",
+      "model_key": "__random__",
+      "model": "\\textsc{Random}",
+      "method_key": "random",
+      "signal": "Expected chance",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.4837475820240668,
+          "ci_halfwidth": 0.00806717428230494,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.0,
+          "ci_halfwidth": 0.0,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.37875607063538813,
+          "ci_halfwidth": 0.006509708004140025,
+          "n": 1281
+        },
+        "norm_map": {
+          "mean": 0.0,
+          "ci_halfwidth": 0.0,
+          "n": 1281
+        }
+      },
+      "is_random": true
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.8157689305230289,
+          "ci_halfwidth": 0.020696721311475375,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.4422549567236474,
+          "ci_halfwidth": 0.06843415005298298,
+          "n": 1054
+        },
+        "map": {
+          "mean": 0.6953153407049858,
+          "ci_halfwidth": 0.011464289801604799,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.1924079634306139,
+          "ci_halfwidth": 0.029864404001994804,
+          "n": 1261
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.6932084309133489,
+          "ci_halfwidth": 0.025761124121779888,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.059523814789469436,
+          "ci_halfwidth": 0.07923734028068706,
+          "n": 1054
+        },
+        "map": {
+          "mean": 0.6328056587520821,
+          "ci_halfwidth": 0.012735319250721522,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.07531078907870857,
+          "ci_halfwidth": 0.029680721050384207,
+          "n": 1261
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.9640905542544886,
+          "ci_halfwidth": 0.010538641686182681,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.9126067875830683,
+          "ci_halfwidth": 0.02469025825139437,
+          "n": 1054
+        },
+        "map": {
+          "mean": 0.8174778788296604,
+          "ci_halfwidth": 0.00919252238695445,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.564195649738155,
+          "ci_halfwidth": 0.020101412402552088,
+          "n": 1261
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.9375487900078064,
+          "ci_halfwidth": 0.013270882123341099,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.8469896511879433,
+          "ci_halfwidth": 0.033353373974223166,
+          "n": 1054
+        },
+        "map": {
+          "mean": 0.8444029896816384,
+          "ci_halfwidth": 0.009070770640499382,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.6399267902801834,
+          "ci_halfwidth": 0.01995067177915444,
+          "n": 1261
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.8985167837626854,
+          "ci_halfwidth": 0.016012880562060905,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.6789119023975032,
+          "ci_halfwidth": 0.0536154453995194,
+          "n": 1007
+        },
+        "map": {
+          "mean": 0.775305397610072,
+          "ci_halfwidth": 0.010886511523831022,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.35013924312965206,
+          "ci_halfwidth": 0.03253965307103923,
+          "n": 1241
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.8555815768930523,
+          "ci_halfwidth": 0.019516003122560466,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.5060311943380463,
+          "ci_halfwidth": 0.0697071514012303,
+          "n": 1007
+        },
+        "map": {
+          "mean": 0.7216995230291053,
+          "ci_halfwidth": 0.012057467106760977,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.21831918648915585,
+          "ci_halfwidth": 0.031468880512604755,
+          "n": 1241
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.9648711943793911,
+          "ci_halfwidth": 0.010158079625292693,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.8996559795715704,
+          "ci_halfwidth": 0.03145577682413575,
+          "n": 1007
+        },
+        "map": {
+          "mean": 0.8337962182916387,
+          "ci_halfwidth": 0.009157960520546682,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.5773927045549779,
+          "ci_halfwidth": 0.021885481316397337,
+          "n": 1241
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.9461358313817331,
+          "ci_halfwidth": 0.012490241998438678,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.8490580009199672,
+          "ci_halfwidth": 0.03638614922813033,
+          "n": 1007
+        },
+        "map": {
+          "mean": 0.8537869359956929,
+          "ci_halfwidth": 0.009211032614765968,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.6403696477504278,
+          "ci_halfwidth": 0.020336159585365,
+          "n": 1241
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.9117876658860266,
+          "ci_halfwidth": 0.015612802498048417,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.7385391292451812,
+          "ci_halfwidth": 0.04927169015875782,
+          "n": 1041
+        },
+        "map": {
+          "mean": 0.8076542849909151,
+          "ci_halfwidth": 0.011372631613572104,
+          "n": 1278
+        },
+        "norm_map": {
+          "mean": 0.48779685896282116,
+          "ci_halfwidth": 0.027377693164500033,
+          "n": 1247
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.8899297423887588,
+          "ci_halfwidth": 0.01717408274785326,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.6641976685924813,
+          "ci_halfwidth": 0.05636866822205433,
+          "n": 1041
+        },
+        "map": {
+          "mean": 0.7618667754108585,
+          "ci_halfwidth": 0.011434038391355483,
+          "n": 1278
+        },
+        "norm_map": {
+          "mean": 0.383720880806582,
+          "ci_halfwidth": 0.02667429474237737,
+          "n": 1247
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.9102263856362217,
+          "ci_halfwidth": 0.016393442622950838,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.7502491344710364,
+          "ci_halfwidth": 0.04737186164779822,
+          "n": 1041
+        },
+        "map": {
+          "mean": 0.7633291613773525,
+          "ci_halfwidth": 0.009463966918795641,
+          "n": 1278
+        },
+        "norm_map": {
+          "mean": 0.4127087524313358,
+          "ci_halfwidth": 0.020407706709634515,
+          "n": 1247
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy, mean/15",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.8649492583918813,
+          "ci_halfwidth": 0.018345042935206834,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.6153159200709634,
+          "ci_halfwidth": 0.05690754673733772,
+          "n": 1041
+        },
+        "map": {
+          "mean": 0.7776916285195535,
+          "ci_halfwidth": 0.009874019732787065,
+          "n": 1278
+        },
+        "norm_map": {
+          "mean": 0.45807100484133917,
+          "ci_halfwidth": 0.02139896711488201,
+          "n": 1247
+        }
+      },
+      "is_random": false
+    },
+    {
+      "grid": "interval15",
+      "model_key": "__random__",
+      "model": "\\textsc{Random}",
+      "method_key": "random",
+      "signal": "Expected chance",
+      "n": 1281,
+      "metrics": {
+        "hit7": {
+          "mean": 0.7074888669988703,
+          "ci_halfwidth": 0.010523679326944313,
+          "n": 1281
+        },
+        "norm_hit7": {
+          "mean": 0.0,
+          "ci_halfwidth": 0.0,
+          "n": 1281
+        },
+        "map": {
+          "mean": 0.6262987871389756,
+          "ci_halfwidth": 0.007772784697829771,
+          "n": 1279
+        },
+        "norm_map": {
+          "mean": 0.0,
+          "ci_halfwidth": 0.0,
+          "n": 1281
+        }
+      },
+      "is_random": true
+    }
+  ]
+}

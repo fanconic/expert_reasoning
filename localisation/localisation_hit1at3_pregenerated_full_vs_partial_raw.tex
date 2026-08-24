@@ -1,0 +1,24 @@
+% Requires \usepackage{booktabs}
+\begin{wraptable}{r}{0.58\linewidth}
+\vspace{-0.45em}
+\renewcommand{\arraystretch}{1.10}
+\setlength{\tabcolsep}{3.1pt}
+\centering
+\scriptsize
+\begin{tabular}{l c c c}
+\toprule
+\textbf{Model} & \multicolumn{2}{c}{\textit{Dense (Full)}} & \textit{Interval} \\
+& H@1@1 & H@1@7 & H@1@7 \\
+\midrule
+\texttt{Qwen2.5-7B} & 47.6 {\scriptsize\color{gray}$\pm$ 2.8} {\scriptsize\textcolor{blue}{($\uparrow$ +36.2)}} & 54.9 {\scriptsize\color{gray}$\pm$ 2.6} {\scriptsize\textcolor{blue}{($\uparrow$ +23.6)}} & 65.5 {\scriptsize\color{gray}$\pm$ 2.6} {\scriptsize\textcolor{blue}{($\uparrow$ +13.2)}} \\
+\texttt{Llama3.1-8B} & 65.8 {\scriptsize\color{gray}$\pm$ 2.8} {\scriptsize\textcolor{blue}{($\uparrow$ +53.7)}} & 80.6 {\scriptsize\color{gray}$\pm$ 2.2} {\scriptsize\textcolor{blue}{($\uparrow$ +47.5)}} & 86.1 {\scriptsize\color{gray}$\pm$ 2.0} {\scriptsize\textcolor{blue}{($\uparrow$ +30.1)}} \\
+\texttt{Qwen3-4B} & 62.0 {\scriptsize\color{gray}$\pm$ 2.7} {\scriptsize\textcolor{blue}{($\uparrow$ +50.3)}} & 70.3 {\scriptsize\color{gray}$\pm$ 2.5} {\scriptsize\textcolor{blue}{($\uparrow$ +38.5)}} & 78.9 {\scriptsize\color{gray}$\pm$ 2.2} {\scriptsize\textcolor{blue}{($\uparrow$ +26.0)}} \\
+\bottomrule
+\end{tabular}
+\vspace{0.25em}
+\caption{\textbf{Single-trace error localisation on \textsc{GSM8K} (\textit{pregenerated}).} Raw-reward Hit@1@w (\%, mean \(\pm\) bootstrap 95\% CI half-width), single-perturbation pairs only; \textcolor{blue}{($\uparrow$ +\(\Delta\))} denotes gain over empirical chance in percentage points (\(\Delta = \mathrm{Hit@1@w} - \mathrm{rand}\)). Interval uses 15-token buckets, so for \(1 \le w \le 15\), H@1@w is unchanged (reported as H@1@7).}
+\label{tab:localisation_merged_pregenerated_raw}
+\vspace{-0.70em}
+\end{wraptable}
+
+\textbf{Localisation performance.} Hit@1@w is the fraction of traces where the predicted failure point (largest one-step reward drop on the corrupted trace) falls within \(\pm w\) tokens of the injected perturbation. We interpret performance via \(\Delta\) above chance (blue bracketed arrows): all models are substantially above random for dense H@1@1 and H@1@7, and remain clearly above random for interval (e.g., \(+13.2\), \(+30.1\), \(+26.0\) points). This indicates that reward drops are consistently close to the true corrupted step; qualitative trajectory examples are shown in Appendix~\ref{app:error_localisation_app}.

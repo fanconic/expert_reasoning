@@ -1,0 +1,72 @@
+{
+  "source_pair_details": "outputs/localisation/chatgpt_step_perturbations/gsm8k_qwen7b_sft_step_perturbations_full.jsonl",
+  "source_run_dir": "outputs/localisation/chatgpt_step_perturbations",
+  "policy_model": "/mnt/pdata/caf83/icml_math/outputs/llama8b_sft/best_model",
+  "max_length": 1124,
+  "append_eos": false,
+  "n_rows_total": 1234,
+  "n_rows_scored": 1228,
+  "n_unique_traces_scored": 1228,
+  "severity_filter": null,
+  "require_table_valid": false,
+  "target_position_source": "step_first_diff",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "prob_largest_drop": {
+      "1": {
+        "mean": 0.17996742671009772,
+        "ci_halfwidth": 0.02199714983713351,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.31596091205211724,
+        "ci_halfwidth": 0.026058631921824088,
+        "n": 1228
+      }
+    },
+    "logprob_largest_drop": {
+      "1": {
+        "mean": 0.34283387622149836,
+        "ci_halfwidth": 0.026465798045602618,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.503257328990228,
+        "ci_halfwidth": 0.027687296416938123,
+        "n": 1228
+      }
+    },
+    "entropy_largest_spike": {
+      "1": {
+        "mean": 0.06514657980456026,
+        "ci_halfwidth": 0.013843648208469051,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.23208469055374592,
+        "ci_halfwidth": 0.024429967426710095,
+        "n": 1228
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.03126502045584401,
+        "ci_halfwidth": 0.0006259344947971111,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.15336777746697955,
+        "ci_halfwidth": 0.002944638183272466,
+        "n": 1228
+      }
+    }
+  }
+}

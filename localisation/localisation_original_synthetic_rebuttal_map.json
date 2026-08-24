@@ -1,0 +1,429 @@
+{
+  "old_n": 1234,
+  "new_n": 160,
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "methods": [
+    {
+      "source": "old",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Reward dense (old)",
+      "map": {
+        "mean": 0.1481706587562616,
+        "ci_halfwidth": 0.010905197921193766,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.0905557231311704,
+        "ci_halfwidth": 0.002839441227761988,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.06163571362283829,
+        "ci_halfwidth": 0.01178416991576093,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "old",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Reward interval (old)",
+      "map": {
+        "mean": 0.7321011825125161,
+        "ci_halfwidth": 0.019128466970205815,
+        "n": 1141
+      },
+      "random_map": {
+        "mean": 0.48567662839574816,
+        "ci_halfwidth": 0.00769904952001213,
+        "n": 1141
+      },
+      "norm_map": {
+        "mean": 0.556538789424075,
+        "ci_halfwidth": 0.03088429316323038,
+        "n": 1141
+      },
+      "n": 1141
+    },
+    {
+      "source": "old",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "SFT token log-probability",
+      "map": {
+        "mean": 0.7942943767577366,
+        "ci_halfwidth": 0.01251420801299502,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09165717665116561,
+        "ci_halfwidth": 0.0028600554127321334,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.7638478066728978,
+        "ci_halfwidth": 0.014497205750926778,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "old",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "SFT token entropy",
+      "map": {
+        "mean": 0.11937522036968713,
+        "ci_halfwidth": 0.00568773587694834,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09165717665116561,
+        "ci_halfwidth": 0.0028600554127321334,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.0317709669319287,
+        "ci_halfwidth": 0.0047775589705552745,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "new",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Reward dense (new)",
+      "map": {
+        "mean": 0.26932051196895823,
+        "ci_halfwidth": 0.02497744132959119,
+        "n": 160
+      },
+      "random_map": {
+        "mean": 0.12771113400421674,
+        "ci_halfwidth": 0.00827101703327969,
+        "n": 160
+      },
+      "norm_map": {
+        "mean": 0.16244621604671394,
+        "ci_halfwidth": 0.026952830427696042,
+        "n": 160
+      },
+      "n": 160
+    },
+    {
+      "source": "new",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Base token log-probability",
+      "map": {
+        "mean": 0.5756944932627055,
+        "ci_halfwidth": 0.029233093720680947,
+        "n": 160
+      },
+      "random_map": {
+        "mean": 0.12771113400421674,
+        "ci_halfwidth": 0.00827101703327969,
+        "n": 160
+      },
+      "norm_map": {
+        "mean": 0.5049032232567386,
+        "ci_halfwidth": 0.03482294576275077,
+        "n": 160
+      },
+      "n": 160
+    },
+    {
+      "source": "new",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Base token entropy",
+      "map": {
+        "mean": 0.17233315722503803,
+        "ci_halfwidth": 0.01604719531010798,
+        "n": 160
+      },
+      "random_map": {
+        "mean": 0.12771113400421674,
+        "ci_halfwidth": 0.00827101703327969,
+        "n": 160
+      },
+      "norm_map": {
+        "mean": 0.0538169279223759,
+        "ci_halfwidth": 0.012921855718568711,
+        "n": 160
+      },
+      "n": 160
+    },
+    {
+      "source": "old",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Reward dense (old)",
+      "map": {
+        "mean": 0.4820802304079546,
+        "ci_halfwidth": 0.018300341979167523,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09257746443170511,
+        "ci_halfwidth": 0.002499492953033318,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.4303543174843761,
+        "ci_halfwidth": 0.019453352464710333,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "old",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Reward interval (old)",
+      "map": {
+        "mean": 0.7815546813944433,
+        "ci_halfwidth": 0.015084466408860575,
+        "n": 1125
+      },
+      "random_map": {
+        "mean": 0.5083038674171555,
+        "ci_halfwidth": 0.007599743273133286,
+        "n": 1125
+      },
+      "norm_map": {
+        "mean": 0.5513796523539118,
+        "ci_halfwidth": 0.030156330381327423,
+        "n": 1125
+      },
+      "n": 1125
+    },
+    {
+      "source": "old",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "SFT token log-probability",
+      "map": {
+        "mean": 0.7209822514704161,
+        "ci_halfwidth": 0.015219296276008432,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09367189826011008,
+        "ci_halfwidth": 0.0025598856805676418,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.6912549810588284,
+        "ci_halfwidth": 0.016264832450999855,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "old",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "SFT token entropy",
+      "map": {
+        "mean": 0.13053616659053124,
+        "ci_halfwidth": 0.007421662456249735,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09367189826011008,
+        "ci_halfwidth": 0.0025598856805676418,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.042751190658547336,
+        "ci_halfwidth": 0.006876178570238228,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "new",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Base token log-probability",
+      "map": {
+        "mean": 0.6371695070276597,
+        "ci_halfwidth": 0.028747822605323603,
+        "n": 160
+      },
+      "random_map": {
+        "mean": 0.12272861523289307,
+        "ci_halfwidth": 0.0070026573494239505,
+        "n": 160
+      },
+      "norm_map": {
+        "mean": 0.5847069128900974,
+        "ci_halfwidth": 0.03284291912680665,
+        "n": 160
+      },
+      "n": 160
+    },
+    {
+      "source": "new",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Base token entropy",
+      "map": {
+        "mean": 0.19375499486682357,
+        "ci_halfwidth": 0.02166076595626422,
+        "n": 160
+      },
+      "random_map": {
+        "mean": 0.12272861523289307,
+        "ci_halfwidth": 0.0070026573494239505,
+        "n": 160
+      },
+      "norm_map": {
+        "mean": 0.0841472972422804,
+        "ci_halfwidth": 0.022052034645935886,
+        "n": 160
+      },
+      "n": 160
+    },
+    {
+      "source": "old",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Reward dense (old)",
+      "map": {
+        "mean": 0.19374365948598013,
+        "ci_halfwidth": 0.012875611240219562,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09230560311151223,
+        "ci_halfwidth": 0.0029068679359102317,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.10931494916694447,
+        "ci_halfwidth": 0.014033981622250828,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "old",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Reward interval (old)",
+      "map": {
+        "mean": 0.7096770948988894,
+        "ci_halfwidth": 0.016244886919566603,
+        "n": 1127
+      },
+      "random_map": {
+        "mean": 0.4887254898599777,
+        "ci_halfwidth": 0.007977419776683287,
+        "n": 1127
+      },
+      "norm_map": {
+        "mean": 0.40339126671233055,
+        "ci_halfwidth": 0.031537476797225905,
+        "n": 1127
+      },
+      "n": 1127
+    },
+    {
+      "source": "old",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "SFT token log-probability",
+      "map": {
+        "mean": 0.5231880224915503,
+        "ci_halfwidth": 0.011207507601314837,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09332398452874219,
+        "ci_halfwidth": 0.0029270520313177187,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.46900317709353073,
+        "ci_halfwidth": 0.012510782533799114,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "old",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "SFT token entropy",
+      "map": {
+        "mean": 0.11265446885244235,
+        "ci_halfwidth": 0.00487692355844932,
+        "n": 1234
+      },
+      "random_map": {
+        "mean": 0.09332398452874219,
+        "ci_halfwidth": 0.0029270520313177187,
+        "n": 1234
+      },
+      "norm_map": {
+        "mean": 0.022175061755995977,
+        "ci_halfwidth": 0.0040779180574719714,
+        "n": 1234
+      },
+      "n": 1234
+    },
+    {
+      "source": "new",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Base token log-probability",
+      "map": {
+        "mean": 0.36499591976703216,
+        "ci_halfwidth": 0.018463638562363383,
+        "n": 160
+      },
+      "random_map": {
+        "mean": 0.13008395436242304,
+        "ci_halfwidth": 0.008466033728654274,
+        "n": 160
+      },
+      "norm_map": {
+        "mean": 0.2665664678819929,
+        "ci_halfwidth": 0.02233776024175911,
+        "n": 160
+      },
+      "n": 160
+    },
+    {
+      "source": "new",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Base token entropy",
+      "map": {
+        "mean": 0.20560024194629417,
+        "ci_halfwidth": 0.019092223603307104,
+        "n": 160
+      },
+      "random_map": {
+        "mean": 0.13008395436242304,
+        "ci_halfwidth": 0.008466033728654274,
+        "n": 160
+      },
+      "norm_map": {
+        "mean": 0.08936992734037699,
+        "ci_halfwidth": 0.01724611942647089,
+        "n": 160
+      },
+      "n": 160
+    }
+  ]
+}

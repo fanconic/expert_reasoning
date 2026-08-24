@@ -136,6 +136,13 @@ class IRLConfig(GRPOConfig):
             "help": "Margin for the pairwise loss in the discriminator (0 = no margin)."
         },
     )
+    disc_pairwise_negatives_per_prompt: int = field(
+        default=0,
+        metadata={
+            "help": "For pairwise discriminator losses, subsample this many generated negatives per expert prompt. "
+            "Use 0 to keep all generated negatives."
+        },
+    )
 
     use_outcome_rewards: bool = field(
         default=False,
@@ -153,6 +160,13 @@ class IRLConfig(GRPOConfig):
         default=6,
         metadata={
             "help": "Maximum samples per micro-batch through reward model to avoid OOM."
+        },
+    )
+    reward_score_micro_batch: int = field(
+        default=None,
+        metadata={
+            "help": "Maximum samples per reward-model inference micro-batch when scoring policy rollouts. "
+            "Defaults to max_micro_batch if unset."
         },
     )
     dense_rewards: bool = field(
@@ -201,7 +215,7 @@ class IRLConfig(GRPOConfig):
         },
     )
     classifier_loss: str = field(
-        default="bce", metadata={"help": "Loss of the classifier `bce` or `wgan`"}
+        default="bce", metadata={"help": "Loss of the classifier: `bce` or `gad_pairwise`."}
     )
     warmup_reward_dir: str = field(
         default=None, metadata={"help": "If path it is set, it loads the warmed up reward model and its optimiser"}
@@ -306,6 +320,18 @@ class IRLConfig(GRPOConfig):
             "help": "Number of optimization steps to warm up the reward model discriminator before alternating training. "
             "During warm-up, only the reward model is trained with expert demonstrations as positives, "
             "policy-generated samples as negatives, and perturbed expert demonstrations as additional negatives."
+        },
+    )
+    continue_reward_warmup_after_load: bool = field(
+        default=False,
+        metadata={
+            "help": "If true, run reward_warmup_steps additional discriminator warmup steps after loading warmup_reward_dir."
+        },
+    )
+    freeze_reward_after_warmup: bool = field(
+        default=False,
+        metadata={
+            "help": "If true, freeze the reward model after loading/running warmup and skip all subsequent discriminator updates."
         },
     )
 

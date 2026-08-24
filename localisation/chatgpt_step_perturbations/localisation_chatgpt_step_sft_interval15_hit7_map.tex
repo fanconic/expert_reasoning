@@ -1,0 +1,30 @@
+% Requires \usepackage{multirow}
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\caption{\textbf{Interval-resolution natural-error localisation.} Dense reward and SFT token baselines are averaged into non-overlapping 15-token intervals before detection; the fixed-interval reward uses its native interval scores. All methods are scored on the same 1228 ChatGPT-edited GSM8K clean/perturbed pairs. Hit@7 uses the first changed token target (step\_first\_diff); MAP uses the broader edited token span. Values are percentages with 95\% bootstrap CI half-widths. \textbf{Bold} marks the best and \underline{underlining} the second-best value within each model and metric.}
+\label{tab:localisation_chatgpt_step_sft_interval15_hit7_map}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Model} & \textbf{Signal} & \textbf{Hit@7 (\%)} & \textbf{MAP (\%)} & \textbf{n} \\
+\midrule
+\multirow{4}{*}{\textsc{Qwen2.5-7B}} & Reward dense, mean/15 & 34.12 $\pm$ 2.65 & 62.70 $\pm$ 1.19 & 1228 \\
+ & Reward interval & 36.56 $\pm$ 2.69 & 56.34 $\pm$ 1.26 & 1228 \\
+ & SFT log-probability, mean/15 & \textbf{93.89} $\pm$ 1.34 & \textbf{82.11} $\pm$ 0.85 & 1228 \\
+ & SFT entropy, mean/15 & \underline{83.88} $\pm$ 2.08 & \underline{80.44} $\pm$ 1.07 & 1228 \\
+\midrule
+\multirow{4}{*}{\textsc{Llama3.1-8B}} & Reward dense, mean/15 & 57.41 $\pm$ 2.77 & 74.71 $\pm$ 1.17 & 1228 \\
+ & Reward interval & 52.85 $\pm$ 2.81 & 66.37 $\pm$ 1.33 & 1228 \\
+ & SFT log-probability, mean/15 & \textbf{89.58} $\pm$ 1.67 & \underline{80.72} $\pm$ 1.02 & 1228 \\
+ & SFT entropy, mean/15 & \underline{81.35} $\pm$ 2.20 & \textbf{81.60} $\pm$ 1.10 & 1228 \\
+\midrule
+\multirow{4}{*}{\textsc{Qwen3-4B}} & Reward dense, mean/15 & 63.93 $\pm$ 2.61 & \textbf{77.89} $\pm$ 1.25 & 1228 \\
+ & Reward interval & 66.12 $\pm$ 2.57 & 72.46 $\pm$ 1.26 & 1228 \\
+ & SFT log-probability, mean/15 & \textbf{80.46} $\pm$ 2.24 & \underline{73.37} $\pm$ 1.02 & 1228 \\
+ & SFT entropy, mean/15 & \underline{73.70} $\pm$ 2.44 & 72.97 $\pm$ 1.14 & 1228 \\
+\midrule
+\textsc{Random} & Shared 15-token interval chance & 38.65 $\pm$ 0.69 & 55.64 $\pm$ 0.77 & 1228 \\
+\bottomrule
+\end{tabular}
+\end{table}

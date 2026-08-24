@@ -1,0 +1,48 @@
+{
+  "source_pairs_jsonl": "outputs/localisation/chatgpt_step_perturbations/gsm8k_qwen7b_sft_step_perturbations_full.jsonl",
+  "checkpoint_dir": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_full/best_model",
+  "reward_name": "Qwen/Qwen2.5-7B-Instruct",
+  "dense_reward_mode": "full",
+  "dense_rewards_config_value": true,
+  "localization_mode": "token",
+  "partial_fixed_stride": null,
+  "max_length": 1124,
+  "n_rows_total": 1234,
+  "n_rows_scored": 1228,
+  "target_position_source": "step_first_diff",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "reward_largest_drop": {
+      "1": {
+        "mean": 0.02768729641693811,
+        "ci_halfwidth": 0.009364820846905538,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.08876221498371335,
+        "ci_halfwidth": 0.015879478827361564,
+        "n": 1228
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.02874734365050384,
+        "ci_halfwidth": 0.0006092259900586268,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.1390334410077254,
+        "ci_halfwidth": 0.0027755713492209205,
+        "n": 1228
+      }
+    }
+  }
+}

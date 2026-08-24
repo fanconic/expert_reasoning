@@ -1,0 +1,48 @@
+{
+  "source_pairs_jsonl": "outputs/localisation/expert_step_perturbations/scores/_inputs/expert_step_valid_target_char_span.jsonl",
+  "checkpoint_dir": "/mnt/pdata/caf83/icml_math/outputs/llama8b_partial_fixed/best_model",
+  "reward_name": "meta-llama/Llama-3.1-8B-Instruct",
+  "dense_reward_mode": "partial_fixed",
+  "dense_rewards_config_value": "partial_fixed",
+  "localization_mode": "bucket",
+  "partial_fixed_stride": 15,
+  "max_length": 1124,
+  "n_rows_total": 1281,
+  "n_rows_scored": 1281,
+  "target_position_source": "target_char_span",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "reward_largest_drop": {
+      "1": {
+        "mean": 0.8352849336455894,
+        "ci_halfwidth": 0.020296643247462887,
+        "n": 1281
+      },
+      "7": {
+        "mean": 0.8352849336455894,
+        "ci_halfwidth": 0.020296643247462887,
+        "n": 1281
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.7053404838568061,
+        "ci_halfwidth": 0.010197707130351064,
+        "n": 1281
+      },
+      "7": {
+        "mean": 0.7053404838568061,
+        "ci_halfwidth": 0.010197707130351064,
+        "n": 1281
+      }
+    }
+  }
+}

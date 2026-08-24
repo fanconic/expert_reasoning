@@ -1,0 +1,11 @@
+# Keep the localisation folder light in git.
+#
+# The raw trace files are large and reproducible from the committed scripts.
+# Commit the small summaries, configs, tables, and documentation instead.
+*.jsonl
+*.log
+*.png
+*.pdf
+*_trace.txt
+logs/
+**/logs/

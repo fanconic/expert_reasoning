@@ -6,7 +6,7 @@ RUNNER="runner_scripts/${GPU_NUM}_run_gpu_node.sh"
 
 # Shared defaults (override at launch if needed)
 : "${TRACE_JSONL:=/mnt/pdata/caf83/icml_math/outputs/qwen7b_sft/best_model/eval_results_math_qwen7b_sft_t0p5.jsonl}"
-: "${OUTPUT_ROOT:=/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/outputs/localisation}"
+: "${OUTPUT_ROOT:=/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/localisation}"
 : "${MAX_EXAMPLES:=1300}"  # Empty => use full split.
 : "${START_INDEX:=0}"
 : "${MAX_SEVERITY:=5}"
@@ -95,8 +95,15 @@ run_localiser() {
             ;;
     esac
 
+    local source_dir
+    if [[ "${trace_source}" == "expert" ]]; then
+        source_dir="expert"
+    else
+        source_dir="qwen7b_sft"
+    fi
+
     local label="${model}_${density}_localisation_${source_suffix}"
-    local out_dir="${OUTPUT_ROOT}/${label}"
+    local out_dir="${OUTPUT_ROOT}/runs/${source_dir}/${model}/${density}"
 
     mkdir -p "${out_dir}"
 
@@ -106,7 +113,7 @@ run_localiser() {
         --checkpoint-dir "${checkpoint_dir}"
         --split "test"
         --trace-source "${trace_source}"
-        --dense-reward-mode "${I believe}"
+        --dense-reward-mode "${density}"
         --start-index "${START_INDEX}"
         --max-severity "${MAX_SEVERITY}"
         --variants-per-severity "${VARIANTS_PER_SEVERITY}"

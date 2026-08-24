@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6500,
+    "win_rate": 0.9903076923076923,
+    "mean_margin": 2.825969045522004,
+    "median_margin": 3.221952098403775,
+    "tie_rate": 0.008307692307692308,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1300,
+      "win_rate": 0.9876923076923076,
+      "mean_margin": 2.108357262222106,
+      "median_margin": 2.546823821998844
+    },
+    "2": {
+      "n_pairs": 1300,
+      "win_rate": 0.9723076923076923,
+      "mean_margin": 2.733901936336924,
+      "median_margin": 3.176722095535254
+    },
+    "3": {
+      "n_pairs": 1300,
+      "win_rate": 0.9961538461538462,
+      "mean_margin": 3.00796709541797,
+      "median_margin": 3.2678844002221115
+    },
+    "4": {
+      "n_pairs": 1300,
+      "win_rate": 0.9961538461538462,
+      "mean_margin": 3.1085840845576813,
+      "median_margin": 3.3102739807420685
+    },
+    "5": {
+      "n_pairs": 1300,
+      "win_rate": 0.9992307692307693,
+      "mean_margin": 3.1710348490753413,
+      "median_margin": 3.3102055639769903
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1300,
+    "mean_spearman_rho": -0.2752307692307692,
+    "nonincreasing_rate": 0.02923076923076923
+  },
+  "localization": {
+    "n_pairs": 6433,
+    "mode": "token",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": null,
+    "local_window_units": 3,
+    "unit_name": "token",
+    "mean_local_drop": 2.764102210986097,
+    "mean_far_drop": 2.8821100398789747,
+    "mean_gap": -0.1180078288928783,
+    "hit_at_k": {
+      "1": 0.18032022384579513,
+      "3": 0.386755790455464,
+      "5": 0.5244831338411317
+    },
+    "hit_at_k_random": {
+      "1": 0.3237630185409457,
+      "3": 0.6513281391670283,
+      "5": 0.7946208300289859
+    },
+    "hit_at_k_norm": {
+      "1": -0.25353144018971824,
+      "3": -1.4406822333868508,
+      "5": -4.388452121616713
+    },
+    "mean_local_unit_ratio": 0.3237630185409457
+  }
+}

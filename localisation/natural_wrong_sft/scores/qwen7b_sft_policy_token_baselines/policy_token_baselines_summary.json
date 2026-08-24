@@ -1,0 +1,72 @@
+{
+  "source_pair_details": "outputs/localisation/natural_wrong_sft/scores/_inputs/natural_wrong_sft_valid_target_char_span.jsonl",
+  "source_run_dir": "outputs/localisation/natural_wrong_sft/scores/_inputs",
+  "policy_model": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_sft/best_model",
+  "max_length": 1124,
+  "append_eos": false,
+  "n_rows_total": 865,
+  "n_rows_scored": 865,
+  "n_unique_traces_scored": 864,
+  "severity_filter": null,
+  "require_table_valid": false,
+  "target_position_source": "target_char_span",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "prob_largest_drop": {
+      "1": {
+        "mean": 0.24508670520231213,
+        "ci_halfwidth": 0.028916184971098255,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.48554913294797686,
+        "ci_halfwidth": 0.0329479768786127,
+        "n": 865
+      }
+    },
+    "logprob_largest_drop": {
+      "1": {
+        "mean": 0.2682080924855491,
+        "ci_halfwidth": 0.03063583815028903,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.4936416184971098,
+        "ci_halfwidth": 0.03179190751445088,
+        "n": 865
+      }
+    },
+    "entropy_largest_spike": {
+      "1": {
+        "mean": 0.08786127167630058,
+        "ci_halfwidth": 0.0184971098265896,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.43352601156069365,
+        "ci_halfwidth": 0.0329479768786127,
+        "n": 865
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.2705733123917173,
+        "ci_halfwidth": 0.008434783755426722,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.3713003608582366,
+        "ci_halfwidth": 0.009767618951486895,
+        "n": 865
+      }
+    }
+  }
+}

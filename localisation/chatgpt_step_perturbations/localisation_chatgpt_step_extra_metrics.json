@@ -1,0 +1,1724 @@
+{
+  "root_dir": "outputs/localisation/chatgpt_step_perturbations/scores",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "methods": [
+    {
+      "key": "qwen7b_full_reward",
+      "section": "reward",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_full_reward_localisation/pair_details.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": -0.0011503927358111512,
+              "ci_halfwidth": 0.009431745569592686,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.03436056461466197,
+              "ci_halfwidth": 0.0014706318287494198,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.1970684039087948,
+              "ci_halfwidth": 0.0228114820846905,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": -0.07063070462057032,
+              "ci_halfwidth": 0.03237636426019101,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.2515920296893415,
+              "ci_halfwidth": 0.006272381626424739,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": -0.06164910385108934,
+              "ci_halfwidth": 0.019052401119742577,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.1401144718348283,
+              "ci_halfwidth": 0.003342569117582614,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.254071661237785,
+              "ci_halfwidth": 0.02525447882736151,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": -0.24981128245418124,
+              "ci_halfwidth": 0.04793242028498666,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.3689593930736507,
+              "ci_halfwidth": 0.007411615080335027,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.048866435338631185,
+            "ci_halfwidth": 0.0057798452217770226,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.047078665941537444,
+            "ci_halfwidth": 0.005429395146039677,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.3974839313517171,
+            "ci_halfwidth": 0.01810057631972195,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.24220526063612743,
+            "ci_halfwidth": 0.005782051715854594,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen7b_partial_fixed_reward",
+      "section": "reward",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": -0.010847024211758857,
+              "ci_halfwidth": 0.04554610815545841,
+              "n": 1227
+            },
+            "first_diff_mass": {
+              "mean": 0.35690001798271653,
+              "ci_halfwidth": 0.014636901906504879,
+              "n": 1226
+            },
+            "edit_span_hit": {
+              "mean": 0.6172638436482085,
+              "ci_halfwidth": 0.02809446254071657,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.11118004189493914,
+              "ci_halfwidth": 0.0653994936938537,
+              "n": 1168
+            },
+            "edit_span_mass": {
+              "mean": 0.6476559523829988,
+              "ci_halfwidth": 0.016296613629794343,
+              "n": 1226
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": -0.010847024211758857,
+              "ci_halfwidth": 0.04554610815545841,
+              "n": 1227
+            },
+            "first_diff_mass": {
+              "mean": 0.35690001798271653,
+              "ci_halfwidth": 0.014636901906504879,
+              "n": 1226
+            },
+            "edit_span_hit": {
+              "mean": 0.6172638436482085,
+              "ci_halfwidth": 0.02809446254071657,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.11118004189493914,
+              "ci_halfwidth": 0.0653994936938537,
+              "n": 1168
+            },
+            "edit_span_mass": {
+              "mean": 0.6476559523829988,
+              "ci_halfwidth": 0.016296613629794343,
+              "n": 1226
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.3836689519955102,
+            "ci_halfwidth": 0.016040693786289972,
+            "n": 1107
+          },
+          "first_diff_map": {
+            "mean": 0.38328933311995644,
+            "ci_halfwidth": 0.01577221453957567,
+            "n": 1107
+          },
+          "edit_span_mrr": {
+            "mean": 0.612327241316603,
+            "ci_halfwidth": 0.01760059458862645,
+            "n": 1222
+          },
+          "edit_span_map": {
+            "mean": 0.5634424696896438,
+            "ci_halfwidth": 0.012570277938327101,
+            "n": 1222
+          }
+        }
+      }
+    },
+    {
+      "key": "llama8b_full_reward",
+      "section": "reward",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_full_reward_localisation/pair_details.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.024870959742013598,
+              "ci_halfwidth": 0.013378830262470325,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.04715960649663608,
+              "ci_halfwidth": 0.0022377995413123235,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.32247557003257327,
+              "ci_halfwidth": 0.025651465798045586,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.0838154290261901,
+              "ci_halfwidth": 0.03595721207212173,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.31215178012496164,
+              "ci_halfwidth": 0.007653899189506236,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.006290817690074805,
+              "ci_halfwidth": 0.02451090898859056,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.17120071685726046,
+              "ci_halfwidth": 0.004295426366278374,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.4210097719869707,
+              "ci_halfwidth": 0.02729030944625399,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.008472095345768772,
+              "ci_halfwidth": 0.052151075810779796,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.43930611452972784,
+              "ci_halfwidth": 0.008701861601451755,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.08512840526415498,
+            "ci_halfwidth": 0.0093324715832208,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.0786502624692693,
+            "ci_halfwidth": 0.008257661953345416,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.5227367838189816,
+            "ci_halfwidth": 0.018874259726471554,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.29411253487597877,
+            "ci_halfwidth": 0.006731813664597408,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "llama8b_partial_fixed_reward",
+      "section": "reward",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.2022314259059773,
+              "ci_halfwidth": 0.050080406242977604,
+              "n": 1226
+            },
+            "first_diff_mass": {
+              "mean": 0.491028573414931,
+              "ci_halfwidth": 0.015681583749257794,
+              "n": 1222
+            },
+            "edit_span_hit": {
+              "mean": 0.7809446254071661,
+              "ci_halfwidth": 0.023615635179153105,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.42079792517732656,
+              "ci_halfwidth": 0.06930042494550637,
+              "n": 1136
+            },
+            "edit_span_mass": {
+              "mean": 0.7536790123542226,
+              "ci_halfwidth": 0.013973273011380294,
+              "n": 1222
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.2022314259059773,
+              "ci_halfwidth": 0.050080406242977604,
+              "n": 1226
+            },
+            "first_diff_mass": {
+              "mean": 0.491028573414931,
+              "ci_halfwidth": 0.015681583749257794,
+              "n": 1222
+            },
+            "edit_span_hit": {
+              "mean": 0.7809446254071661,
+              "ci_halfwidth": 0.023615635179153105,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.42079792517732656,
+              "ci_halfwidth": 0.06930042494550637,
+              "n": 1136
+            },
+            "edit_span_mass": {
+              "mean": 0.7536790123542226,
+              "ci_halfwidth": 0.013973273011380294,
+              "n": 1222
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.520611549000994,
+            "ci_halfwidth": 0.018616716446277437,
+            "n": 1099
+          },
+          "first_diff_map": {
+            "mean": 0.520611549000994,
+            "ci_halfwidth": 0.018616716446277437,
+            "n": 1099
+          },
+          "edit_span_mrr": {
+            "mean": 0.7317444120505345,
+            "ci_halfwidth": 0.017117237609329483,
+            "n": 1225
+          },
+          "edit_span_map": {
+            "mean": 0.663651197506737,
+            "ci_halfwidth": 0.013310267457073144,
+            "n": 1225
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen4b_full_reward",
+      "section": "reward",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_full_reward_localisation/pair_details.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.06205038767511479,
+              "ci_halfwidth": 0.01588310628747587,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.04647425554159689,
+              "ci_halfwidth": 0.002460732095652316,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.43159609120521175,
+              "ci_halfwidth": 0.027280130293159593,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.25934173866211624,
+              "ci_halfwidth": 0.03649176212661086,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.3110711778427053,
+              "ci_halfwidth": 0.008000469452209807,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.1630656423401632,
+              "ci_halfwidth": 0.029946709127395277,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.17537017176171824,
+              "ci_halfwidth": 0.005052177509306421,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.5260586319218241,
+              "ci_halfwidth": 0.02687296416938112,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.25549550038007857,
+              "ci_halfwidth": 0.044930384853030136,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.4316237495504588,
+              "ci_halfwidth": 0.009248885114998578,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.0889036192771835,
+            "ci_halfwidth": 0.010424853238254823,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.08430891661992211,
+            "ci_halfwidth": 0.009650283003985134,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.5636294729882875,
+            "ci_halfwidth": 0.020073337877414887,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.28603042206507545,
+            "ci_halfwidth": 0.0068240928276092905,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen4b_partial_fixed_reward",
+      "section": "reward",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.4610531265667546,
+              "ci_halfwidth": 0.04334768454478291,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.5658606073684316,
+              "ci_halfwidth": 0.01474089680838081,
+              "n": 1223
+            },
+            "edit_span_hit": {
+              "mean": 0.8485342019543974,
+              "ci_halfwidth": 0.01995114006514659,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.6400312930131427,
+              "ci_halfwidth": 0.05061109842332834,
+              "n": 1157
+            },
+            "edit_span_mass": {
+              "mean": 0.7773320483045871,
+              "ci_halfwidth": 0.012052580932635115,
+              "n": 1223
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.4610531265667546,
+              "ci_halfwidth": 0.04334768454478291,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.5658606073684316,
+              "ci_halfwidth": 0.01474089680838081,
+              "n": 1223
+            },
+            "edit_span_hit": {
+              "mean": 0.8485342019543974,
+              "ci_halfwidth": 0.01995114006514659,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.6400312930131427,
+              "ci_halfwidth": 0.05061109842332834,
+              "n": 1157
+            },
+            "edit_span_mass": {
+              "mean": 0.7773320483045871,
+              "ci_halfwidth": 0.012052580932635115,
+              "n": 1223
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.5957129732952403,
+            "ci_halfwidth": 0.019570090843799737,
+            "n": 1094
+          },
+          "first_diff_map": {
+            "mean": 0.5943962674538543,
+            "ci_halfwidth": 0.01956754597093946,
+            "n": 1094
+          },
+          "edit_span_mrr": {
+            "mean": 0.8165501165501164,
+            "ci_halfwidth": 0.014953953404751252,
+            "n": 1222
+          },
+          "edit_span_map": {
+            "mean": 0.724597966086494,
+            "ci_halfwidth": 0.0125801315048506,
+            "n": 1222
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen7b_base_logprob",
+      "section": "policy",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Base token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.06769002549707055,
+              "ci_halfwidth": 0.016510795226542148,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.06305048160610068,
+              "ci_halfwidth": 0.003423354863313525,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.5724755700325733,
+              "ci_halfwidth": 0.026465798045602618,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.43189258634398525,
+              "ci_halfwidth": 0.03614624776306022,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.4596434088634618,
+              "ci_halfwidth": 0.0075744208289246495,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.3382154882445656,
+              "ci_halfwidth": 0.03191324479390989,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.27703080006735664,
+              "ci_halfwidth": 0.005380975580152131,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.6001628664495114,
+              "ci_halfwidth": 0.026872964169381064,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.334004122758838,
+              "ci_halfwidth": 0.046752904444142096,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.5429418352142866,
+              "ci_halfwidth": 0.007478681895508321,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.11355167345349974,
+            "ci_halfwidth": 0.011919830083077447,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.10410155799277772,
+            "ci_halfwidth": 0.010801800614923404,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.7387095501837735,
+            "ci_halfwidth": 0.016243682948841542,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.36252703578603784,
+            "ci_halfwidth": 0.005814463343286447,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen7b_base_entropy",
+      "section": "policy",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Base token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_spike",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.038210330711596345,
+              "ci_halfwidth": 0.014748433908579332,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.04005583815443466,
+              "ci_halfwidth": 0.0018748183173368169,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.511400651465798,
+              "ci_halfwidth": 0.027687296416938123,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.3716187556814592,
+              "ci_halfwidth": 0.03694295575039802,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.3422323850895944,
+              "ci_halfwidth": 0.00819868872471835,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.09659798948465632,
+              "ci_halfwidth": 0.027205998903025705,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.1826019802948402,
+              "ci_halfwidth": 0.0041168299643783435,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.6596091205211726,
+              "ci_halfwidth": 0.025244299674267112,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.4776520225318943,
+              "ci_halfwidth": 0.0406937616910327,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.47780759293753433,
+              "ci_halfwidth": 0.009072456576419058,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.07885409128295157,
+            "ci_halfwidth": 0.009816992102849906,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.0735959555518185,
+            "ci_halfwidth": 0.009057590684235152,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.6208091450842844,
+            "ci_halfwidth": 0.020288631916496824,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.29506970613970107,
+            "ci_halfwidth": 0.006865756417913371,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen7b_sft_logprob",
+      "section": "policy",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B-SFT}",
+      "signal": "SFT token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.10218641372521883,
+              "ci_halfwidth": 0.019593316910611065,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.09142461552811074,
+              "ci_halfwidth": 0.004975495548737559,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.8982084690553745,
+              "ci_halfwidth": 0.016693811074918574,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.868264141255506,
+              "ci_halfwidth": 0.021974008457307626,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.6721699146005184,
+              "ci_halfwidth": 0.007699668806749549,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.6477189719743824,
+              "ci_halfwidth": 0.029005144824004347,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.40682113687457894,
+              "ci_halfwidth": 0.007822287900984909,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.9275244299674267,
+              "ci_halfwidth": 0.014250814332247563,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.8872964675840227,
+              "ci_halfwidth": 0.02264535685980401,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.7529564686138648,
+              "ci_halfwidth": 0.0072705763027459125,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.13904290206932604,
+            "ci_halfwidth": 0.012965758763984495,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.12534711043028843,
+            "ci_halfwidth": 0.011613603139263684,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.9396579804560261,
+            "ci_halfwidth": 0.009169211454940263,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.46633269209119194,
+            "ci_halfwidth": 0.005900394686928823,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen7b_sft_entropy",
+      "section": "policy",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B-SFT}",
+      "signal": "SFT token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_spike",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": -0.0002290300085303447,
+              "ci_halfwidth": 0.009629558794015416,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.04436970295751225,
+              "ci_halfwidth": 0.0020106822355795,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.28094462540716614,
+              "ci_halfwidth": 0.025244299674267112,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.0566074377780009,
+              "ci_halfwidth": 0.03517144066788423,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.3528532446897979,
+              "ci_halfwidth": 0.00865047750431222,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": -0.014764126375376562,
+              "ci_halfwidth": 0.021479009446026272,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.1851285863081097,
+              "ci_halfwidth": 0.004297552650483372,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.3534201954397394,
+              "ci_halfwidth": 0.026465798045602618,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": -0.04735524093004811,
+              "ci_halfwidth": 0.04595793172227682,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.48346386269618885,
+              "ci_halfwidth": 0.009030594440903289,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.0691937610969557,
+            "ci_halfwidth": 0.0070429231696408565,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.06522962345471552,
+            "ci_halfwidth": 0.006534240167951726,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.5001794989568003,
+            "ci_halfwidth": 0.018104772725374058,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.2920609635158418,
+            "ci_halfwidth": 0.006839058288575228,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "llama8b_base_logprob",
+      "section": "policy",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Base token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.1885851651191564,
+              "ci_halfwidth": 0.02251884965735844,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.09711170921402931,
+              "ci_halfwidth": 0.0035589546809154174,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.4503257328990228,
+              "ci_halfwidth": 0.02687296416938109,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.2534134853560899,
+              "ci_halfwidth": 0.03758685761270297,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.39126983800205173,
+              "ci_halfwidth": 0.007454011910794284,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.23451373951682458,
+              "ci_halfwidth": 0.03150747451681782,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.24081745513529765,
+              "ci_halfwidth": 0.004920974117674989,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.501628664495114,
+              "ci_halfwidth": 0.02687296416938112,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.1390626102045592,
+              "ci_halfwidth": 0.04990793319917803,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.4918442600610285,
+              "ci_halfwidth": 0.0078331384220795,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.08376118692287884,
+            "ci_halfwidth": 0.010409216527848084,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.08194585904816698,
+            "ci_halfwidth": 0.010412138563268301,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.6521380009943432,
+            "ci_halfwidth": 0.017416514960045815,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.33407570662823166,
+            "ci_halfwidth": 0.005791958621591292,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "llama8b_base_entropy",
+      "section": "policy",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Base token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_spike",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.012066272887230833,
+              "ci_halfwidth": 0.01161675546162749,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.040878345680019565,
+              "ci_halfwidth": 0.001572138297719853,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.46661237785016285,
+              "ci_halfwidth": 0.0289087947882736,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.28375465488884943,
+              "ci_halfwidth": 0.040178989710252896,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.32936454367776796,
+              "ci_halfwidth": 0.0075570053061110865,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.022323556244795983,
+              "ci_halfwidth": 0.025080099469742198,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.1725506092579214,
+              "ci_halfwidth": 0.0036552420007810726,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.5765472312703583,
+              "ci_halfwidth": 0.028104641693811105,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.29151707365167195,
+              "ci_halfwidth": 0.05075143576380005,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.46004001494798613,
+              "ci_halfwidth": 0.008378612533901902,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.07860926428968222,
+            "ci_halfwidth": 0.008844749317312939,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.07542927765452653,
+            "ci_halfwidth": 0.008627694611641562,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.5900903605714474,
+            "ci_halfwidth": 0.019965548575266112,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.2918759972473105,
+            "ci_halfwidth": 0.006624518579060962,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "llama8b_sft_logprob",
+      "section": "policy",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B-SFT}",
+      "signal": "SFT token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.3217450703462161,
+              "ci_halfwidth": 0.027219913266363582,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.13657053453578075,
+              "ci_halfwidth": 0.004266395882468396,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.6506514657980456,
+              "ci_halfwidth": 0.027280130293159566,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.5381475723487184,
+              "ci_halfwidth": 0.037097528819095504,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.5144471770879139,
+              "ci_halfwidth": 0.008880287629718597,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.4130858135319164,
+              "ci_halfwidth": 0.03309788485638285,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.30231591795582274,
+              "ci_halfwidth": 0.00634824559009356,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.7166123778501629,
+              "ci_halfwidth": 0.025254478827361537,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.5320670112132314,
+              "ci_halfwidth": 0.04382383144264926,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.6165776422652693,
+              "ci_halfwidth": 0.008936310443841966,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.06841089782053805,
+            "ci_halfwidth": 0.009221639554246194,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.06494381976259174,
+            "ci_halfwidth": 0.008618017812706675,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.7933283682637007,
+            "ci_halfwidth": 0.016122576439642156,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.39340260361913504,
+            "ci_halfwidth": 0.006599775888308068,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "llama8b_sft_entropy",
+      "section": "policy",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B-SFT}",
+      "signal": "SFT token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_spike",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.0350704719828412,
+              "ci_halfwidth": 0.013956771541246922,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.053373368227463656,
+              "ci_halfwidth": 0.0027404601525064763,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.5244299674267101,
+              "ci_halfwidth": 0.028094462540716625,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.3776568238815233,
+              "ci_halfwidth": 0.03763024964350464,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.40568357703073904,
+              "ci_halfwidth": 0.009789745877592765,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.0938506911769453,
+              "ci_halfwidth": 0.02848291724385523,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.1993502444672115,
+              "ci_halfwidth": 0.005690796467716502,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.6693811074918566,
+              "ci_halfwidth": 0.02728013029315962,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.4687639618592986,
+              "ci_halfwidth": 0.046450808906462776,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.5483294731235132,
+              "ci_halfwidth": 0.009754786857878173,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.09587727948322537,
+            "ci_halfwidth": 0.01041767866492909,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.09393773663325948,
+            "ci_halfwidth": 0.010208850973641381,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.6459443875164704,
+            "ci_halfwidth": 0.020070769299497027,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.3230602139542843,
+            "ci_halfwidth": 0.007262235437850345,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen4b_base_logprob",
+      "section": "policy",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Base token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": -0.007525998587417746,
+              "ci_halfwidth": 0.00854996347971293,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.04074093461773079,
+              "ci_halfwidth": 0.002419511638208815,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.13762214983713356,
+              "ci_halfwidth": 0.019951140065146575,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": -0.15639324614401418,
+              "ci_halfwidth": 0.028359939365460538,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.30938043168041535,
+              "ci_halfwidth": 0.007045317360970027,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": -0.006044016218799128,
+              "ci_halfwidth": 0.022437814403593187,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.19598820351683466,
+              "ci_halfwidth": 0.004818741575666377,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.2288273615635179,
+              "ci_halfwidth": 0.02361563517915309,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": -0.27032979777774807,
+              "ci_halfwidth": 0.04397616436076389,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.4147014199634193,
+              "ci_halfwidth": 0.00865419659267419,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.06483407908355189,
+            "ci_halfwidth": 0.006089979895803534,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.060358246729026684,
+            "ci_halfwidth": 0.0055359390294186794,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.3458529320262716,
+            "ci_halfwidth": 0.015252571519821734,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.27922313284778694,
+            "ci_halfwidth": 0.005712803072673578,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen4b_base_entropy",
+      "section": "policy",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Base token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_spike",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.028269252780499493,
+              "ci_halfwidth": 0.013298800505016143,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.04056908839613774,
+              "ci_halfwidth": 0.0020301161408266648,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.5684039087947883,
+              "ci_halfwidth": 0.02728013029315962,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.4395539146640979,
+              "ci_halfwidth": 0.03653638251168598,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.38942835738587334,
+              "ci_halfwidth": 0.009619202807420596,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.0764284120018224,
+              "ci_halfwidth": 0.026729495380164343,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.18508433366636992,
+              "ci_halfwidth": 0.004727792349676199,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.7174267100977199,
+              "ci_halfwidth": 0.025651465798045614,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.5624651338933491,
+              "ci_halfwidth": 0.041176965047706515,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.5304672775502638,
+              "ci_halfwidth": 0.010274718517404302,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.08033844729990794,
+            "ci_halfwidth": 0.009929462930835298,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.07704610921036506,
+            "ci_halfwidth": 0.009483619488196822,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.6496989103709491,
+            "ci_halfwidth": 0.019620599621745505,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.312523212471797,
+            "ci_halfwidth": 0.007179991505396499,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen4b_sft_logprob",
+      "section": "policy",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B-SFT}",
+      "signal": "SFT token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_drop",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.006541344256497319,
+              "ci_halfwidth": 0.01134009278026638,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.06068637750577334,
+              "ci_halfwidth": 0.003195931648266998,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.2931596091205212,
+              "ci_halfwidth": 0.025651465798045586,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.05167409894396873,
+              "ci_halfwidth": 0.035635577829402736,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.46369792481780153,
+              "ci_halfwidth": 0.007576767644964427,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.10255452269306445,
+              "ci_halfwidth": 0.02795827427793625,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.2752775508501349,
+              "ci_halfwidth": 0.0054626588087312855,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.40798045602605865,
+              "ci_halfwidth": 0.028094462540716625,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": 0.046622068323702893,
+              "ci_halfwidth": 0.04855968416703149,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.5680969385460999,
+              "ci_halfwidth": 0.009066737415578785,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.09930492833539699,
+            "ci_halfwidth": 0.009079727533005198,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.09252429892732447,
+            "ci_halfwidth": 0.008428000820181386,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.5992214440387024,
+            "ci_halfwidth": 0.014694373598415189,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.36315058975581693,
+            "ci_halfwidth": 0.0057475016355549025,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "qwen4b_sft_entropy",
+      "section": "policy",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B-SFT}",
+      "signal": "SFT token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "detector": "largest_spike",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": -0.026987981912931867,
+              "ci_halfwidth": 0.003457643245017737,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.037949514179466,
+              "ci_halfwidth": 0.001603813406423335,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.03501628664495114,
+              "ci_halfwidth": 0.010586319218241042,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": -0.2944397713009062,
+              "ci_halfwidth": 0.018437531971160742,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.3015557351220694,
+              "ci_halfwidth": 0.007826567956709773,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": -0.1597126249655893,
+              "ci_halfwidth": 0.006883471403445834,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": 0.16303350708353745,
+              "ci_halfwidth": 0.003694325674851673,
+              "n": 1228
+            },
+            "edit_span_hit": {
+              "mean": 0.1563517915309446,
+              "ci_halfwidth": 0.02117263843648208,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": -0.36823287199462473,
+              "ci_halfwidth": 0.03840083450889478,
+              "n": 1228
+            },
+            "edit_span_mass": {
+              "mean": 0.4397264516984003,
+              "ci_halfwidth": 0.009495987796707794,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": 0.058982403270142716,
+            "ci_halfwidth": 0.005197296119807036,
+            "n": 1228
+          },
+          "first_diff_map": {
+            "mean": 0.05499458433848481,
+            "ci_halfwidth": 0.004688867043942509,
+            "n": 1228
+          },
+          "edit_span_mrr": {
+            "mean": 0.365928953205384,
+            "ci_halfwidth": 0.009894872069050598,
+            "n": 1228
+          },
+          "edit_span_map": {
+            "mean": 0.2818750897851421,
+            "ci_halfwidth": 0.006623179539122004,
+            "n": 1228
+          }
+        }
+      }
+    },
+    {
+      "key": "shared_token_grid_random",
+      "section": "random",
+      "model_key": "__random__",
+      "model": "\\textsc{Random}",
+      "signal": "Shared token-grid chance",
+      "detail_path": null,
+      "detector": "uniform",
+      "metrics": {
+        "n_rows": 1228,
+        "windows": {
+          "1": {
+            "first_diff_normalized_hit": {
+              "mean": 0.0,
+              "ci_halfwidth": 0.0,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": null,
+              "ci_halfwidth": null,
+              "n": 0
+            },
+            "edit_span_hit": {
+              "mean": 0.24649095569600427,
+              "ci_halfwidth": 0.00607129456002535,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": null,
+              "ci_halfwidth": null,
+              "n": 0
+            },
+            "edit_span_mass": {
+              "mean": 0.24649095569600427,
+              "ci_halfwidth": 0.00607129456002535,
+              "n": 1228
+            }
+          },
+          "7": {
+            "first_diff_normalized_hit": {
+              "mean": 0.0,
+              "ci_halfwidth": 0.0,
+              "n": 1228
+            },
+            "first_diff_mass": {
+              "mean": null,
+              "ci_halfwidth": null,
+              "n": 0
+            },
+            "edit_span_hit": {
+              "mean": 0.3871870738441463,
+              "ci_halfwidth": 0.008110074817524598,
+              "n": 1228
+            },
+            "edit_span_normalized_hit": {
+              "mean": null,
+              "ci_halfwidth": null,
+              "n": 0
+            },
+            "edit_span_mass": {
+              "mean": 0.3871870738441463,
+              "ci_halfwidth": 0.008110074817524598,
+              "n": 1228
+            }
+          }
+        },
+        "ranking": {
+          "first_diff_mrr": {
+            "mean": null,
+            "ci_halfwidth": null,
+            "n": 0
+          },
+          "first_diff_map": {
+            "mean": null,
+            "ci_halfwidth": null,
+            "n": 0
+          },
+          "edit_span_mrr": {
+            "mean": null,
+            "ci_halfwidth": null,
+            "n": 0
+          },
+          "edit_span_map": {
+            "mean": 0.22717651517117876,
+            "ci_halfwidth": 0.005387476018768336,
+            "n": 1228
+          }
+        }
+      }
+    }
+  ]
+}

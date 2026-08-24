@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6215,
+    "win_rate": 0.990506838294449,
+    "mean_margin": 3.467490726882701,
+    "median_margin": 3.9409278734379543,
+    "tie_rate": 0.008045052292839904,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1243,
+      "win_rate": 0.9895414320193081,
+      "mean_margin": 2.3298357541596104,
+      "median_margin": 2.2193016501034006
+    },
+    "2": {
+      "n_pairs": 1243,
+      "win_rate": 0.9718423169750603,
+      "mean_margin": 3.236689153159783,
+      "median_margin": 3.781561367753623
+    },
+    "3": {
+      "n_pairs": 1243,
+      "win_rate": 0.995172968624296,
+      "mean_margin": 3.7489688767244704,
+      "median_margin": 4.063772997444058
+    },
+    "4": {
+      "n_pairs": 1243,
+      "win_rate": 0.997586484312148,
+      "mean_margin": 3.9501966705802665,
+      "median_margin": 4.1609851925872094
+    },
+    "5": {
+      "n_pairs": 1243,
+      "win_rate": 0.998390989541432,
+      "mean_margin": 4.071763179789375,
+      "median_margin": 4.228539902014836
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1243,
+    "mean_spearman_rho": -0.45462590506838296,
+    "nonincreasing_rate": 0.04907481898632341
+  },
+  "localization": {
+    "n_pairs": 6154,
+    "mode": "token",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": null,
+    "local_window_units": 3,
+    "unit_name": "token",
+    "mean_local_drop": 3.7175785520384137,
+    "mean_far_drop": 3.377958003490228,
+    "mean_gap": 0.33962054854818546,
+    "hit_at_k": {
+      "1": 0.44296392590185246,
+      "3": 0.719369515762106,
+      "5": 0.829379265518362
+    },
+    "hit_at_k_random": {
+      "1": 0.3165582305578051,
+      "3": 0.6405243577249402,
+      "5": 0.7851024331575993
+    },
+    "hit_at_k_norm": {
+      "1": 0.18371547088957965,
+      "3": 0.16570414123412597,
+      "5": -0.09586609351999846
+    },
+    "mean_local_unit_ratio": 0.316558230557805
+  }
+}

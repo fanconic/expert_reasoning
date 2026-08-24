@@ -69,9 +69,11 @@ def run_irl_training(
         switch_label_if_correct=getattr(cfg.model, "switch_label_if_correct", False),
         neg_sample_weight=cfg.model.neg_sample_weight,
         disc_pairwise_margin=cfg.model.disc_pairwise_margin,
+        disc_pairwise_negatives_per_prompt=getattr(cfg.model, "disc_pairwise_negatives_per_prompt", 0),
         standard_grpo=cfg.training.standard_grpo,
         mask_truncated_completions=False,
         max_micro_batch=cfg.training.max_micro_batch,
+        reward_score_micro_batch=getattr(cfg.training, "reward_score_micro_batch", None),
         dense_rewards="full" if cfg.model.dense_rewards==True else cfg.model.dense_rewards,
         advantage_calculation=cfg.model.advantage_calculation,
         dense_gamma=cfg.model.dense_gamma,
@@ -82,6 +84,8 @@ def run_irl_training(
         expert_error_rate=getattr(cfg.dataset, "expert_error_rate", 0.0),
         beta=getattr(cfg.training, "beta", 0.0),
         reward_warmup_steps=getattr(cfg.training, "reward_warmup_steps", 0),
+        continue_reward_warmup_after_load=getattr(cfg.training, "continue_reward_warmup_after_load", False),
+        freeze_reward_after_warmup=getattr(cfg.training, "freeze_reward_after_warmup", False),
         vllm_importance_sampling_correction=False, # set this one to false, else it leads to mismatch (https://github.com/huggingface/trl/issues/4205)
         save_strategy="steps",  # or "epoch" or "no"
         save_total_limit=1,  # Keep only 2 checkpoints: best + final
@@ -153,6 +157,11 @@ def run_irl_training(
         reward_processing_classes=reward_processing_classes,
     )
 
-    trainer.train()
+    resume_from_checkpoint = getattr(cfg.training, "resume_from_checkpoint", None)
+    if isinstance(resume_from_checkpoint, str) and resume_from_checkpoint.lower() in {"", "none", "false"}:
+        resume_from_checkpoint = None
+    if resume_from_checkpoint:
+        print(f"Resuming IRL training from checkpoint: {resume_from_checkpoint}")
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     trainer.save_model(os.path.join(cfg.training.output_dir, "best_model"))
     return trainer

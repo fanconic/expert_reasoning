@@ -1,0 +1,59 @@
+{
+  "source_pair_details": "/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/outputs/localisation/qwen7b_full_localisation_from_qwen7b_sft/pair_details.jsonl",
+  "source_run_dir": "/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/outputs/localisation/qwen7b_full_localisation_from_qwen7b_sft",
+  "policy_model": "/mnt/pdata/caf83/icml_math/outputs/qwen4b_sft/best_model",
+  "max_length": 1124,
+  "append_eos": false,
+  "n_rows_total": 6215,
+  "n_rows_scored": 1234,
+  "n_unique_traces_scored": 1234,
+  "severity_filter": 1,
+  "require_table_valid": true,
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "logprob_largest_drop": {
+      "1": {
+        "mean": 0.2585089141004862,
+        "ci_halfwidth": 0.02431118314424635,
+        "n": 1234
+      },
+      "7": {
+        "mean": 0.26904376012965964,
+        "ci_halfwidth": 0.024321312803889744,
+        "n": 1234
+      }
+    },
+    "entropy_largest_spike": {
+      "1": {
+        "mean": 0.0016207455429497568,
+        "ci_halfwidth": 0.002025931928687196,
+        "n": 1234
+      },
+      "7": {
+        "mean": 0.019448946515397084,
+        "ci_halfwidth": 0.008508914100486223,
+        "n": 1234
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.11816065862723127,
+        "ci_halfwidth": 0.005601166331290722,
+        "n": 1234
+      },
+      "7": {
+        "mean": 0.31528248495731936,
+        "ci_halfwidth": 0.010229607861740292,
+        "n": 1234
+      }
+    }
+  }
+}

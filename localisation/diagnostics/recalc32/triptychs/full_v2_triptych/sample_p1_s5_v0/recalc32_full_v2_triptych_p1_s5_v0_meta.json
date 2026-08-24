@@ -1,0 +1,75 @@
+{
+  "chosen_key": {
+    "prompt_idx": 1,
+    "severity": 5,
+    "variant_idx": 0
+  },
+  "run_map": {
+    "qwen4b": "recalc32_qwen4b_full_v2",
+    "qwen7b": "recalc32_qwen7b_full_v2",
+    "llama8b": "recalc32_llama8b_full_v2"
+  },
+  "trace_transform": "zscore_smooth",
+  "transform_params": {
+    "zscore_bins": 20,
+    "zscore_mode": "robust",
+    "smooth_window": 3
+  },
+  "output_files": {
+    "comparison_png": "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/recalc32_full_v2_triptych_p1_s5_v0.png",
+    "comparison_pdf": "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/recalc32_full_v2_triptych_p1_s5_v0.pdf",
+    "trace_text": "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/recalc32_full_v2_triptych_p1_s5_v0_trace.txt",
+    "token_viz": [
+      "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/qwen4b_clean_token_rewards.png",
+      "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/qwen4b_corrupt_token_rewards.png",
+      "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/qwen7b_clean_token_rewards.png",
+      "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/qwen7b_corrupt_token_rewards.png",
+      "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/llama8b_clean_token_rewards.png",
+      "outputs/localisation/recalc32_full_v2_triptych/sample_p1_s5_v0/llama8b_corrupt_token_rewards.png"
+    ]
+  },
+  "metrics": {
+    "qwen4b": {
+      "margin": 2.367001488095238,
+      "gap": -1.7043313419117645,
+      "hit_at": {
+        "1": 0,
+        "3": 0,
+        "5": 0
+      },
+      "hit_at_norm": {
+        "1": -0.23529411764705882,
+        "3": -0.9184491978609626,
+        "5": -2.057141624978437
+      }
+    },
+    "qwen7b": {
+      "margin": 2.0526289506392046,
+      "gap": -0.7643568250868054,
+      "hit_at": {
+        "1": 0,
+        "3": 0,
+        "5": 0
+      },
+      "hit_at_norm": {
+        "1": -0.22222222222222215,
+        "3": -0.8549019607843137,
+        "5": -1.8807189542483662
+      }
+    },
+    "llama8b": {
+      "margin": 1.7453696511008523,
+      "gap": -1.4528910319010415,
+      "hit_at": {
+        "1": 0,
+        "3": 0,
+        "5": 0
+      },
+      "hit_at_norm": {
+        "1": -0.22222222222222215,
+        "3": -0.8549019607843137,
+        "5": -1.8807189542483662
+      }
+    }
+  }
+}

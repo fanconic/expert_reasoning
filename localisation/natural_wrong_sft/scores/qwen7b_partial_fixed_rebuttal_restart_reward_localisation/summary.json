@@ -1,0 +1,48 @@
+{
+  "source_pairs_jsonl": "outputs/localisation/natural_wrong_sft/scores/_inputs/natural_wrong_sft_valid_target_char_span_actual_wrong_answer.jsonl",
+  "checkpoint_dir": "/mnt/pdata/caf83/neurips2026/math/outputs/qwen7b_partial_fixed_rebuttal_restart/best_model",
+  "reward_name": "Qwen/Qwen2.5-7B-Instruct",
+  "dense_reward_mode": "partial_fixed",
+  "dense_rewards_config_value": "partial_fixed",
+  "localization_mode": "bucket",
+  "partial_fixed_stride": 15,
+  "max_length": 1124,
+  "n_rows_total": 861,
+  "n_rows_scored": 861,
+  "target_position_source": "target_char_span",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "reward_largest_drop": {
+      "1": {
+        "mean": 0.6434378629500581,
+        "ci_halfwidth": 0.03252032520325204,
+        "n": 861
+      },
+      "7": {
+        "mean": 0.6434378629500581,
+        "ci_halfwidth": 0.03252032520325204,
+        "n": 861
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.5567483572863601,
+        "ci_halfwidth": 0.01286671528124217,
+        "n": 861
+      },
+      "7": {
+        "mean": 0.5567483572863601,
+        "ci_halfwidth": 0.01286671528124217,
+        "n": 861
+      }
+    }
+  }
+}

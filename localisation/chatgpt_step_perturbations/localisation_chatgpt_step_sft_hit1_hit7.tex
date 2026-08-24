@@ -1,0 +1,30 @@
+% Requires \usepackage{multirow}
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\caption{\textbf{Natural-error localisation with SFT token baselines.} All methods are scored on the same 1228 ChatGPT-edited GSM8K clean/perturbed pairs. The target is the first perturbed-step token that differs from the clean step (\texttt{step\_first\_diff}). Reward and SFT log-probability use the largest-drop detector; SFT entropy uses the largest-spike detector. Values are Hit@1@W in percent with 95\% bootstrap CI half-widths. \textbf{Bold} marks the best and \underline{underlining} the second-best value within each model and metric.}
+\label{tab:localisation_chatgpt_step_sft_hit1_hit7}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Model} & \textbf{Signal} & \textbf{Hit@1 (\%)} & \textbf{Hit@7 (\%)} & \textbf{n} \\
+\midrule
+\multirow{4}{*}{\textsc{Qwen2.5-7B}} & Reward dense & 2.77 $\pm$ 0.94 & 8.88 $\pm$ 1.59 & 1228 \\
+ & Reward interval & \textbf{36.56} $\pm$ 2.69 & \underline{36.56} $\pm$ 2.69 & 1228 \\
+ & SFT token log-probability & \underline{12.79} $\pm$ 1.91 & \textbf{69.71} $\pm$ 2.48 & 1228 \\
+ & SFT token entropy & 2.85 $\pm$ 0.94 & 12.70 $\pm$ 1.83 & 1228 \\
+\midrule
+\multirow{4}{*}{\textsc{Llama3.1-8B}} & Reward dense & 5.54 $\pm$ 1.30 & 15.88 $\pm$ 2.00 & 1228 \\
+ & Reward interval & \textbf{52.85} $\pm$ 2.81 & \textbf{52.85} $\pm$ 2.81 & 1228 \\
+ & SFT token log-probability & \underline{34.28} $\pm$ 2.65 & \underline{50.33} $\pm$ 2.77 & 1228 \\
+ & SFT token entropy & 6.51 $\pm$ 1.38 & 23.21 $\pm$ 2.44 & 1228 \\
+\midrule
+\multirow{4}{*}{\textsc{Qwen3-4B}} & Reward dense & \underline{8.96} $\pm$ 1.51 & \underline{28.01} $\pm$ 2.65 & 1228 \\
+ & Reward interval & \textbf{66.12} $\pm$ 2.57 & \textbf{66.12} $\pm$ 2.57 & 1228 \\
+ & SFT token log-probability & 3.58 $\pm$ 1.10 & 23.45 $\pm$ 2.32 & 1228 \\
+ & SFT token entropy & 0.33 $\pm$ 0.29 & 0.73 $\pm$ 0.49 & 1228 \\
+\midrule
+\textsc{Random} & Shared token-grid chance & 2.98 $\pm$ 0.06 & 14.46 $\pm$ 0.28 & 1228 \\
+\bottomrule
+\end{tabular}
+\end{table}

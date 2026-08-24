@@ -1,0 +1,30 @@
+% Requires \usepackage{booktabs}
+\begin{table}[t]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{l l r r}
+\toprule
+\textbf{Scorer} & \textbf{Signal} & \textbf{Hit@1 (\%)} & \textbf{Hit@7 (\%)} \\
+\midrule
+\textsc{Qwen2.5-7B} & Reward (dense) & 47.57 $\pm$ 2.76 & 54.86 $\pm$ 2.59 \\
+\textsc{Qwen2.5-7B} & Reward (interval) & 65.48 $\pm$ 2.59 & 65.48 $\pm$ 2.59 \\
+\textsc{Llama3.1-8B} & Reward (dense) & 65.80 $\pm$ 2.76 & 80.63 $\pm$ 2.23 \\
+\textsc{Llama3.1-8B} & Reward (interval) & 86.14 $\pm$ 1.99 & 86.14 $\pm$ 1.99 \\
+\textsc{Qwen3-4B} & Reward (dense) & 61.99 $\pm$ 2.71 & 70.26 $\pm$ 2.51 \\
+\textsc{Qwen3-4B} & Reward (interval) & 78.93 $\pm$ 2.23 & 78.93 $\pm$ 2.23 \\
+\midrule
+\textsc{Qwen2.5-7B-SFT} & Token log-probability & 94.08 $\pm$ 1.34 & 98.46 $\pm$ 0.69 \\
+\textsc{Qwen2.5-7B-SFT} & Token entropy & 15.32 $\pm$ 1.99 & 40.03 $\pm$ 2.76 \\
+\textsc{Qwen2.5-7B-SFT} & Random location & 11.58 $\pm$ 0.55 & 31.19 $\pm$ 1.01 \\
+\textsc{Llama3.1-8B-SFT} & Token log-probability & 75.28 $\pm$ 2.39 & 86.47 $\pm$ 1.94 \\
+\textsc{Llama3.1-8B-SFT} & Token entropy & 28.12 $\pm$ 2.51 & 54.86 $\pm$ 2.67 \\
+\textsc{Llama3.1-8B-SFT} & Random location & 12.26 $\pm$ 0.57 & 33.29 $\pm$ 1.02 \\
+\textsc{Qwen3-4B-SFT} & Token log-probability & 25.85 $\pm$ 2.43 & 26.90 $\pm$ 2.43 \\
+\textsc{Qwen3-4B-SFT} & Token entropy & 0.16 $\pm$ 0.20 & 1.94 $\pm$ 0.85 \\
+\textsc{Qwen3-4B-SFT} & Random location & 11.82 $\pm$ 0.56 & 31.53 $\pm$ 1.02 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Localisation on GSM8K pregenerated traces with learned reward signals and simple generator-side baselines.} All rows are computed on the exact same 1234 severity-1 Table-5-valid corrupted traces. Reward and log-probability rows use the largest-drop detector; entropy uses the largest-spike detector. SFT rows score the same traces with the indicated policy/tokenizer, and each random row is the corresponding analytic uniform-location baseline in that tokenizer space. Values are percentage mean $\pm$ bootstrapped 95\% CI half-width.}
+\label{tab:localisation_combined_reward_policy_hit1_hit7}
+\end{table}

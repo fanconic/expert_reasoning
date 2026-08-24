@@ -1,0 +1,35 @@
+{
+  "args": {
+    "pairs_jsonl": "outputs/localisation/expert_step_perturbations/scores/_inputs/expert_step_valid_target_char_span.jsonl",
+    "output_dir": "outputs/localisation/expert_step_perturbations/scores/qwen7b_partial_fixed_reward_localisation",
+    "config": "configs/math/qwen7b/irl_eval.yaml",
+    "checkpoint_dir": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_partial_fixed/best_model",
+    "reward_name": null,
+    "reward_lora_rank": null,
+    "reward_gpu_memory_utilization": 0.4,
+    "dense_reward_mode": "partial_fixed",
+    "dense_partial_fixed_n": 15,
+    "load_in_4bit": null,
+    "max_examples": 0,
+    "start_index": 0,
+    "max_micro_batch": 8,
+    "aggregate": "mean",
+    "discount_gamma": 0.95,
+    "windows": [
+      1,
+      7
+    ],
+    "target_position_source": "target_char_span",
+    "include_text": false,
+    "seed": 42,
+    "bootstrap_samples": 2000,
+    "bootstrap_alpha": 0.05,
+    "bootstrap_seed": 42
+  },
+  "model_name": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_partial_fixed/best_model",
+  "reward_name": "Qwen/Qwen2.5-7B-Instruct",
+  "dense_rewards": "partial_fixed",
+  "localization_mode": "bucket",
+  "partial_fixed_stride": 15,
+  "max_length": 1124
+}
