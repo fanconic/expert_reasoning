@@ -35,7 +35,7 @@ POLICY_DIRS = {
 REWARD_DIRS = {
     "qwen7b": "qwen7b_full_rebuttal_reward_localisation",
 }
-OLD_REWARD_RUN = "{model}_{mode}_localisation_from_qwen7b_sft"
+OLD_REWARD_RUN = "runs/qwen7b_sft/{model}/{mode}"
 OLD_REWARD_MODES = [
     ("full", "Reward dense (old)"),
     ("partial_fixed", "Reward interval (old)"),
@@ -345,7 +345,7 @@ def _collect_old_rows(args: argparse.Namespace, windows: list[int]) -> tuple[lis
     random_by_key: dict[tuple[Any, ...], dict[int, list[float]]] = {
         key: {window: [] for window in windows} for key in ref_keys
     }
-    old_policy_base = args.old_root_dir / "qwen7b_full_localisation_from_qwen7b_sft"
+    old_policy_base = args.old_root_dir / "runs/qwen7b_sft/qwen7b/full"
     for model in MODEL_ORDER:
         policy_dir = OLD_POLICY_DIRS[model]
         policy_path = old_policy_base / policy_dir / "policy_token_baselines.jsonl"

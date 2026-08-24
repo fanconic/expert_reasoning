@@ -23,11 +23,11 @@ MODE_ORDER = [
     ("full", "Reward (dense)"),
     ("partial_fixed", "Reward (interval)"),
 ]
-RUN_NAME = "{model}_{mode}_localisation_from_qwen7b_sft"
+RUN_NAME = "runs/qwen7b_sft/{model}/{mode}"
 
 BASELINE_RUN_DIRS = [
-    "qwen7b_full_localisation_from_qwen7b_sft",
-    "qwen7b_partial_fixed_localisation_from_qwen7b_sft",
+    "runs/qwen7b_sft/qwen7b/full",
+    "runs/qwen7b_sft/qwen7b/partial_fixed",
 ]
 POLICY_BASELINES = [
     (

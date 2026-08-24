@@ -83,7 +83,7 @@ run_localiser() {
     fi
 
     local label="${model}_${density}_localisation_from_qwen7b_sft"
-    local out_dir="${OUTPUT_ROOT}/${label}"
+    local out_dir="${OUTPUT_ROOT}/runs/qwen7b_sft/${model}/${density}"
 
     mkdir -p "${out_dir}"
 

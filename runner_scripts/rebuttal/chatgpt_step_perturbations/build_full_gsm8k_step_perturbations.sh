@@ -8,7 +8,7 @@ cd "${REPO_ROOT}"
 : "${MAX_EXAMPLES:=0}"  # 0 => all Table-5-valid prompts (currently 1234)
 : "${START_INDEX:=0}"
 : "${OUTPUT_FILE:=localisation/chatgpt_step_perturbations/gsm8k_qwen7b_sft_step_perturbations_full.jsonl}"
-: "${SOURCE_PAIR_DETAILS:=localisation/qwen7b_full_localisation_from_qwen7b_sft/pair_details.jsonl}"
+: "${SOURCE_PAIR_DETAILS:=localisation/runs/qwen7b_sft/qwen7b/full/pair_details.jsonl}"
 : "${MAX_RETRIES:=3}"
 : "${NUM_WORKERS:=4}"
 : "${SLEEP_SECONDS:=0}"

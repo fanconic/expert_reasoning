@@ -197,7 +197,14 @@ GPU_NUM=1 bash runner_scripts/rebuttal/localisation_policy_baselines/run_qwen7b_
 
 By default this covers `qwen7b`, `qwen4b`, and `llama8b` SFT policies plus the
 matching base instruct models against the qwen7b-SFT pregenerated localisation
-folders. Existing summaries are skipped unless `FORCE=1` is set.
+folders. Canonical run folders live under:
+
+```text
+localisation/runs/qwen7b_sft/<model>/<granularity>
+```
+
+The old long top-level folder names are symlinks kept for compatibility.
+Existing summaries are skipped unless `FORCE=1` is set.
 
 To run only the base model token-probability/log-probability scores:
 

@@ -28,11 +28,11 @@ except Exception:
     make_text_reward_image = None
 
 
-DEFAULT_ROOT = Path("outputs") / "localisation"
+DEFAULT_ROOT = Path("localisation")
 DEFAULT_RUNS = {
-    "qwen4b": "qwen4b_full_localisation_expert",
-    "qwen7b": "qwen7b_full_localisation_expert",
-    "llama8b": "llama8b_full_localisation_expert",
+    "qwen4b": "runs/expert/qwen4b/full",
+    "qwen7b": "runs/expert/qwen7b/full",
+    "llama8b": "runs/expert/llama8b/full",
 }
 MODEL_LABELS = {
     "qwen4b": "Qwen3-4B",

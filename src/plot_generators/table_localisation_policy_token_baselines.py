@@ -9,8 +9,8 @@ import numpy as np
 
 ROOT_DIR = Path("localisation")
 DEFAULT_RUN_DIRS = [
-    "qwen7b_full_localisation_from_qwen7b_sft",
-    "qwen7b_partial_fixed_localisation_from_qwen7b_sft",
+    "runs/qwen7b_sft/qwen7b/full",
+    "runs/qwen7b_sft/qwen7b/partial_fixed",
 ]
 DEFAULT_OUTPUT = ROOT_DIR / "localisation_policy_token_baselines_hit1_hit7.tex"
 BOOTSTRAP_SAMPLES = 2000

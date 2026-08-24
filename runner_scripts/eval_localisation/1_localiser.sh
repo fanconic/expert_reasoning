@@ -95,8 +95,15 @@ run_localiser() {
             ;;
     esac
 
+    local source_dir
+    if [[ "${trace_source}" == "expert" ]]; then
+        source_dir="expert"
+    else
+        source_dir="qwen7b_sft"
+    fi
+
     local label="${model}_${density}_localisation_${source_suffix}"
-    local out_dir="${OUTPUT_ROOT}/${label}"
+    local out_dir="${OUTPUT_ROOT}/runs/${source_dir}/${model}/${density}"
 
     mkdir -p "${out_dir}"
 
@@ -106,7 +113,7 @@ run_localiser() {
         --checkpoint-dir "${checkpoint_dir}"
         --split "test"
         --trace-source "${trace_source}"
-        --dense-reward-mode "${I believe}"
+        --dense-reward-mode "${density}"
         --start-index "${START_INDEX}"
         --max-severity "${MAX_SEVERITY}"
         --variants-per-severity "${VARIANTS_PER_SEVERITY}"

@@ -8,7 +8,7 @@ cd "${REPO_ROOT}"
 : "${MAX_EXAMPLES:=0}"  # 0 => all selected expert prompts
 : "${START_INDEX:=0}"
 : "${OUTPUT_FILE:=localisation/expert_step_perturbations/gsm8k_expert_step_perturbations_full.jsonl}"
-: "${SOURCE_PAIR_DETAILS:=localisation/qwen7b_full_localisation_expert/pair_details.jsonl}"
+: "${SOURCE_PAIR_DETAILS:=localisation/runs/expert/qwen7b/full/pair_details.jsonl}"
 : "${MAX_RETRIES:=3}"
 : "${NUM_WORKERS:=4}"
 : "${SLEEP_SECONDS:=0}"

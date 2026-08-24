@@ -18,7 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.eval import build_chatgpt_step_perturbation_dataset as base  # noqa: E402
 
 base.DEFAULT_SOURCE = (
-    PROJECT_ROOT / "localisation/qwen7b_full_localisation_expert/pair_details.jsonl"
+    PROJECT_ROOT / "localisation/runs/expert/qwen7b/full/pair_details.jsonl"
 )
 base.DEFAULT_OUTPUT = (
     PROJECT_ROOT

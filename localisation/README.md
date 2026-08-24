@@ -9,10 +9,10 @@ ignored by git.
 
 ## Layout
 
-- `*_localisation_from_qwen7b_sft/`: reward-model localisation on the original
-  pregenerated Qwen2.5-7B SFT synthetic perturbation pairs.
-- `*_localisation_expert/`: reward-model localisation on perturbations built
-  from expert traces.
+- `runs/qwen7b_sft/<model>/<granularity>/`: reward-model localisation on the
+  original pregenerated Qwen2.5-7B SFT synthetic perturbation pairs.
+- `runs/expert/<model>/<granularity>/`: reward-model localisation on
+  perturbations built from expert traces.
 - `chatgpt_step_perturbations/`: LLM-edited fluent-but-wrong step perturbations
   derived from Qwen2.5-7B SFT traces, plus reward and policy localisation
   summaries.
@@ -21,8 +21,14 @@ ignored by git.
 - `natural_wrong_sft/`: naturally wrong Qwen2.5-7B SFT generations whose first
   erroneous step was labelled by an LLM, then scored with the same localisation
   pipeline.
-- `recalc32_*`: diagnostic dense-reward recalculations and visualization
-  metadata for the reviewer-facing examples.
+- `diagnostics/recalc32/<model>/<variant>/`: diagnostic dense-reward
+  recalculations.
+- `diagnostics/recalc32/triptychs/<variant>/`: visualization metadata for the
+  reviewer-facing dense-reward examples.
+
+The old long top-level names, such as
+`qwen7b_full_localisation_from_qwen7b_sft`, are kept as symlink aliases for
+backward compatibility with older scripts and notebooks.
 
 ## Main Artifact Types
 

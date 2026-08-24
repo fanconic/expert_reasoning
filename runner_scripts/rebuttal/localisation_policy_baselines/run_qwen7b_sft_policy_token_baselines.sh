@@ -24,7 +24,7 @@ RUN_DIRS_WAS_SET="${RUN_DIRS+x}"
 OUTPUT_SUBDIR_WAS_SET="${OUTPUT_SUBDIR+x}"
 
 : "${LOCALISATION_ROOT:=/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/localisation}"
-: "${REFERENCE_RUN_DIRS:=qwen7b_full_localisation_from_qwen7b_sft qwen7b_partial_fixed_localisation_from_qwen7b_sft}"
+: "${REFERENCE_RUN_DIRS:=runs/qwen7b_sft/qwen7b/full runs/qwen7b_sft/qwen7b/partial_fixed}"
 : "${MICRO_BATCH:=4}"
 : "${ENTROPY_TOKEN_CHUNK_SIZE:=32}"
 : "${MAX_LENGTH:=1124}"

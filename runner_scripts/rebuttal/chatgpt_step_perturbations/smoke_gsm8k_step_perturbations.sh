@@ -8,7 +8,7 @@ cd "${REPO_ROOT}"
 : "${MAX_EXAMPLES:=3}"
 : "${START_INDEX:=0}"
 : "${OUTPUT_FILE:=localisation/chatgpt_step_perturbations/gsm8k_qwen7b_sft_step_perturbations_smoke.jsonl}"
-: "${SOURCE_PAIR_DETAILS:=localisation/qwen7b_full_localisation_from_qwen7b_sft/pair_details.jsonl}"
+: "${SOURCE_PAIR_DETAILS:=localisation/runs/qwen7b_sft/qwen7b/full/pair_details.jsonl}"
 : "${REASONING_EFFORT:=off}"
 : "${FORCE:=0}"
 

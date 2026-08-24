@@ -47,7 +47,7 @@ DEFAULT_GENERATIONS = Path(
     "/mnt/pdata/caf83/icml_math/outputs/qwen7b_sft/best_model/"
     "eval_results_math_qwen7b_sft_t0p5.jsonl"
 )
-DEFAULT_REFERENCE = PROJECT_ROOT / "localisation/qwen7b_full_localisation_from_qwen7b_sft/pair_details.jsonl"
+DEFAULT_REFERENCE = PROJECT_ROOT / "localisation/runs/qwen7b_sft/qwen7b/full/pair_details.jsonl"
 DEFAULT_OUTPUT = (
     PROJECT_ROOT
     / "localisation/natural_wrong_sft/"
