@@ -50,6 +50,7 @@ from transformers import (
     is_wandb_available,
     get_scheduler
 )
+from transformers.trainer_utils import PREFIX_CHECKPOINT_DIR
 from trl import GRPOTrainer
 from transformers.utils import is_peft_available
 from trl.data_utils import apply_chat_template, is_conversational
@@ -429,6 +430,11 @@ class AIRLTrainer(GRPOTrainer):
         self.use_outcome_rewards = args.use_outcome_rewards
         self.reward_updates_per_policy_step = args.reward_updates_per_policy_step
         self.max_micro_batch = args.max_micro_batch
+        self.reward_score_micro_batch = (
+            args.reward_score_micro_batch
+            if args.reward_score_micro_batch is not None
+            else args.max_micro_batch
+        )
 
         # Internal buffers --------------------------------------------------------------
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
@@ -492,8 +498,13 @@ class AIRLTrainer(GRPOTrainer):
         )
         self.reward_warmup_steps = self.args.reward_warmup_steps
         self.warmup_done = False
+        self.continue_reward_warmup_after_load = bool(
+            getattr(args, "continue_reward_warmup_after_load", False)
+        )
         if args.warmup_reward_dir:
             self.load_reward_warmup_checkpoint(args.warmup_reward_dir)
+        self.freeze_reward_after_warmup = bool(getattr(args, "freeze_reward_after_warmup", False))
+        self.reward_model_frozen = False
 
         if not self.use_outcome_rewards: # Only the reward model is used for training
             self.reward_weights = torch.zeros_like(self.reward_weights, dtype=torch.float32)
@@ -512,6 +523,9 @@ class AIRLTrainer(GRPOTrainer):
         self.switch_label_if_correct = getattr(args, "switch_label_if_correct", False)
         self.neg_sample_weight = getattr(args, "neg_sample_weight", 1.0)  # weight in BCE
         self.disc_pairwise_margin = getattr(args, "disc_pairwise_margin", 0.0)  # >0 to enable pairwise hinge
+        self.disc_pairwise_negatives_per_prompt = max(
+            0, int(getattr(args, "disc_pairwise_negatives_per_prompt", 0) or 0)
+        )
         self.neg_label_smoothing = getattr(args, "neg_label_smoothing", None)  # defaults to self.eps if None
         
         self.num_generations_with_expert = self.num_generations + 1 if self.add_expert_to_policy_optim else self.num_generations 
@@ -526,10 +540,25 @@ class AIRLTrainer(GRPOTrainer):
     # -----------------------------------------------------------------------
     # Core overwrites overrides
     # -----------------------------------------------------------------------$
+    def _freeze_reward_model(self):
+        if self.reward_model_frozen:
+            return
+        for param in self.reward_model.parameters():
+            param.requires_grad_(False)
+        self.reward_model.eval()
+        self.reward_model_frozen = True
+        if self.accelerator.is_main_process:
+            logger.info("Reward model frozen after warmup; discriminator updates are disabled.")
+
     def train(self, *args, **kwargs):
         # Set the learning rate warm up as the same as the scheduler warmup steps
         num_policy_steps = self.args.max_steps
-        total_reward_steps = self.reward_warmup_steps + num_policy_steps * self.reward_updates_per_policy_step
+        reward_steps_after_warmup = (
+            0
+            if self.freeze_reward_after_warmup
+            else num_policy_steps * self.reward_updates_per_policy_step
+        )
+        total_reward_steps = max(1, self.reward_warmup_steps + reward_steps_after_warmup)
         if self.reward_optimizer is not None:
             self.reward_scheduler = get_scheduler(
                 name=self.args.lr_scheduler_type,
@@ -542,6 +571,9 @@ class AIRLTrainer(GRPOTrainer):
         if self.reward_warmup_steps > 0 and not self.warmup_done:
             self._warmup_discriminator()
             self.warmup_done = True
+
+        if self.freeze_reward_after_warmup:
+            self._freeze_reward_model()
 
         return super().train(*args, **kwargs)
     
@@ -945,6 +977,141 @@ class AIRLTrainer(GRPOTrainer):
         # ------------------------------------------------------------------
         # PASS 1: count total valid completion tokens (only matters if dense)
         # -----------------------------------------------------------------
+        if self.classifier_loss in {"gad", "gad_pairwise", "pairwise_bt"}:
+            if self.dense_rewards:
+                raise ValueError("GAD pairwise discriminator loss is sequence-level only; set model.dense_rewards=false.")
+            if N % B != 0:
+                raise ValueError(
+                    "GAD pairwise loss requires an integer number of policy rollouts per expert prompt "
+                    f"({N=} negatives, {B=} positives). Disable replay-buffer mixing or perturbation negatives."
+                )
+
+            pair_k = N // B
+            requested_pair_k = self.disc_pairwise_negatives_per_prompt
+            if requested_pair_k > 0 and requested_pair_k < pair_k:
+                selected_neg_indices = []
+                for prompt_idx in range(B):
+                    start = prompt_idx * pair_k
+                    end = start + pair_k
+                    selected_neg_indices.extend(random.sample(range(start, end), k=requested_pair_k))
+                selected_neg_indices.sort()
+                neg_texts = [neg_texts[idx] for idx in selected_neg_indices]
+                N = len(neg_texts)
+                pair_k = requested_pair_k
+
+            pair_micro_bs = max(1, micro_bs)
+            pair_count = torch.tensor(float(N), device=device)
+
+            pair_loss_sum = torch.tensor(0.0, device=device)
+            pair_cnt = torch.tensor(0.0, device=device)
+            logits_pos_all = []
+            logits_neg_all = []
+            margins_all = []
+
+            if do_step:
+                self.reward_optimizer.zero_grad()
+
+            score_micro_bs = max(
+                1,
+                int(getattr(self, "reward_score_micro_batch", pair_micro_bs)),
+            )
+            pos_coeff_sums = torch.zeros(B, device=device)
+            neg_coeffs = []
+
+            with torch.no_grad():
+                pos_logits_base = []
+                for i in range(0, B, score_micro_bs):
+                    j = min(i + score_micro_bs, B)
+                    batch_pos = _tok(pos_texts[i:j])
+                    pos_logits_base.append(self.reward_model(**batch_pos).logits[..., 0].view(-1).detach())
+                    del batch_pos
+                pos_logits_base = torch.cat(pos_logits_base, dim=0)
+
+                for i in range(0, N, score_micro_bs):
+                    j = min(i + score_micro_bs, N)
+                    batch_neg = _tok(neg_texts[i:j])
+                    logits_neg_det = self.reward_model(**batch_neg).logits[..., 0].view(-1).detach()
+                    pos_idx = torch.arange(i, j, device=device) // pair_k
+                    logits_pos_det = pos_logits_base[pos_idx]
+
+                    margins_det = logits_pos_det - logits_neg_det
+                    shifted_margins = margins_det - float(self.disc_pairwise_margin)
+                    loss_vec = F.softplus(-shifted_margins)
+                    pos_coeff = -torch.sigmoid(-shifted_margins).detach()
+
+                    pair_loss_sum += loss_vec.sum().detach()
+                    pair_cnt += torch.tensor(float(loss_vec.numel()), device=device)
+                    logits_pos_all.append(logits_pos_det.detach())
+                    logits_neg_all.append(logits_neg_det.detach())
+                    margins_all.append(margins_det.detach())
+                    pos_coeff_sums.scatter_add_(0, pos_idx, pos_coeff)
+                    neg_coeffs.append(pos_coeff)
+
+                    del batch_neg, logits_neg_det, logits_pos_det, margins_det, shifted_margins, loss_vec, pos_coeff
+
+            neg_coeffs = torch.cat(neg_coeffs, dim=0)
+
+            if do_step:
+                for i in range(0, B, pair_micro_bs):
+                    j = min(i + pair_micro_bs, B)
+                    batch_pos = _tok(pos_texts[i:j])
+                    logits_pos = self.reward_model(**batch_pos).logits[..., 0].view(-1)
+                    pos_surrogate = (pos_coeff_sums[i:j] * logits_pos).sum() / pair_count.clamp_min(1.0)
+                    self.accelerator.backward(pos_surrogate)
+                    del batch_pos, logits_pos, pos_surrogate
+
+                for i in range(0, N, pair_micro_bs):
+                    j = min(i + pair_micro_bs, N)
+                    batch_neg = _tok(neg_texts[i:j])
+                    logits_neg = self.reward_model(**batch_neg).logits[..., 0].view(-1)
+                    neg_surrogate = (-neg_coeffs[i:j] * logits_neg).sum() / pair_count.clamp_min(1.0)
+                    self.accelerator.backward(neg_surrogate)
+                    del batch_neg, logits_neg, neg_surrogate
+
+            if do_step:
+                reward_max_grad_norm = getattr(self.args, "max_grad_norm", None)
+                if reward_max_grad_norm is not None:
+                    self.accelerator.clip_grad_norm_(self.reward_model.parameters(), float(reward_max_grad_norm))
+                self.reward_optimizer.step()
+                if hasattr(self, "reward_scheduler") and self.reward_scheduler is not None:
+                    self.reward_scheduler.step()
+
+            loss = pair_loss_sum / pair_cnt.clamp_min(1.0)
+            logits_pos_det = torch.cat(logits_pos_all, dim=0)
+            logits_neg_det = torch.cat(logits_neg_all, dim=0)
+            margins_det = torch.cat(margins_all, dim=0)
+            pair_acc = (margins_det > 0).float().mean()
+
+            p_pos = torch.sigmoid(logits_pos_det)
+            p_neg = torch.sigmoid(logits_neg_det)
+
+            def gmean(x: torch.Tensor) -> float:
+                return self.accelerator.gather(x.detach()).mean().item()
+
+            margin_std = margins_det.std() if margins_det.numel() > 1 else torch.zeros((), device=device)
+            current_reward_lr = self.reward_optimizer.param_groups[0]["lr"]
+
+            return {
+                f"{log_prefix}/loss": gmean(loss),
+                f"{log_prefix}/bt_loss": gmean(loss),
+                f"{log_prefix}/bce_pos": gmean(loss),
+                f"{log_prefix}/lr": current_reward_lr,
+                f"{log_prefix}/bce_neg": gmean(loss),
+                f"{log_prefix}/acc": gmean(pair_acc),
+                f"{log_prefix}/pairwise_acc": gmean(pair_acc),
+                f"{log_prefix}/acc_pos": gmean(pair_acc),
+                f"{log_prefix}/acc_neg": gmean(pair_acc),
+                f"{log_prefix}/logit_pos_mean": gmean(logits_pos_det.mean()),
+                f"{log_prefix}/logit_neg_mean": gmean(logits_neg_det.mean()),
+                f"{log_prefix}/margin_mean": gmean(margins_det.mean()),
+                f"{log_prefix}/margin_std": gmean(margin_std),
+                f"{log_prefix}/prob_pos_mean": gmean(p_pos.mean()),
+                f"{log_prefix}/prob_neg_mean": gmean(p_neg.mean()),
+                f"{log_prefix}/neg_pos_ratio": pair_k,
+                f"{log_prefix}/pairs_per_prompt": pair_k,
+                f"{log_prefix}/pairs_used": N,
+            }
+
         if self.dense_rewards:
             T_pos = torch.tensor(0.0, device=device)
             T_neg = torch.tensor(0.0, device=device)
@@ -1224,7 +1391,9 @@ class AIRLTrainer(GRPOTrainer):
     def load_reward_warmup_checkpoint(self, checkpoint_path: str):
         """
         Loads the reward model and optimizer state from a warmup checkpoint.
-        Call this before train() to bypass the _warmup_discriminator step.
+        By default this bypasses _warmup_discriminator. If
+        continue_reward_warmup_after_load is set, reward_warmup_steps are run
+        after loading the checkpoint.
         """
         from safetensors.torch import load_file as safe_load_file
         
@@ -1257,19 +1426,33 @@ class AIRLTrainer(GRPOTrainer):
             unwrapped_model.load_state_dict(state_dict, strict=True)
 
         # --- 2. Load Optimizer State ---
-        opt_path = os.path.join(checkpoint_path, "reward_optimizer_warmup.pt")
-        if os.path.exists(opt_path):
+        opt_path = None
+        for candidate in ("reward_optimizer_warmup.pt", "reward_optimizer.pt"):
+            candidate_path = os.path.join(checkpoint_path, candidate)
+            if os.path.exists(candidate_path):
+                opt_path = candidate_path
+                break
+        if opt_path is not None:
             logger.info(f"Loading reward optimizer state from {opt_path}...")
             opt_state = torch.load(opt_path, map_location="cpu")
             self.reward_optimizer.load_state_dict(opt_state)
             del opt_state
             torch.cuda.empty_cache()
         else:
-            logger.warning(f"No optimizer checkpoint found at {opt_path}. Optimizer starts fresh.")
+            logger.warning(
+                f"No reward optimizer checkpoint found in {checkpoint_path}. Optimizer starts fresh."
+            )
 
-        self.warmup_done = False
-        self.reward_warmup_steps = 1 #Make one, otherwise there is OOM
-        logger.info("Reward model loaded. Warmup phase will be skipped.")
+        if self.continue_reward_warmup_after_load and self.reward_warmup_steps > 0:
+            self.warmup_done = False
+            logger.info(
+                "Reward model loaded. Running %d additional warmup step(s).",
+                self.reward_warmup_steps,
+            )
+        else:
+            self.warmup_done = True
+            self.reward_warmup_steps = 0
+            logger.info("Reward model loaded. Warmup phase will be skipped.")
 
 
     @profiling_decorator
@@ -1303,64 +1486,48 @@ class AIRLTrainer(GRPOTrainer):
                 if isinstance(reward_func, nn.Module):
                     # OPTIMIZATION: We no longer need 'prompt_texts'. We only need the full conversation.
                     full_texts = build_texts(prompts, completions, reward_processing_class, is_conversational(inputs[0]))
+                    score_micro_bs = max(1, int(getattr(self, "reward_score_micro_batch", self.max_micro_batch)))
 
-                    # Tokenize (Padding side = Right) ATTENTION always right padded
-                    reward_inputs = reward_processing_class(
-                        text=full_texts, return_tensors="pt", padding="max_length", padding_side="right", 
-                        add_special_tokens=False, truncation=True, max_length=self.max_length
-                    ).to(device)
+                    for start in range(0, len(full_texts), score_micro_bs):
+                        end = min(start + score_micro_bs, len(full_texts))
 
-                    with torch.inference_mode():
-                        if self.dense_rewards:
-                            # logits: (B, Full_Len)
-                            reward_logits = reward_func(**reward_inputs).logits[:, :, 0] / self.disc_temperature
-                            if self.clip_reward_model:
-                                reward_logits.clamp_(self.reward_lb, self.reward_ub)
-                            full_lens = reward_inputs["attention_mask"].sum(dim=1).long()
-                            start_indices = (full_lens - completion_lens).clamp(min=0)
-                            gather_indices = start_indices[:, None] + torch.arange(seq_len, device=device)[None, :]
-                            gather_indices = gather_indices.clamp(max=reward_logits.size(1) - 1)
-                            reward_comp = reward_logits.gather(1, gather_indices)
-                            reward_comp[~output_mask] = float('nan')
-                            if self.dense_rewards=="partial":
-                                end_of_thought_mask = self._sentence_boundary_mask(reward_inputs, reward_inputs["attention_mask"])
-                                
-                                # --- DEBUGGING VISUALIZATION START ---
-                                # if self.accelerator.is_main_process:
-                                #     # Check only the first sample in the micro-batch
-                                #     sample_ids = reward_inputs["input_ids"][0]
-                                #     sample_tokens = self.reward_tokenizer.convert_ids_to_tokens(sample_ids)
-                                #     sample_mask = end_of_thought_mask[0]
-                                    
-                                #     print("\n" + "="*50)
-                                #     print("DEBUG: Reward Model Token Alignment")
-                                #     print(f"BOS Token: {self.reward_tokenizer.bos_token} (ID: {self.reward_tokenizer.bos_token_id})")
-                                #     print("-" * 50)
-                                    
-                                #     for idx, (token, is_boundary) in enumerate(zip(sample_tokens, sample_mask)):
-                                #         # Only print non-padding tokens for clarity
-                                #         if token == self.reward_tokenizer.pad_token:
-                                #             continue
-                                #         boundary_marker = " [STEP END] <---" if is_boundary else ""
-                                #         print(f"Token {idx:3}: '{token:15}' {boundary_marker}")
-                                #     print("="*50 + "\n")
-                                    
-                                # import IPython; IPython.embed(); exit()
-                                # # # --- DEBUGGING VISUALIZATION END ---
-                                
-                                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
-                                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
-                            elif self.dense_rewards=="partial_fixed":
-                                end_of_thought_mask = self._every_n_tokens_mask(reward_inputs, reward_inputs["attention_mask"], n=self.args.dense_partial_fixed_n)
-                                end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
-                                reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
-                            rewards_per_func[:, i, :] = reward_comp
-                        else:
-                            # Sequence-level reward (last token)
-                            reward_val = reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
-                            if self.clip_reward_model:
-                                reward_val = torch.clamp(reward_val, self.reward_lb, self.reward_ub)
-                            rewards_per_func[:, i, 0] = reward_val
+                        # Tokenize (Padding side = Right) ATTENTION always right padded
+                        reward_inputs = reward_processing_class(
+                            text=full_texts[start:end], return_tensors="pt", padding="max_length", padding_side="right",
+                            add_special_tokens=False, truncation=True, max_length=self.max_length
+                        ).to(device)
+
+                        with torch.inference_mode():
+                            if self.dense_rewards:
+                                # logits: (B, Full_Len)
+                                reward_logits = reward_func(**reward_inputs).logits[:, :, 0] / self.disc_temperature
+                                if self.clip_reward_model:
+                                    reward_logits.clamp_(self.reward_lb, self.reward_ub)
+                                chunk_completion_lens = completion_lens[start:end]
+                                chunk_mask = output_mask[start:end]
+                                full_lens = reward_inputs["attention_mask"].sum(dim=1).long()
+                                start_indices = (full_lens - chunk_completion_lens).clamp(min=0)
+                                gather_indices = start_indices[:, None] + torch.arange(seq_len, device=device)[None, :]
+                                gather_indices = gather_indices.clamp(max=reward_logits.size(1) - 1)
+                                reward_comp = reward_logits.gather(1, gather_indices)
+                                reward_comp[~chunk_mask] = float('nan')
+                                if self.dense_rewards=="partial":
+                                    end_of_thought_mask = self._sentence_boundary_mask(reward_inputs, reward_inputs["attention_mask"])
+                                    end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
+                                    reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
+                                elif self.dense_rewards=="partial_fixed":
+                                    end_of_thought_mask = self._every_n_tokens_mask(reward_inputs, reward_inputs["attention_mask"], n=self.args.dense_partial_fixed_n)
+                                    end_of_thought_mask = end_of_thought_mask.gather(1, gather_indices)
+                                    reward_comp = backfill_rewards(reward_comp, end_of_thought_mask)
+                                rewards_per_func[start:end, i, :] = reward_comp
+                            else:
+                                # Sequence-level reward (last token)
+                                reward_val = reward_func(**reward_inputs).logits[:, 0] / self.disc_temperature
+                                if self.clip_reward_model:
+                                    reward_val = torch.clamp(reward_val, self.reward_lb, self.reward_ub)
+                                rewards_per_func[start:end, i, 0] = reward_val
+
+                        del reward_inputs
 
                 # === BRANCH B: OUTCOME / VERIFIABLE REWARD ===
                 else:
@@ -1694,7 +1861,11 @@ class AIRLTrainer(GRPOTrainer):
             ]
 
 
-        if mode == "train" and self.reward_updates_per_policy_step > 0:
+        if (
+            mode == "train"
+            and self.reward_updates_per_policy_step > 0
+            and not self.freeze_reward_after_warmup
+        ):
             
             # medical corruptions (before label switch, as they are wrong guaranteed)
             if self.num_neg_perturbations_per_expert and "corrupted_reasonings" in inputs[0].keys():
@@ -1920,7 +2091,35 @@ class AIRLTrainer(GRPOTrainer):
         # Reward optimizer state dict (so we can resume properly)
         if getattr(self, "reward_optimizer", None) is not None:
             torch.save(
-                self.reward_optimizer.state_dict(), reward_dir / "reward_optimizer.pt"
+                self.reward_optimizer.state_dict(), os.path.join(reward_dir, "reward_optimizer.pt")
+            )
+        if getattr(self, "reward_scheduler", None) is not None:
+            torch.save(
+                self.reward_scheduler.state_dict(), os.path.join(reward_dir, "reward_scheduler.pt")
+            )
+
+    def _save_checkpoint(self, model, trial):
+        super()._save_checkpoint(model, trial)
+
+        if not self.accelerator.is_main_process:
+            return
+
+        checkpoint_dir = os.path.join(
+            self._get_output_dir(trial=trial),
+            f"{PREFIX_CHECKPOINT_DIR}-{self.state.global_step}",
+        )
+        reward_dir = os.path.join(checkpoint_dir, "reward_model")
+        os.makedirs(reward_dir, exist_ok=True)
+
+        if getattr(self, "reward_optimizer", None) is not None:
+            torch.save(
+                self.reward_optimizer.state_dict(),
+                os.path.join(reward_dir, "reward_optimizer.pt"),
+            )
+        if getattr(self, "reward_scheduler", None) is not None:
+            torch.save(
+                self.reward_scheduler.state_dict(),
+                os.path.join(reward_dir, "reward_scheduler.pt"),
             )
             
     def compute_loss(
