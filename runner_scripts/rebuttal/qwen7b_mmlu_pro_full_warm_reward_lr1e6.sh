@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rebuttal restart: MMLU-Pro Llama-3.1-8B full dense AIRL, reusing warmed reward.
+# Rebuttal restart: MMLU-Pro Qwen2.5-7B full dense AIRL, reusing warmed reward when available.
 set -u
 
 GPU_NUM="${GPU_NUM:-3}"
@@ -33,7 +33,20 @@ RUN_NAME="${MODEL}_${VARIANT}_rebuttal_warm_reward_lr1e6"
 WB_PROJECT="neurips_airl_rebuttal_${DATASET}"
 OUTPUT_DIR="/mnt/pdata/caf83/neurips2026/${DATASET}/outputs/${RUN_NAME}"
 EVAL_TRACE_FILE="${OUTPUT_DIR}/best_model/eval_results_${DATASET}_${MODEL}_${VARIANT}_warm_reward_lr1e6_t0p5.jsonl"
+WARMUP_REWARD_DIR="${WARMUP_REWARD_DIR:-${OUTPUT_DIR}/reward_model_warmup}"
 
+WARMUP_FLAGS=()
+if [[ -f "${WARMUP_REWARD_DIR}/adapter_model.safetensors" ]]; then
+    WARMUP_FLAGS=(
+        model.warmup_reward_dir="${WARMUP_REWARD_DIR}"
+        training.reward_warmup_steps=1
+        +training.continue_reward_warmup_after_load=true
+    )
+else
+    WARMUP_FLAGS=(
+        training.reward_warmup_steps=250
+    )
+fi
 
 IRL_TRAIN_PARAMS=(
     model.reward_updates_per_policy_step=3
@@ -46,7 +59,6 @@ IRL_TRAIN_PARAMS=(
     training.gradient_accumulation_steps=8
     model.max_prompt_length=300
     model.max_completion_length=824
-    training.reward_warmup_steps=250
 )
 COMMON_REWARD_FLAGS=(
     model.clip_reward_model=true
@@ -84,7 +96,7 @@ run_cmd() {
     return "${rc}"
 }
 
-run_llama8b_mmlu_pro_full_warm_reward_lr1e6() {
+run_qwen7b_mmlu_pro_full_warm_reward_lr1e6() {
     if ! run_cmd "${RUN_NAME}_TRAIN" \
         bash "${RUNNER}" train_irl.py \
             --config-path="configs/${DATASET}/${MODEL}" \
@@ -95,6 +107,7 @@ run_llama8b_mmlu_pro_full_warm_reward_lr1e6() {
             "${DENSE_FLAGS[@]}" \
             "${IRL_LORA_FLAGS[@]}" \
             "${COMMON_REWARD_FLAGS[@]}" \
+            "${WARMUP_FLAGS[@]}" \
             "${IRL_TRAIN_PARAMS[@]}"; then
         echo "Skipping ${RUN_NAME}_EVAL because training did not finish."
         return
@@ -114,7 +127,7 @@ run_llama8b_mmlu_pro_full_warm_reward_lr1e6() {
             ++eval.output_file="${EVAL_TRACE_FILE}"
 }
 
-run_llama8b_mmlu_pro_full_warm_reward_lr1e6
+run_qwen7b_mmlu_pro_full_warm_reward_lr1e6
 
 echo -e "\n======================\nGPU ${GPU_NUM} SUMMARY\n======================"
 if [[ ${#FAILED_RUNS[@]} -ne 0 ]]; then
@@ -122,4 +135,4 @@ if [[ ${#FAILED_RUNS[@]} -ne 0 ]]; then
     printf "  %s\n" "${FAILED_RUNS[@]}"
     exit 1
 fi
-echo "MMLU-Pro Llama-3.1-8B full warm-reward LR 1e-6 run succeeded on GPU ${GPU_NUM}."
+echo "MMLU-Pro Qwen2.5-7B full warm-reward LR 1e-6 run succeeded on GPU ${GPU_NUM}."
