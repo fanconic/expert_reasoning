@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6215,
+    "win_rate": 0.9898632341110217,
+    "mean_margin": 2.8606200771154944,
+    "median_margin": 3.289602999498615,
+    "tie_rate": 0.008205953338696701,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1243,
+      "win_rate": 0.9879324215607401,
+      "mean_margin": 1.9741124029573782,
+      "median_margin": 1.9924982244318181
+    },
+    "2": {
+      "n_pairs": 1243,
+      "win_rate": 0.9726468222043443,
+      "mean_margin": 2.718630496450738,
+      "median_margin": 3.1865531412760415
+    },
+    "3": {
+      "n_pairs": 1243,
+      "win_rate": 0.9935639581657281,
+      "mean_margin": 3.0810236220971357,
+      "median_margin": 3.3801491477272725
+    },
+    "4": {
+      "n_pairs": 1243,
+      "win_rate": 0.996781979082864,
+      "mean_margin": 3.2223265599997313,
+      "median_margin": 3.462950721153846
+    },
+    "5": {
+      "n_pairs": 1243,
+      "win_rate": 0.998390989541432,
+      "mean_margin": 3.3070073040724894,
+      "median_margin": 3.4952657948369565
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1243,
+    "mean_spearman_rho": -0.3958970233306516,
+    "nonincreasing_rate": 0.04102976669348351
+  },
+  "localization": {
+    "n_pairs": 6154,
+    "mode": "token",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": null,
+    "local_window_units": 3,
+    "unit_name": "token",
+    "mean_local_drop": 2.7944903669297037,
+    "mean_far_drop": 2.9187697313398697,
+    "mean_gap": -0.12427936441016611,
+    "hit_at_k": {
+      "1": 0.4153396165095873,
+      "3": 0.6925576860578485,
+      "5": 0.7986675333116672
+    },
+    "hit_at_k_random": {
+      "1": 0.3236244577206818,
+      "3": 0.6520602265228211,
+      "5": 0.7963118889547626
+    },
+    "hit_at_k_norm": {
+      "1": 0.12792275273368608,
+      "3": -0.06152565418606234,
+      "5": -0.11572668736883578
+    },
+    "mean_local_unit_ratio": 0.3236244577206818
+  }
+}

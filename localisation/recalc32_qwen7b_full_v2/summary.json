@@ -1,0 +1,91 @@
+{
+  "overall": {
+    "n_pairs": 160,
+    "win_rate": 0.99375,
+    "mean_margin": 3.1954389630579962,
+    "median_margin": 3.6203933499311978,
+    "tie_rate": 0.0,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 32,
+      "win_rate": 1.0,
+      "mean_margin": 2.1043524211135667,
+      "median_margin": 1.990488454573827
+    },
+    "2": {
+      "n_pairs": 32,
+      "win_rate": 0.96875,
+      "mean_margin": 3.154653105536143,
+      "median_margin": 3.505593856438537
+    },
+    "3": {
+      "n_pairs": 32,
+      "win_rate": 1.0,
+      "mean_margin": 3.4419241243801206,
+      "median_margin": 3.7715611846192094
+    },
+    "4": {
+      "n_pairs": 32,
+      "win_rate": 1.0,
+      "mean_margin": 3.438802702163498,
+      "median_margin": 3.882890358754874
+    },
+    "5": {
+      "n_pairs": 32,
+      "win_rate": 1.0,
+      "mean_margin": 3.837462462096654,
+      "median_margin": 4.008162950717487
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 32,
+    "mean_spearman_rho": -0.44375000000000003,
+    "nonincreasing_rate": 0.03125
+  },
+  "localization": {
+    "n_pairs": 159,
+    "mode": "token",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": null,
+    "local_window_units": 3,
+    "unit_name": "token",
+    "mean_local_drop": 3.145012939564667,
+    "mean_far_drop": 3.2128683874591637,
+    "mean_gap": -0.06785544789449734,
+    "hit_at_k": {
+      "1": 0.389937106918239,
+      "3": 0.6352201257861635,
+      "5": 0.7547169811320755
+    },
+    "hit_at_k_random": {
+      "1": 0.32155609625226206,
+      "3": 0.6431740373389326,
+      "5": 0.7824662637779017
+    },
+    "hit_at_k_norm": {
+      "1": 0.1371658906210415,
+      "3": -0.020066931964162045,
+      "5": -0.0409750095446642
+    },
+    "mean_local_unit_ratio": 0.3215560962522621
+  },
+  "stabilized_localization": {
+    "n_pairs": 159,
+    "zscore_bins": 20,
+    "zscore_mode": "robust",
+    "smooth_window": 3,
+    "onset_threshold": 1.0,
+    "onset_persistence": 3,
+    "mean_ldm": 0.2993060676156639,
+    "mean_ldm_random": 0.3215560962522621,
+    "mean_ldm_norm": -0.033973534483313,
+    "mean_onset_lag": 0.8679245283018868,
+    "median_onset_lag": 0.0,
+    "onset_detect_rate": 1.0,
+    "false_alarm_rate": 0.0
+  }
+}

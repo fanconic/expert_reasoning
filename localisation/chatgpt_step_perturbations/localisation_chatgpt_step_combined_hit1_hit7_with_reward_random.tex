@@ -1,0 +1,37 @@
+% Requires \usepackage{multirow}
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\caption{\textbf{Localisation on ChatGPT-edited GSM8K reasoning traces.} All methods are scored on the same 1228 successful clean/perturbed pairs. The target location is the first perturbed-step token that differs from the clean step (\texttt{step\_first\_diff}). Values are Hit@1@W in percent with 95\% bootstrap CI half-widths.}
+\label{tab:localisation_chatgpt_step_combined_hit1_hit7}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Model} & \textbf{Signal} & \textbf{Hit@1 (\%)} & \textbf{Hit@7 (\%)} & \textbf{n} \\
+\midrule
+\multirow{7}{*}{\textsc{Qwen2.5-7B}} & Reward dense & 2.77 $\pm$ 0.94 & 8.88 $\pm$ 1.59 & 1228 \\
+ & Random (reward dense space) & 2.87 $\pm$ 0.06 & 13.90 $\pm$ 0.28 & 1228 \\
+ & Reward interval & 36.56 $\pm$ 2.69 & 36.56 $\pm$ 2.69 & 1228 \\
+ & Random (reward interval space) & 37.28 $\pm$ 0.70 & 37.28 $\pm$ 0.70 & 1228 \\
+ & SFT token log-probability & 12.79 $\pm$ 1.91 & \textbf{69.71} $\pm$ 2.48 & 1228 \\
+ & SFT token entropy & 2.85 $\pm$ 0.94 & 12.70 $\pm$ 1.83 & 1228 \\
+ & SFT random location & 2.87 $\pm$ 0.06 & 13.90 $\pm$ 0.28 & 1228 \\
+\midrule
+\multirow{7}{*}{\textsc{Llama3.1-8B}} & Reward dense & 5.54 $\pm$ 1.30 & 15.88 $\pm$ 2.00 & 1228 \\
+ & Random (reward dense space) & 3.13 $\pm$ 0.06 & 15.34 $\pm$ 0.29 & 1228 \\
+ & Reward interval & 52.85 $\pm$ 2.81 & 52.85 $\pm$ 2.81 & 1228 \\
+ & Random (reward interval space) & 40.86 $\pm$ 0.72 & 40.86 $\pm$ 0.72 & 1228 \\
+ & SFT token log-probability & 34.28 $\pm$ 2.65 & 50.33 $\pm$ 2.77 & 1228 \\
+ & SFT token entropy & 6.51 $\pm$ 1.38 & 23.21 $\pm$ 2.44 & 1228 \\
+ & SFT random location & 3.13 $\pm$ 0.06 & 15.34 $\pm$ 0.29 & 1228 \\
+\midrule
+\multirow{7}{*}{\textsc{Qwen3-4B}} & Reward dense & 8.96 $\pm$ 1.51 & 28.01 $\pm$ 2.65 & 1228 \\
+ & Random (reward dense space) & 2.94 $\pm$ 0.06 & 14.14 $\pm$ 0.28 & 1228 \\
+ & Reward interval & \textbf{66.12} $\pm$ 2.57 & 66.12 $\pm$ 2.57 & 1228 \\
+ & Random (reward interval space) & 37.81 $\pm$ 0.69 & 37.81 $\pm$ 0.69 & 1228 \\
+ & SFT token log-probability & 3.58 $\pm$ 1.10 & 23.45 $\pm$ 2.32 & 1228 \\
+ & SFT token entropy & 0.33 $\pm$ 0.29 & 0.73 $\pm$ 0.49 & 1228 \\
+ & SFT random location & 2.94 $\pm$ 0.06 & 14.14 $\pm$ 0.28 & 1228 \\
+\bottomrule
+\end{tabular}
+\end{table}

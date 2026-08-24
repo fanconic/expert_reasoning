@@ -1,0 +1,38 @@
+% Requires \usepackage{booktabs,multirow}
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\caption{\textbf{Localisation on synthetic GSM8K perturbations.} Old rows use the previous 1234 severity-1 Table-5-valid pregenerated traces; new rebuttal rows use the 160 original synthetic perturbations from \texttt{gsm8k\_process\_sensitivity\_pregen}. Reward and log-probability use the largest-drop detector; entropy uses the largest-spike detector. Values are Hit@1@W in percent with bootstrapped 95\% CI half-widths.}
+\label{tab:localisation_original_synthetic_rebuttal_hit1_hit7}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Model} & \textbf{Signal} & \textbf{Hit@1 (\%)} & \textbf{Hit@7 (\%)} & \textbf{n} \\
+\midrule
+\multirow{7}{*}{\textsc{Qwen2.5-7B}} & Reward dense (old) & 47.57 $\pm$ 2.76 & 54.86 $\pm$ 2.59 & 1234 \\
+ & Reward interval (old) & 65.48 $\pm$ 2.59 & 65.48 $\pm$ 2.59 & 1234 \\
+ & SFT token log-probability & \textbf{94.08} $\pm$ 1.34 & \textbf{98.46} $\pm$ 0.69 & 1234 \\
+ & SFT token entropy & 15.32 $\pm$ 1.99 & 40.03 $\pm$ 2.76 & 1234 \\
+ & Reward dense (new) & 43.75 $\pm$ 7.50 & 64.38 $\pm$ 7.50 & 160 \\
+ & Base token log-probability & 78.12 $\pm$ 6.25 & 81.25 $\pm$ 5.63 & 160 \\
+ & Base token entropy & 40.62 $\pm$ 7.50 & 66.25 $\pm$ 7.50 & 160 \\
+\midrule
+\multirow{6}{*}{\textsc{Llama3.1-8B}} & Reward dense (old) & 65.80 $\pm$ 2.76 & 80.63 $\pm$ 2.23 & 1234 \\
+ & Reward interval (old) & \textbf{86.14} $\pm$ 1.99 & 86.14 $\pm$ 1.99 & 1234 \\
+ & SFT token log-probability & 75.28 $\pm$ 2.39 & \textbf{86.47} $\pm$ 1.94 & 1234 \\
+ & SFT token entropy & 28.12 $\pm$ 2.51 & 54.86 $\pm$ 2.67 & 1234 \\
+ & Base token log-probability & 78.75 $\pm$ 6.56 & 84.38 $\pm$ 5.63 & 160 \\
+ & Base token entropy & 38.12 $\pm$ 7.81 & 68.75 $\pm$ 7.50 & 160 \\
+\midrule
+\multirow{6}{*}{\textsc{Qwen3-4B}} & Reward dense (old) & 61.99 $\pm$ 2.71 & 70.26 $\pm$ 2.51 & 1234 \\
+ & Reward interval (old) & \textbf{78.93} $\pm$ 2.23 & \textbf{78.93} $\pm$ 2.23 & 1234 \\
+ & SFT token log-probability & 25.85 $\pm$ 2.43 & 26.90 $\pm$ 2.43 & 1234 \\
+ & SFT token entropy & 0.16 $\pm$ 0.20 & 1.94 $\pm$ 0.85 & 1234 \\
+ & Base token log-probability & 39.38 $\pm$ 7.50 & 43.75 $\pm$ 7.81 & 160 \\
+ & Base token entropy & 41.88 $\pm$ 7.50 & 73.12 $\pm$ 6.87 & 160 \\
+\midrule
+\textsc{Random} & Chance (old SFT grids) & 11.88 $\pm$ 0.56 & 32.00 $\pm$ 1.02 & 1234 \\
+\textsc{Random} & Chance (new base grids) & 19.11 $\pm$ 1.52 & 49.36 $\pm$ 2.91 & 160 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6215,
+    "win_rate": 0.9909895414320193,
+    "mean_margin": 2.559598088193503,
+    "median_margin": 2.71182281802399,
+    "tie_rate": 0.008205953338696701,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1243,
+      "win_rate": 0.9919549477071601,
+      "mean_margin": 1.9661992152599208,
+      "median_margin": 2.0481126598674386
+    },
+    "2": {
+      "n_pairs": 1243,
+      "win_rate": 0.9734513274336283,
+      "mean_margin": 2.4630494848029882,
+      "median_margin": 2.621564695821006
+    },
+    "3": {
+      "n_pairs": 1243,
+      "win_rate": 0.9943684633950121,
+      "mean_margin": 2.710426166151735,
+      "median_margin": 2.8018508184523814
+    },
+    "4": {
+      "n_pairs": 1243,
+      "win_rate": 0.996781979082864,
+      "mean_margin": 2.8057987865898486,
+      "median_margin": 2.861553485576923
+    },
+    "5": {
+      "n_pairs": 1243,
+      "win_rate": 0.998390989541432,
+      "mean_margin": 2.8525167881630216,
+      "median_margin": 2.9151381340579707
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1243,
+    "mean_spearman_rho": -0.41359613837489945,
+    "nonincreasing_rate": 0.04344328238133548
+  },
+  "localization": {
+    "n_pairs": 4948,
+    "mode": "bucket",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": 15,
+    "local_window_units": 1,
+    "unit_name": "bucket",
+    "mean_local_drop": 2.4075420705212833,
+    "mean_far_drop": 3.121322435863855,
+    "mean_gap": -0.7137803653425708,
+    "hit_at_k": {
+      "1": 0.3694421988682296,
+      "3": 0.9145109135004043,
+      "5": 0.9925222312045271
+    },
+    "hit_at_k_random": {
+      "1": 0.6601312662120059,
+      "3": 0.9665876430225663,
+      "5": 0.9947529509473727
+    },
+    "hit_at_k_norm": {
+      "1": -1.1290152495487986,
+      "3": -4.9307533363663865,
+      "5": -5.827230531201681
+    },
+    "mean_local_unit_ratio": 0.6601312662120059
+  }
+}

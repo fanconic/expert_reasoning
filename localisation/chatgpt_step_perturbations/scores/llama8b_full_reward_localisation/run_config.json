@@ -1,0 +1,35 @@
+{
+  "args": {
+    "pairs_jsonl": "outputs/localisation/chatgpt_step_perturbations/gsm8k_qwen7b_sft_step_perturbations_full.jsonl",
+    "output_dir": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_full_reward_localisation",
+    "config": "configs/math/llama8b/irl_eval.yaml",
+    "checkpoint_dir": "/mnt/pdata/caf83/icml_math/outputs/llama8b_full/best_model",
+    "reward_name": null,
+    "reward_lora_rank": null,
+    "reward_gpu_memory_utilization": 0.4,
+    "dense_reward_mode": "full",
+    "dense_partial_fixed_n": 15,
+    "load_in_4bit": null,
+    "max_examples": 0,
+    "start_index": 0,
+    "max_micro_batch": 8,
+    "aggregate": "mean",
+    "discount_gamma": 0.95,
+    "windows": [
+      1,
+      7
+    ],
+    "target_position_source": "step_first_diff",
+    "include_text": false,
+    "seed": 42,
+    "bootstrap_samples": 2000,
+    "bootstrap_alpha": 0.05,
+    "bootstrap_seed": 42
+  },
+  "model_name": "/mnt/pdata/caf83/icml_math/outputs/llama8b_full/best_model",
+  "reward_name": "meta-llama/Llama-3.1-8B-Instruct",
+  "dense_rewards": true,
+  "localization_mode": "token",
+  "partial_fixed_stride": null,
+  "max_length": 1124
+}

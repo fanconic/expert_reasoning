@@ -1,0 +1,72 @@
+{
+  "source_pair_details": "outputs/localisation/chatgpt_step_perturbations/gsm8k_qwen7b_sft_step_perturbations_full.jsonl",
+  "source_run_dir": "outputs/localisation/chatgpt_step_perturbations",
+  "policy_model": "unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit",
+  "max_length": 1124,
+  "append_eos": false,
+  "n_rows_total": 1234,
+  "n_rows_scored": 1228,
+  "n_unique_traces_scored": 1228,
+  "severity_filter": null,
+  "require_table_valid": false,
+  "target_position_source": "step_first_diff",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "prob_largest_drop": {
+      "1": {
+        "mean": 0.019543973941368076,
+        "ci_halfwidth": 0.00773615635179153,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.15065146579804561,
+        "ci_halfwidth": 0.020358306188925077,
+        "n": 1228
+      }
+    },
+    "logprob_largest_drop": {
+      "1": {
+        "mean": 0.021986970684039087,
+        "ci_halfwidth": 0.008153501628664496,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.13599348534201955,
+        "ci_halfwidth": 0.019543973941368087,
+        "n": 1228
+      }
+    },
+    "entropy_largest_spike": {
+      "1": {
+        "mean": 0.057003257328990226,
+        "ci_halfwidth": 0.012622149837133553,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.20846905537459284,
+        "ci_halfwidth": 0.022394136807817586,
+        "n": 1228
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.02936108044987155,
+        "ci_halfwidth": 0.0006344370586675308,
+        "n": 1228
+      },
+      "7": {
+        "mean": 0.14136304461269084,
+        "ci_halfwidth": 0.002834812954378943,
+        "n": 1228
+      }
+    }
+  }
+}

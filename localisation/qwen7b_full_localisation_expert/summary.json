@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6500,
+    "win_rate": 0.9896923076923076,
+    "mean_margin": 3.3921439804168503,
+    "median_margin": 3.8539009150065215,
+    "tie_rate": 0.008153846153846154,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1300,
+      "win_rate": 0.9876923076923076,
+      "mean_margin": 2.2936378816276584,
+      "median_margin": 2.27487567292542
+    },
+    "2": {
+      "n_pairs": 1300,
+      "win_rate": 0.9715384615384616,
+      "mean_margin": 3.1949760594908634,
+      "median_margin": 3.6939867401802013
+    },
+    "3": {
+      "n_pairs": 1300,
+      "win_rate": 0.9946153846153846,
+      "mean_margin": 3.637341822716399,
+      "median_margin": 3.9569612331239945
+    },
+    "4": {
+      "n_pairs": 1300,
+      "win_rate": 0.9953846153846154,
+      "mean_margin": 3.845626439738865,
+      "median_margin": 4.068187918651808
+    },
+    "5": {
+      "n_pairs": 1300,
+      "win_rate": 0.9992307692307693,
+      "mean_margin": 3.9891376985104676,
+      "median_margin": 4.133160567705106
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1300,
+    "mean_spearman_rho": -0.4553076923076923,
+    "nonincreasing_rate": 0.052307692307692305
+  },
+  "localization": {
+    "n_pairs": 6433,
+    "mode": "token",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": null,
+    "local_window_units": 3,
+    "unit_name": "token",
+    "mean_local_drop": 3.623758197242782,
+    "mean_far_drop": 3.3176680760944026,
+    "mean_gap": 0.3060901211483792,
+    "hit_at_k": {
+      "1": 0.44256179076636093,
+      "3": 0.720348204570185,
+      "5": 0.8296284781594901
+    },
+    "hit_at_k_random": {
+      "1": 0.31680224032428767,
+      "3": 0.6428216054728876,
+      "5": 0.7880588609186151
+    },
+    "hit_at_k_norm": {
+      "1": 0.18041382986475962,
+      "3": 0.12765352568130917,
+      "5": -0.18490755050421293
+    },
+    "mean_local_unit_ratio": 0.31680224032428767
+  }
+}

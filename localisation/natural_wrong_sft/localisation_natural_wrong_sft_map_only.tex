@@ -1,0 +1,45 @@
+% Requires \usepackage{booktabs,multirow,arydshln}
+\begin{table}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4pt}
+\caption{\textbf{MAP localisation on naturally wrong Qwen7B-SFT GSM8K traces.} We label the first mathematically invalid reasoning step in 861 Qwen7B-SFT generations whose final answer is actually incorrect, then rank candidate transition positions by each method's error signal. The token-grid panel evaluates all methods over token transitions, expanding interval rewards to tokens. The interval-grid panel evaluates common 15-token intervals, mean-pooling dense reward and SFT token baselines while using the interval reward natively. MAP uses the labelled step span (target\_char\_span); Norm. MAP subtracts the expected random-ranking MAP, $(m-r)/(1-r)$. Values are percentages with 95\% bootstrap CI half-widths; $n$ is the number of examples with finite MAP on that tokenizer/grid. \textbf{Bold} marks the best and \underline{underlining} the second-best value within each model and grid.}
+\label{tab:natural_wrong_sft_map_only}
+\begin{tabular}{lllccc}
+\toprule
+\textbf{Grid} & \textbf{Model} & \textbf{Signal} & \textbf{MAP} & \textbf{Norm. MAP} & \textbf{n} \\
+\midrule
+\multirow{12}{*}{Token grid} & \multirow{4}{*}{\textsc{Qwen2.5-7B}} & Reward dense & 28.15 $\pm$ 0.81 & -0.73 $\pm$ 0.44 & 861 \\
+ &  & Reward interval, expanded & \textbf{41.76} $\pm$ 1.61 & \textbf{19.63} $\pm$ 2.06 & 861 \\
+ &  & SFT log-probability & \underline{32.17} $\pm$ 0.96 & \underline{5.84} $\pm$ 0.65 & 861 \\
+ &  & SFT entropy & 31.60 $\pm$ 0.93 & 5.01 $\pm$ 0.61 & 861 \\
+\cdashline{2-6}
+ & \multirow{4}{*}{\textsc{Llama3.1-8B}} & Reward dense & 30.95 $\pm$ 0.94 & 3.62 $\pm$ 0.59 & 861 \\
+ &  & Reward interval, expanded & \textbf{41.55} $\pm$ 1.62 & \textbf{19.03} $\pm$ 1.96 & 861 \\
+ &  & SFT log-probability & \underline{34.26} $\pm$ 0.99 & \underline{8.72} $\pm$ 0.75 & 861 \\
+ &  & SFT entropy & 32.47 $\pm$ 0.95 & 6.20 $\pm$ 0.63 & 861 \\
+\cdashline{2-6}
+ & \multirow{4}{*}{\textsc{Qwen3-4B}} & Reward dense & 31.65 $\pm$ 0.95 & 4.01 $\pm$ 0.56 & 861 \\
+ &  & Reward interval, expanded & \textbf{44.56} $\pm$ 1.78 & \textbf{23.20} $\pm$ 2.37 & 861 \\
+ &  & SFT log-probability & \underline{33.73} $\pm$ 1.00 & \underline{7.88} $\pm$ 0.70 & 861 \\
+ &  & SFT entropy & 33.02 $\pm$ 0.98 & 6.88 $\pm$ 0.66 & 861 \\
+ & \textsc{Random} & Expected chance & 28.67 $\pm$ 0.84 & 0.00 $\pm$ 0.00 & 861 \\
+\midrule
+\multirow{12}{*}{15-token interval grid} & \multirow{4}{*}{\textsc{Qwen2.5-7B}} & Reward dense, mean/15 & 62.27 $\pm$ 1.79 & 24.49 $\pm$ 3.39 & 856 \\
+ &  & Reward interval & 59.58 $\pm$ 1.79 & 20.45 $\pm$ 3.11 & 856 \\
+ &  & SFT log-probability, mean/15 & \underline{64.35} $\pm$ 1.66 & \underline{31.77} $\pm$ 2.95 & 856 \\
+ &  & SFT entropy, mean/15 & \textbf{64.66} $\pm$ 1.69 & \textbf{32.67} $\pm$ 2.99 & 856 \\
+\cdashline{2-6}
+ & \multirow{4}{*}{\textsc{Llama3.1-8B}} & Reward dense, mean/15 & 66.66 $\pm$ 1.87 & 30.19 $\pm$ 3.68 & 844 \\
+ &  & Reward interval & 64.13 $\pm$ 1.79 & 24.49 $\pm$ 3.45 & 844 \\
+ &  & SFT log-probability, mean/15 & \textbf{68.86} $\pm$ 1.74 & \textbf{36.22} $\pm$ 3.42 & 844 \\
+ &  & SFT entropy, mean/15 & \underline{68.10} $\pm$ 1.81 & \underline{35.47} $\pm$ 3.26 & 844 \\
+\cdashline{2-6}
+ & \multirow{4}{*}{\textsc{Qwen3-4B}} & Reward dense, mean/15 & \underline{67.58} $\pm$ 1.76 & \underline{32.79} $\pm$ 3.40 & 852 \\
+ &  & Reward interval & \textbf{69.18} $\pm$ 1.73 & \textbf{37.69} $\pm$ 3.39 & 852 \\
+ &  & SFT log-probability, mean/15 & 56.85 $\pm$ 1.59 & 14.05 $\pm$ 2.79 & 852 \\
+ &  & SFT entropy, mean/15 & 58.81 $\pm$ 1.66 & 18.76 $\pm$ 2.81 & 852 \\
+ & \textsc{Random} & Expected chance & 52.71 $\pm$ 0.94 & 0.00 $\pm$ 0.00 & 856 \\
+\bottomrule
+\end{tabular}
+\end{table}

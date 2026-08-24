@@ -1,0 +1,72 @@
+{
+  "args": {
+    "config": "configs/math/qwen4b/irl_eval.yaml",
+    "checkpoint_dir": "/mnt/pdata/caf83/icml_math/outputs/qwen4b_partial_fixed/best_model",
+    "reward_name": null,
+    "reward_lora_rank": null,
+    "reward_gpu_memory_utilization": null,
+    "dense_reward_mode": "partial_fixed",
+    "dense_partial_fixed_n": 15,
+    "load_in_4bit": null,
+    "split": "test",
+    "no_system": false,
+    "trace_source": "expert",
+    "pregenerated_mode": "pregenerated_policy_and_reward",
+    "pregenerated_jsonl_path": null,
+    "pregenerated_source_dir": null,
+    "pregenerated_candidates": null,
+    "pregenerated_pick": "generation_idx",
+    "pregenerated_generation_idx": 0,
+    "clean_correct_policy": "require",
+    "max_examples": 1300,
+    "start_index": 0,
+    "max_severity": 5,
+    "variants_per_severity": 1,
+    "perturb_fns": [
+      "flip_operator_in_one_step",
+      "corrupt_numbers"
+    ],
+    "aggregate": "mean",
+    "discount_gamma": 0.95,
+    "local_window": 3,
+    "hit_ks": [
+      1,
+      3,
+      5
+    ],
+    "max_micro_batch": 8,
+    "seed": 42,
+    "output_dir": "/mnt/pdata/caf83/workspace/caf83/expert_reasoning_clean/outputs/localisation/qwen4b_partial_fixed_localisation_expert"
+  },
+  "model_name": "/mnt/pdata/caf83/icml_math/outputs/qwen4b_partial_fixed/best_model",
+  "reward_name": "Qwen/Qwen3-4B-Instruct-2507",
+  "dense_rewards": "partial_fixed",
+  "localization_mode": "bucket",
+  "partial_fixed_stride": 15,
+  "max_length": 1124,
+  "dataset_slice": {
+    "split": "test",
+    "start": 0,
+    "end": 1300,
+    "n": 1300
+  },
+  "perturb_fns": [
+    "flip_operator_in_one_step",
+    "corrupt_numbers"
+  ],
+  "trace_source": "expert",
+  "pregenerated_mode": null,
+  "pregenerated_jsonl_path": null,
+  "pregenerated_pick": null,
+  "pregenerated_generation_idx": null,
+  "clean_correct_policy": "require",
+  "pregenerated_index_stats": null,
+  "build_stats": {
+    "prepared_prompts": 1300,
+    "skipped_missing_pregenerated": 0,
+    "skipped_no_correct_clean": 0,
+    "used_incorrect_clean_fallback": 0,
+    "skipped_invalid_clean_trace": 0,
+    "used_user_text_fallback": 0
+  }
+}

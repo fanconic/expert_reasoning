@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6215,
+    "win_rate": 0.9895414320193081,
+    "mean_margin": 2.8581213533506538,
+    "median_margin": 3.2756012617543346,
+    "tie_rate": 0.008205953338696701,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1243,
+      "win_rate": 0.9879324215607401,
+      "mean_margin": 2.077673152714215,
+      "median_margin": 2.396778405230978
+    },
+    "2": {
+      "n_pairs": 1243,
+      "win_rate": 0.9710378117457763,
+      "mean_margin": 2.772396023464233,
+      "median_margin": 3.2388042566219157
+    },
+    "3": {
+      "n_pairs": 1243,
+      "win_rate": 0.9935639581657281,
+      "mean_margin": 3.065837579408548,
+      "median_margin": 3.331568821803197
+    },
+    "4": {
+      "n_pairs": 1243,
+      "win_rate": 0.996781979082864,
+      "mean_margin": 3.1633377520937165,
+      "median_margin": 3.3572443181818183
+    },
+    "5": {
+      "n_pairs": 1243,
+      "win_rate": 0.998390989541432,
+      "mean_margin": 3.211362259072558,
+      "median_margin": 3.3683457485465116
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1243,
+    "mean_spearman_rho": -0.26468222043443285,
+    "nonincreasing_rate": 0.02815768302493966
+  },
+  "localization": {
+    "n_pairs": 6154,
+    "mode": "token",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": null,
+    "local_window_units": 3,
+    "unit_name": "token",
+    "mean_local_drop": 2.8648665407293925,
+    "mean_far_drop": 2.8806268999018947,
+    "mean_gap": -0.01576035917250153,
+    "hit_at_k": {
+      "1": 0.18280792980175495,
+      "3": 0.4073773155671108,
+      "5": 0.5441988950276243
+    },
+    "hit_at_k_random": {
+      "1": 0.323171466946888,
+      "3": 0.6486002323376115,
+      "5": 0.7913279193151653
+    },
+    "hit_at_k_norm": {
+      "1": -0.24984917943795268,
+      "3": -1.31931217197776,
+      "5": -4.8805132959528095
+    },
+    "mean_local_unit_ratio": 0.323171466946888
+  }
+}

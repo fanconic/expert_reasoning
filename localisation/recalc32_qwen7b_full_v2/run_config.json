@@ -1,0 +1,77 @@
+{
+  "args": {
+    "config": "configs/math/qwen7b/irl_eval.yaml",
+    "checkpoint_dir": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_full/best_model",
+    "reward_name": null,
+    "reward_lora_rank": null,
+    "reward_gpu_memory_utilization": null,
+    "dense_reward_mode": "full",
+    "dense_partial_fixed_n": null,
+    "load_in_4bit": null,
+    "split": "test",
+    "no_system": false,
+    "trace_source": "expert",
+    "pregenerated_mode": "pregenerated_policy_and_reward",
+    "pregenerated_jsonl_path": null,
+    "pregenerated_source_dir": null,
+    "pregenerated_candidates": null,
+    "pregenerated_pick": "generation_idx",
+    "pregenerated_generation_idx": 0,
+    "clean_correct_policy": "require",
+    "max_examples": 32,
+    "start_index": 0,
+    "max_severity": 5,
+    "variants_per_severity": 1,
+    "perturb_fns": [
+      "flip_operator_in_one_step",
+      "corrupt_numbers"
+    ],
+    "aggregate": "mean",
+    "discount_gamma": 0.95,
+    "local_window": 3,
+    "hit_ks": [
+      1,
+      3,
+      5
+    ],
+    "max_micro_batch": 8,
+    "zscore_bins": 20,
+    "zscore_mode": "robust",
+    "smooth_window": 3,
+    "onset_threshold": 1.0,
+    "onset_persistence": 3,
+    "seed": 42,
+    "output_dir": "outputs/localisation/recalc32_qwen7b_full_v2"
+  },
+  "model_name": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_full/best_model",
+  "reward_name": "Qwen/Qwen2.5-7B-Instruct",
+  "dense_rewards": true,
+  "localization_mode": "token",
+  "partial_fixed_stride": null,
+  "max_length": 1124,
+  "dataset_slice": {
+    "split": "test",
+    "start": 0,
+    "end": 32,
+    "n": 32
+  },
+  "perturb_fns": [
+    "flip_operator_in_one_step",
+    "corrupt_numbers"
+  ],
+  "trace_source": "expert",
+  "pregenerated_mode": null,
+  "pregenerated_jsonl_path": null,
+  "pregenerated_pick": null,
+  "pregenerated_generation_idx": null,
+  "clean_correct_policy": "require",
+  "pregenerated_index_stats": null,
+  "build_stats": {
+    "prepared_prompts": 32,
+    "skipped_missing_pregenerated": 0,
+    "skipped_no_correct_clean": 0,
+    "used_incorrect_clean_fallback": 0,
+    "skipped_invalid_clean_trace": 0,
+    "used_user_text_fallback": 0
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "chosen_key": {
+    "prompt_idx": 1,
+    "severity": 1,
+    "variant_idx": 0
+  },
+  "run_map": {
+    "qwen4b": "recalc32_qwen4b_full_v2",
+    "qwen7b": "recalc32_qwen7b_full_v2",
+    "llama8b": "recalc32_llama8b_full_v2"
+  },
+  "trace_transform": "raw",
+  "transform_params": {
+    "zscore_bins": 20,
+    "zscore_mode": "robust",
+    "smooth_window": 3
+  },
+  "output_files": {
+    "comparison_png": "outputs/localisation/recalc32_full_v2_triptych_pretty_raw_single_corruption/sample_p1_s1_v0/recalc32_full_v2_triptych_pretty_raw_single_corruption_p1_s1_v0.png",
+    "comparison_pdf": "outputs/localisation/recalc32_full_v2_triptych_pretty_raw_single_corruption/sample_p1_s1_v0/recalc32_full_v2_triptych_pretty_raw_single_corruption_p1_s1_v0.pdf",
+    "trace_text": "outputs/localisation/recalc32_full_v2_triptych_pretty_raw_single_corruption/sample_p1_s1_v0/recalc32_full_v2_triptych_pretty_raw_single_corruption_p1_s1_v0_trace.txt",
+    "token_viz": []
+  },
+  "metrics": {
+    "qwen4b": {
+      "margin": 2.4835611979166665,
+      "gap": -2.652483258928571,
+      "hit_at": {
+        "1": 0,
+        "3": 0,
+        "5": 0
+      },
+      "hit_at_norm": {
+        "1": -0.19999999999999996,
+        "3": -0.7540106951871659,
+        "5": -1.6204071071243746
+      }
+    },
+    "qwen7b": {
+      "margin": 2.2355929287997163,
+      "gap": -1.5191245060629825,
+      "hit_at": {
+        "1": 0,
+        "3": 1,
+        "5": 1
+      },
+      "hit_at_norm": {
+        "1": -0.18918918918918914,
+        "3": 1.0,
+        "5": 1.0
+      }
+    },
+    "llama8b": {
+      "margin": 2.667258522727273,
+      "gap": -2.502624276061776,
+      "hit_at": {
+        "1": 0,
+        "3": 0,
+        "5": 0
+      },
+      "hit_at_norm": {
+        "1": -0.18918918918918914,
+        "3": -0.7045045045045045,
+        "5": -1.491432609079668
+      }
+    }
+  }
+}

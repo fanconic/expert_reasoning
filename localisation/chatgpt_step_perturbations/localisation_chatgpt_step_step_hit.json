@@ -1,0 +1,587 @@
+{
+  "root_dir": "outputs/localisation/chatgpt_step_perturbations/scores",
+  "pairs_jsonl": "outputs/localisation/chatgpt_step_perturbations/gsm8k_qwen7b_sft_step_perturbations_full.jsonl",
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "methods": [
+    {
+      "key": "qwen7b_full_reward",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_full_reward_localisation/pair_details.jsonl",
+      "tokenizer_source": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_full/best_model",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.2255700325732899,
+          "ci_halfwidth": 0.02403298045602599,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.33867777360974083,
+          "ci_halfwidth": 0.0066798533644733815,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": -0.20887546032347423,
+          "ci_halfwidth": 0.041856158170545874,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen7b_partial_fixed_reward",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "tokenizer_source": "/mnt/pdata/caf83/icml_math/outputs/qwen7b_partial_fixed/best_model",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.506514657980456,
+          "ci_halfwidth": 0.028104641693811078,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.42831478781524657,
+          "ci_halfwidth": 0.0078061627790037,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.17693639716237436,
+          "ci_halfwidth": 0.049119736663761515,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 3.429153094462541,
+          "ci_halfwidth": 0.050508957654723075,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "llama8b_full_reward",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_full_reward_localisation/pair_details.jsonl",
+      "tokenizer_source": "/mnt/pdata/caf83/icml_math/outputs/llama8b_full/best_model",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.36644951140065146,
+          "ci_halfwidth": 0.026475977198697015,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.3479075502539018,
+          "ci_halfwidth": 0.006577036747392573,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.012411153287163848,
+          "ci_halfwidth": 0.044575024972131935,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 35.615635179153095,
+          "ci_halfwidth": 0.6153501628664522,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "llama8b_partial_fixed_reward",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "tokenizer_source": "/mnt/pdata/caf83/icml_math/outputs/llama8b_partial_fixed/best_model",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.6042345276872965,
+          "ci_halfwidth": 0.026872964169381064,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.4490722633081083,
+          "ci_halfwidth": 0.0077119905768982255,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.3058981869136845,
+          "ci_halfwidth": 0.050322833292093055,
+          "n": 1226
+        },
+        "step_units": {
+          "mean": 3.270358306188925,
+          "ci_halfwidth": 0.04845276872964166,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen4b_full_reward",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_full_reward_localisation/pair_details.jsonl",
+      "tokenizer_source": "/mnt/pdata/caf83/icml_math/outputs/qwen4b_full/best_model",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.498371335504886,
+          "ci_halfwidth": 0.027687296416938123,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.34550106511795536,
+          "ci_halfwidth": 0.006905712777873552,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.2457151064544796,
+          "ci_halfwidth": 0.044186437389701586,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen4b_partial_fixed_reward",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "tokenizer_source": "/mnt/pdata/caf83/icml_math/outputs/qwen4b_partial_fixed/best_model",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.6677524429967426,
+          "ci_halfwidth": 0.026465798045602618,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.4350954473448764,
+          "ci_halfwidth": 0.007721461751379027,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.4277052152968277,
+          "ci_halfwidth": 0.047836899319238485,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 3.4226384364820848,
+          "ci_halfwidth": 0.050905944625406985,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen7b_base_token_log-probability",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Base token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.5415309446254072,
+          "ci_halfwidth": 0.02687296416938112,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.33867777360974083,
+          "ci_halfwidth": 0.0066798533644733815,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.29713817616436217,
+          "ci_halfwidth": 0.04301854791113238,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen7b_base_token_entropy",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "Base token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_spike",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.6148208469055375,
+          "ci_halfwidth": 0.026872964169381064,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.33867777360974083,
+          "ci_halfwidth": 0.0066798533644733815,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.42721485931521086,
+          "ci_halfwidth": 0.04111744180658508,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen7b_sft_token_log-probability",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "SFT token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.8216612377850163,
+          "ci_halfwidth": 0.02118281758957652,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.33867777360974083,
+          "ci_halfwidth": 0.0066798533644733815,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.7305383329612892,
+          "ci_halfwidth": 0.033064385618004344,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen7b_sft_token_entropy",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "signal": "SFT token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen2.5-7b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_spike",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.3281758957654723,
+          "ci_halfwidth": 0.02646579804560259,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.33867777360974083,
+          "ci_halfwidth": 0.0066798533644733815,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": -0.04206931360070031,
+          "ci_halfwidth": 0.04466255684572898,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "llama8b_base_token_log-probability",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Base token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.46416938110749184,
+          "ci_halfwidth": 0.027280130293159593,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.3479075502539018,
+          "ci_halfwidth": 0.006577036747392573,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.16550086945122655,
+          "ci_halfwidth": 0.04494871716320315,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 35.615635179153095,
+          "ci_halfwidth": 0.6153501628664522,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "llama8b_base_token_entropy",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "Base token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_spike",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.5545602605863192,
+          "ci_halfwidth": 0.02890879478827363,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.3479075502539018,
+          "ci_halfwidth": 0.006577036747392573,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.3140841776048635,
+          "ci_halfwidth": 0.046598261519098044,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 35.615635179153095,
+          "ci_halfwidth": 0.6153501628664522,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "llama8b_sft_token_log-probability",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "SFT token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.6490228013029316,
+          "ci_halfwidth": 0.02605863192182406,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.3479075502539018,
+          "ci_halfwidth": 0.006577036747392573,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.4651256498768799,
+          "ci_halfwidth": 0.04132062754562876,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 35.615635179153095,
+          "ci_halfwidth": 0.6153501628664522,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "llama8b_sft_token_entropy",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "signal": "SFT token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/llama-3.1-8b-instruct-unsloth-bnb-4bit",
+      "detector": "largest_spike",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.6311074918566775,
+          "ci_halfwidth": 0.02850162866449507,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.3479075502539018,
+          "ci_halfwidth": 0.006577036747392573,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.44824298375105276,
+          "ci_halfwidth": 0.04331845550369537,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 35.615635179153095,
+          "ci_halfwidth": 0.6153501628664522,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen4b_base_token_log-probability",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Base token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.23941368078175895,
+          "ci_halfwidth": 0.024022801302931593,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.34550106511795536,
+          "ci_halfwidth": 0.006905712777873552,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": -0.1615525985196279,
+          "ci_halfwidth": 0.03859855904177887,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen4b_base_token_entropy",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "Base token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_base_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit",
+      "detector": "largest_spike",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.6824104234527687,
+          "ci_halfwidth": 0.026465798045602618,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.34550106511795536,
+          "ci_halfwidth": 0.006905712777873552,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.5247484626626909,
+          "ci_halfwidth": 0.040586542037351514,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen4b_sft_token_log-probability",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "SFT token log-probability",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit",
+      "detector": "largest_drop",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.3957654723127036,
+          "ci_halfwidth": 0.02728013029315962,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.34550106511795536,
+          "ci_halfwidth": 0.006905712777873552,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": 0.08191444268852854,
+          "ci_halfwidth": 0.04349968130016658,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    },
+    {
+      "key": "qwen4b_sft_token_entropy",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "signal": "SFT token entropy",
+      "detail_path": "outputs/localisation/chatgpt_step_perturbations/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "tokenizer_source": "unsloth/qwen3-4b-instruct-2507-unsloth-bnb-4bit",
+      "detector": "largest_spike",
+      "metrics": {
+        "step_hit": {
+          "mean": 0.2288273615635179,
+          "ci_halfwidth": 0.024837133550488597,
+          "n": 1228
+        },
+        "step_chance": {
+          "mean": 0.34550106511795536,
+          "ci_halfwidth": 0.006905712777873552,
+          "n": 1228
+        },
+        "step_normalized_hit": {
+          "mean": -0.16666598590554382,
+          "ci_halfwidth": 0.039362294710179296,
+          "n": 1228
+        },
+        "step_units": {
+          "mean": 38.43648208469055,
+          "ci_halfwidth": 0.7024022801302898,
+          "n": 1228
+        },
+        "n_missing": 0
+      }
+    }
+  ]
+}

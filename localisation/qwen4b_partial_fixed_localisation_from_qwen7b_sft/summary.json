@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6215,
+    "win_rate": 0.9887369267900241,
+    "mean_margin": 2.473165744103614,
+    "median_margin": 2.7801626609156536,
+    "tie_rate": 0.008205953338696701,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1243,
+      "win_rate": 0.9879324215607401,
+      "mean_margin": 1.8487955480244669,
+      "median_margin": 2.0119137325802363
+    },
+    "2": {
+      "n_pairs": 1243,
+      "win_rate": 0.9718423169750603,
+      "mean_margin": 2.41770519381992,
+      "median_margin": 2.732193944919517
+    },
+    "3": {
+      "n_pairs": 1243,
+      "win_rate": 0.9927594529364441,
+      "mean_margin": 2.6339142779448936,
+      "median_margin": 2.8499614987428163
+    },
+    "4": {
+      "n_pairs": 1243,
+      "win_rate": 0.995172968624296,
+      "mean_margin": 2.7177366880743175,
+      "median_margin": 2.8849417630949596
+    },
+    "5": {
+      "n_pairs": 1243,
+      "win_rate": 0.99597747385358,
+      "mean_margin": 2.7476770126544725,
+      "median_margin": 2.8896887010831587
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1243,
+    "mean_spearman_rho": -0.2527755430410298,
+    "nonincreasing_rate": 0.029766693483507644
+  },
+  "localization": {
+    "n_pairs": 5144,
+    "mode": "bucket",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": 15,
+    "local_window_units": 1,
+    "unit_name": "bucket",
+    "mean_local_drop": 2.300995765735857,
+    "mean_far_drop": 3.2107191555753416,
+    "mean_gap": -0.9097233898394841,
+    "hit_at_k": {
+      "1": 0.15318818040435458,
+      "3": 0.8823872472783826,
+      "5": 0.9910575427682737
+    },
+    "hit_at_k_random": {
+      "1": 0.6494702795026236,
+      "3": 0.9595697696237521,
+      "5": 0.9925880849873575
+    },
+    "hit_at_k_norm": {
+      "1": -2.1713155402356414,
+      "3": -6.498334270426799,
+      "5": -6.11281152049857
+    },
+    "mean_local_unit_ratio": 0.6494702795026235
+  }
+}

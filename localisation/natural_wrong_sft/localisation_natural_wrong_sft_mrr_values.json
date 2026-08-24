@@ -1,0 +1,318 @@
+{
+  "strict_input": "outputs/localisation/natural_wrong_sft/scores/_inputs/natural_wrong_sft_valid_target_char_span_actual_wrong_answer.jsonl",
+  "n_strict": 861,
+  "methods": [
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_full_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.35318352346043297,
+        "ci_halfwidth": 0.01951941701915022,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval, expanded",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_partial_fixed_rebuttal_restart_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.495322868594704,
+        "ci_halfwidth": 0.02479491963964489,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.4816268472024343,
+        "ci_halfwidth": 0.021795651621873496,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.37983728836075487,
+        "ci_halfwidth": 0.015816413001861707,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_full_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.49894706288182084,
+        "ci_halfwidth": 0.024181242160665917,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval, expanded",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.4927999585644872,
+        "ci_halfwidth": 0.02578098742426485,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.6267144565315297,
+        "ci_halfwidth": 0.023219748520815597,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.5205777314945853,
+        "ci_halfwidth": 0.022221115511113138,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_full_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.537664636923265,
+        "ci_halfwidth": 0.02530673029135244,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval, expanded",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.5553647740029962,
+        "ci_halfwidth": 0.025641514911269703,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.46872338636307903,
+        "ci_halfwidth": 0.017737571397377222,
+        "n": 861
+      }
+    },
+    {
+      "grid": "token",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.47734810133905026,
+        "ci_halfwidth": 0.02058441522032231,
+        "n": 861
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_full_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.6762269272783291,
+        "ci_halfwidth": 0.022472077993398176,
+        "n": 856
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_partial_fixed_rebuttal_restart_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.6454409119566831,
+        "ci_halfwidth": 0.023394085632695405,
+        "n": 856
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.7117421961704534,
+        "ci_halfwidth": 0.020830285008898775,
+        "n": 856
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen7b",
+      "model": "\\textsc{Qwen2.5-7B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen7b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.7142091942325588,
+        "ci_halfwidth": 0.020097796114516397,
+        "n": 856
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_full_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.7098289513277665,
+        "ci_halfwidth": 0.02113408490370866,
+        "n": 844
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.6885802635358322,
+        "ci_halfwidth": 0.020862762911785404,
+        "n": 844
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.7428073045964043,
+        "ci_halfwidth": 0.020635320281351066,
+        "n": 844
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "llama8b",
+      "model": "\\textsc{Llama3.1-8B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/llama8b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.7423248355120393,
+        "ci_halfwidth": 0.021349113218929572,
+        "n": 844
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_dense",
+      "signal": "Reward dense, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_full_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.7376225365661985,
+        "ci_halfwidth": 0.021591699290863076,
+        "n": 852
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "reward_interval",
+      "signal": "Reward interval",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_partial_fixed_reward_localisation/pair_details.jsonl",
+      "mrr": {
+        "mean": 0.7559053394440718,
+        "ci_halfwidth": 0.020824821614874478,
+        "n": 852
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_logprob",
+      "signal": "SFT log-probability, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.6191868805425144,
+        "ci_halfwidth": 0.021046149582681195,
+        "n": 852
+      }
+    },
+    {
+      "grid": "interval15",
+      "model_key": "qwen4b",
+      "model": "\\textsc{Qwen3-4B}",
+      "method_key": "sft_entropy",
+      "signal": "SFT entropy, mean/15",
+      "detail_path": "outputs/localisation/natural_wrong_sft/scores/qwen4b_sft_policy_token_baselines/policy_token_baselines.jsonl",
+      "mrr": {
+        "mean": 0.6436587538700215,
+        "ci_halfwidth": 0.02099376827039684,
+        "n": 852
+      }
+    }
+  ]
+}

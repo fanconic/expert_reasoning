@@ -1,0 +1,48 @@
+{
+  "source_pairs_jsonl": "outputs/localisation/natural_wrong_sft/scores/_inputs/natural_wrong_sft_valid_target_char_span.jsonl",
+  "checkpoint_dir": "/mnt/pdata/caf83/icml_math/outputs/qwen4b_partial_fixed/best_model",
+  "reward_name": "Qwen/Qwen3-4B-Instruct-2507",
+  "dense_reward_mode": "partial_fixed",
+  "dense_rewards_config_value": "partial_fixed",
+  "localization_mode": "bucket",
+  "partial_fixed_stride": 15,
+  "max_length": 1124,
+  "n_rows_total": 865,
+  "n_rows_scored": 865,
+  "target_position_source": "target_char_span",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "reward_largest_drop": {
+      "1": {
+        "mean": 0.7213872832369942,
+        "ci_halfwidth": 0.030072254335260118,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.7213872832369942,
+        "ci_halfwidth": 0.030072254335260118,
+        "n": 865
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.5596795946023997,
+        "ci_halfwidth": 0.01240525217070454,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.5596795946023997,
+        "ci_halfwidth": 0.01240525217070454,
+        "n": 865
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+% Requires \usepackage{booktabs}
+\begin{table}[t]
+\centering
+\small
+\renewcommand{\arraystretch}{1.08}
+\begin{tabular}{l r r}
+\toprule
+\textbf{Model} & \textbf{Full Hit@1@15 (\%)} & \textbf{Partial-Fixed Hit@1@15 (\%)} \\
+\midrule
+\textsc{Qwen2.5-7B} & 58.43 $\pm$ 2.63 & 65.48 $\pm$ 2.59 \\
+\textsc{Llama3.1-8B} & 85.01 $\pm$ 2.03 & 86.14 $\pm$ 1.99 \\
+\textsc{Qwen3-4B} & 75.93 $\pm$ 2.35 & 78.93 $\pm$ 2.23 \\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Single-trace localisation on GSM8K (\textit{Pregenerated}).} Metric: raw-reward Hit@1@15 (largest downward step in corrupted trace), reported as percentage mean $\pm$ bootstrapped 95\% CI half-width. Bucket-aware evaluation for partial_fixed (15-token plateaus). Filtered to single-perturbation rows (severity=1).}
+\label{tab:localisation_hit1at15_pregenerated_full_vs_partial_raw}
+\end{table}

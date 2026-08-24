@@ -1,0 +1,30 @@
+% Requires \usepackage{multirow}
+\begin{table}[t]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\caption{\textbf{Natural-error localisation with SFT token baselines.} All methods are scored on the same 1228 ChatGPT-edited GSM8K clean/perturbed pairs. Hit@7 is measured at the first perturbed-step token that differs from the clean step (\texttt{step\_first\_diff}). MAP is average precision over the broader edited token span, ranking positions by reward/log-probability drops or entropy spikes. Values are percentages with 95\% bootstrap CI half-widths. \textbf{Bold} marks the best and \underline{underlining} the second-best value within each model and metric.}
+\label{tab:localisation_chatgpt_step_sft_hit7_map}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Model} & \textbf{Signal} & \textbf{Hit@7 (\%)} & \textbf{MAP (\%)} & \textbf{n} \\
+\midrule
+\multirow{4}{*}{\textsc{Qwen2.5-7B}} & Reward dense & 8.88 $\pm$ 1.59 & 24.22 $\pm$ 0.58 & 1228 \\
+ & Reward interval & \underline{36.56} $\pm$ 2.69 & \textbf{56.34} $\pm$ 1.26 & 1228 \\
+ & SFT token log-probability & \textbf{69.71} $\pm$ 2.48 & \underline{46.63} $\pm$ 0.59 & 1228 \\
+ & SFT token entropy & 12.70 $\pm$ 1.83 & 29.21 $\pm$ 0.68 & 1228 \\
+\midrule
+\multirow{4}{*}{\textsc{Llama3.1-8B}} & Reward dense & 15.88 $\pm$ 2.00 & 29.41 $\pm$ 0.67 & 1228 \\
+ & Reward interval & \textbf{52.85} $\pm$ 2.81 & \textbf{66.37} $\pm$ 1.33 & 1228 \\
+ & SFT token log-probability & \underline{50.33} $\pm$ 2.77 & \underline{39.34} $\pm$ 0.66 & 1228 \\
+ & SFT token entropy & 23.21 $\pm$ 2.44 & 32.31 $\pm$ 0.73 & 1228 \\
+\midrule
+\multirow{4}{*}{\textsc{Qwen3-4B}} & Reward dense & \underline{28.01} $\pm$ 2.65 & 28.60 $\pm$ 0.68 & 1228 \\
+ & Reward interval & \textbf{66.12} $\pm$ 2.57 & \textbf{72.46} $\pm$ 1.26 & 1228 \\
+ & SFT token log-probability & 23.45 $\pm$ 2.32 & \underline{36.32} $\pm$ 0.57 & 1228 \\
+ & SFT token entropy & 0.73 $\pm$ 0.49 & 28.19 $\pm$ 0.66 & 1228 \\
+\midrule
+\textsc{Random} & Shared token-grid chance & 14.46 $\pm$ 0.28 & 22.72 $\pm$ 0.54 & 1228 \\
+\bottomrule
+\end{tabular}
+\end{table}

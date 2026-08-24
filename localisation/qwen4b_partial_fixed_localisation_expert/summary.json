@@ -1,0 +1,76 @@
+{
+  "overall": {
+    "n_pairs": 6500,
+    "win_rate": 0.9893846153846154,
+    "mean_margin": 2.465177745166143,
+    "median_margin": 2.742893582466683,
+    "tie_rate": 0.008461538461538461,
+    "same_answer_rate": 1.0,
+    "clean_correct_rate": 1.0,
+    "pert_correct_rate": 1.0
+  },
+  "by_severity": {
+    "1": {
+      "n_pairs": 1300,
+      "win_rate": 0.9869230769230769,
+      "mean_margin": 1.8993037671370712,
+      "median_margin": 2.180810565605446
+    },
+    "2": {
+      "n_pairs": 1300,
+      "win_rate": 0.9684615384615385,
+      "mean_margin": 2.4005710209614484,
+      "median_margin": 2.681876575682354
+    },
+    "3": {
+      "n_pairs": 1300,
+      "win_rate": 0.9953846153846154,
+      "mean_margin": 2.610339729554103,
+      "median_margin": 2.7770530368668473
+    },
+    "4": {
+      "n_pairs": 1300,
+      "win_rate": 0.9969230769230769,
+      "mean_margin": 2.6856423457541454,
+      "median_margin": 2.843510901866394
+    },
+    "5": {
+      "n_pairs": 1300,
+      "win_rate": 0.9992307692307693,
+      "mean_margin": 2.730031862423948,
+      "median_margin": 2.8474239858009573
+    }
+  },
+  "monotonicity": {
+    "n_prompts": 1300,
+    "mean_spearman_rho": -0.23692307692307693,
+    "nonincreasing_rate": 0.019230769230769232
+  },
+  "localization": {
+    "n_pairs": 5403,
+    "mode": "bucket",
+    "local_window_tokens": 3,
+    "partial_fixed_stride": 15,
+    "local_window_units": 1,
+    "unit_name": "bucket",
+    "mean_local_drop": 2.2391856840409208,
+    "mean_far_drop": 3.285819324665387,
+    "mean_gap": -1.046633640624466,
+    "hit_at_k": {
+      "1": 0.13307421802702202,
+      "3": 0.8730334999074588,
+      "5": 0.9809365167499537
+    },
+    "hit_at_k_random": {
+      "1": 0.6496765401630776,
+      "3": 0.9613959688455841,
+      "5": 0.9934224240577952
+    },
+    "hit_at_k_norm": {
+      "1": -2.2185651275740117,
+      "3": -7.296383961859103,
+      "5": -11.297557256408194
+    },
+    "mean_local_unit_ratio": 0.6496765401630776
+  }
+}

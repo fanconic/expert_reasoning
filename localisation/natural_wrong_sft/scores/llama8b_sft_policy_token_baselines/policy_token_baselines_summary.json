@@ -1,0 +1,72 @@
+{
+  "source_pair_details": "outputs/localisation/natural_wrong_sft/scores/_inputs/natural_wrong_sft_valid_target_char_span.jsonl",
+  "source_run_dir": "outputs/localisation/natural_wrong_sft/scores/_inputs",
+  "policy_model": "/mnt/pdata/caf83/icml_math/outputs/llama8b_sft/best_model",
+  "max_length": 1124,
+  "append_eos": false,
+  "n_rows_total": 865,
+  "n_rows_scored": 865,
+  "n_unique_traces_scored": 864,
+  "severity_filter": null,
+  "require_table_valid": false,
+  "target_position_source": "target_char_span",
+  "windows": [
+    1,
+    7
+  ],
+  "bootstrap": {
+    "samples": 2000,
+    "alpha": 0.05,
+    "seed": 42
+  },
+  "metrics": {
+    "prob_largest_drop": {
+      "1": {
+        "mean": 0.4485549132947977,
+        "ci_halfwidth": 0.03354046242774564,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.5213872832369942,
+        "ci_halfwidth": 0.03354046242774558,
+        "n": 865
+      }
+    },
+    "logprob_largest_drop": {
+      "1": {
+        "mean": 0.49479768786127165,
+        "ci_halfwidth": 0.03238439306358379,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.5606936416184971,
+        "ci_halfwidth": 0.03236994219653183,
+        "n": 865
+      }
+    },
+    "entropy_largest_spike": {
+      "1": {
+        "mean": 0.4300578034682081,
+        "ci_halfwidth": 0.032369942196531776,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.4913294797687861,
+        "ci_halfwidth": 0.03296242774566471,
+        "n": 865
+      }
+    },
+    "random_location": {
+      "1": {
+        "mean": 0.27165984519881087,
+        "ci_halfwidth": 0.008531951575729224,
+        "n": 865
+      },
+      "7": {
+        "mean": 0.3859448556426827,
+        "ci_halfwidth": 0.009970402307172721,
+        "n": 865
+      }
+    }
+  }
+}
