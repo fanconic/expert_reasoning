@@ -44,6 +44,10 @@ DEFAULT_POLICY_JSONL = (
     / "trace_scoring/medicine_qwen7b_sft_t0p5_qwen7b_domain_signals/"
     / "qwen7b_medicine_sft_policy_logprob_entropy_on_medicine_sft_trace.jsonl"
 )
+DEFAULT_POLICY_BASELINE_DIR = ROOT.parent / "trace_scoring/clinician_medreason_policy_baselines"
+DEFAULT_QWEN7B_POLICY_BASELINE_JSONL = (
+    DEFAULT_POLICY_BASELINE_DIR / "qwen7b_sft_policy_logprob_entropy_on_110_clinician_traces.jsonl"
+)
 
 FINAL_ANSWER_ONLY_PATTERNS = [
     re.compile(r"\bfinal answer\b.*\b(wrong|incorrect|error|problem)", re.I),
@@ -62,6 +66,7 @@ class ScoreSpec:
     path: Path
     field: str
     direction: str
+    line_key: str | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -121,21 +126,72 @@ def score_specs(args: argparse.Namespace) -> list[ScoreSpec]:
                     )
                 )
     if args.signals in {"all", "policy"}:
+        qwen7b_policy_path = DEFAULT_QWEN7B_POLICY_BASELINE_JSONL
+        qwen7b_policy_line_key = "source_line_no"
+        if not qwen7b_policy_path.exists():
+            qwen7b_policy_path = args.policy_jsonl
+            qwen7b_policy_line_key = None
         specs.extend(
             [
                 ScoreSpec(
                     key="policy_qwen7b_sft_logprob_drop",
                     label="qwen7b SFT log-prob drop",
-                    path=args.policy_jsonl,
+                    path=qwen7b_policy_path,
                     field="policy_log_probs",
                     direction="drop",
+                    line_key=qwen7b_policy_line_key,
                 ),
                 ScoreSpec(
                     key="policy_qwen7b_sft_entropy_increase",
                     label="qwen7b SFT entropy increase",
-                    path=args.policy_jsonl,
+                    path=qwen7b_policy_path,
                     field="policy_entropies",
                     direction="increase",
+                    line_key=qwen7b_policy_line_key,
+                ),
+                ScoreSpec(
+                    key="policy_llama8b_sft_logprob_drop",
+                    label="llama8b SFT log-prob drop",
+                    path=(
+                        DEFAULT_POLICY_BASELINE_DIR
+                        / "llama8b_sft_policy_logprob_entropy_on_110_clinician_traces.jsonl"
+                    ),
+                    field="policy_log_probs",
+                    direction="drop",
+                    line_key="source_line_no",
+                ),
+                ScoreSpec(
+                    key="policy_llama8b_sft_entropy_increase",
+                    label="llama8b SFT entropy increase",
+                    path=(
+                        DEFAULT_POLICY_BASELINE_DIR
+                        / "llama8b_sft_policy_logprob_entropy_on_110_clinician_traces.jsonl"
+                    ),
+                    field="policy_entropies",
+                    direction="increase",
+                    line_key="source_line_no",
+                ),
+                ScoreSpec(
+                    key="policy_qwen4b_sft_logprob_drop",
+                    label="qwen3-4b SFT log-prob drop",
+                    path=(
+                        DEFAULT_POLICY_BASELINE_DIR
+                        / "qwen3_4b_sft_policy_logprob_entropy_on_110_clinician_traces.jsonl"
+                    ),
+                    field="policy_log_probs",
+                    direction="drop",
+                    line_key="source_line_no",
+                ),
+                ScoreSpec(
+                    key="policy_qwen4b_sft_entropy_increase",
+                    label="qwen3-4b SFT entropy increase",
+                    path=(
+                        DEFAULT_POLICY_BASELINE_DIR
+                        / "qwen3_4b_sft_policy_logprob_entropy_on_110_clinician_traces.jsonl"
+                    ),
+                    field="policy_entropies",
+                    direction="increase",
+                    line_key="source_line_no",
                 ),
             ]
         )
@@ -347,16 +403,25 @@ def needed_source_lines(metadata_by_case: dict[str, dict[str, Any]], annotations
     return lines
 
 
-def load_score_rows(path: Path, needed_lines: set[int]) -> dict[int, dict[str, Any]]:
+def load_score_rows(
+    path: Path,
+    needed_lines: set[int],
+    *,
+    line_key: str | None = None,
+) -> dict[int, dict[str, Any]]:
     rows: dict[int, dict[str, Any]] = {}
     if not path.exists():
         return rows
     with path.open("r", encoding="utf-8") as handle:
         for line_no, line in enumerate(handle, start=1):
-            if line_no not in needed_lines:
-                continue
             if line.strip():
-                rows[line_no] = json.loads(line)
+                if line_key is not None:
+                    row = json.loads(line)
+                    source_line_no = as_int(row.get(line_key))
+                    if source_line_no in needed_lines:
+                        rows[int(source_line_no)] = row
+                elif line_no in needed_lines:
+                    rows[line_no] = json.loads(line)
             if len(rows) == len(needed_lines):
                 break
     return rows
@@ -368,7 +433,7 @@ def evaluate_signal(
     metadata_by_case: dict[str, dict[str, Any]],
     source_lines: set[int],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    score_rows = load_score_rows(spec.path, source_lines)
+    score_rows = load_score_rows(spec.path, source_lines, line_key=spec.line_key)
     details: list[dict[str, Any]] = []
     missing = 0
     mismatched = 0
