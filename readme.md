@@ -1,12 +1,10 @@
-# Expert Reasoning Reward Models
+# Learning Reusable Reasoning Critics from Expert-Referenced Supervision
 
-Code for the paper on learning process-level reasoning reward models from
-expert demonstrations and using them for post-training, inference-time
-reranking, and reasoning-error localisation.
+## Abstract
+Process-level reward models can score intermediate reasoning, but they typically require step-level annotations, preference data, or external verifiers. We study whether paired expert demonstrations can instead train a reusable reasoning critic without any of these. A naive expert-versus-policy classifier risks learning source or formatting cues instead of reasoning quality. We introduce the Prefix-level Expert-Referenced Critic (PERC), which avoids this by using each expert trace three ways: as a positive example, as the reference answer for weakly labelling policy rollouts by agreement, and as the basis for targeted corruptions used as hard negatives, so that policy traces appear on both sides of the classifier and provenance alone cannot separate positives from negatives. Across GSM8K, MMLU-Pro, and MedReason, this critic captures a reusable reasoning-quality signal. As an **inference-time ranker**, it improves Best-of-16 pass@1 in all main reranking settings, transfers positively across all 27 source--target pairs with gains up to 12.7 points, complements consistency-based voting, and continues to improve pass@1 even for policies already trained with it. As a **process-level evaluator**, prefix-value changes localise human-labelled MedReason error units (two doctors, three final-year medical students) better than likelihood-based baselines and identify controlled GSM8K perturbations with up to $78.9%$ Hit@1. It is also a viable **training signal** for GRPO and remains competitive with imitation baselines without task-specific reward tuning. Overall, PERC shows that weak expert-referenced supervision yields reusable critics for inference-time selection and error diagnosis, while remaining feasible as a policy-training reward.
 
-The codebase supports AIRL/ReGAIL-style reward learning from expert reasoning
-traces, SFT and GRPO baselines, reranking analyses, and token-level localisation
-experiments on GSM8K, MedReason, MMLU-Pro, and related evaluation sets.
+
+## Repository Overview
 
 <div align="left">
 <img src="./assets/figure_1.png" width="800" alt="Method overview diagram">
