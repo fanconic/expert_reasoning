@@ -1,0 +1,10 @@
+{"case_id": "MRLOC-NF3-001", "case_rank": 1, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "The answer to the question seems ambigues", "selected_step_id": null}
+{"case_id": "MRLOC-NF3-002", "case_rank": 2, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 2}
+{"case_id": "MRLOC-NF3-003", "case_rank": 3, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 12}
+{"case_id": "MRLOC-NF3-004", "case_rank": 4, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 5}
+{"case_id": "MRLOC-NF3-005", "case_rank": 5, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 7}
+{"case_id": "MRLOC-NF3-006", "case_rank": 6, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 12}
+{"case_id": "MRLOC-NF3-007", "case_rank": 7, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 9}
+{"case_id": "MRLOC-NF3-008", "case_rank": 8, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 5}
+{"case_id": "MRLOC-NF3-009", "case_rank": 9, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 6}
+{"case_id": "MRLOC-NF3-010", "case_rank": 10, "confidence": 5, "expert_id": "expert_5", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 1}

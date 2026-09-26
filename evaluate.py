@@ -907,6 +907,9 @@ def _find_model_head(model, names):
 
 
 def _apply_scalar_head(head, hidden_states):
+    head_param = next(head.parameters(), None)
+    if head_param is not None:
+        hidden_states = hidden_states.to(dtype=head_param.dtype)
     out = head(hidden_states)
     if isinstance(out, (tuple, list)):
         out = out[0]
@@ -914,7 +917,7 @@ def _apply_scalar_head(head, hidden_states):
         out = out.logits
     if out.ndim >= 1 and out.shape[-1] == 1:
         out = out.squeeze(-1)
-    return out
+    return out.float()
 
 
 # ==========================================

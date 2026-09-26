@@ -1,127 +1,90 @@
-# Learning Reasoning Reward Models from Expert Demonstration via Inverse Reinforcement Learning
+# Expert Reasoning Reward Models
+
+Code for the paper on learning process-level reasoning reward models from
+expert demonstrations and using them for post-training, inference-time
+reranking, and reasoning-error localisation.
+
+The codebase supports AIRL/ReGAIL-style reward learning from expert reasoning
+traces, SFT and GRPO baselines, reranking analyses, and token-level localisation
+experiments on GSM8K, MedReason, MMLU-Pro, and related evaluation sets.
 
 <div align="left">
 <img src="./assets/figure_1.png" width="800" alt="Method overview diagram">
 </div>
 
-## Abstract
-Teaching large language models (LLMs) to reason during post-training typically relies on reinforcement learning with explicit outcome- or process-based reward functions. However, in many real-world settings, obtaining or defining such reward functions is difficult, especially for complex tasks, making learning from expert demonstrations an attractive alternative. The dominant approach, supervised fine-tuning (SFT), trains models to imitate expert reasoning traces directly, but suffers from the general limitations of off-policy learning: performance can be fragile to inference-time deviations from states explicitly covered by the demonstrations. To address this, we propose \textbf{Reasoning Adversarial Inverse Reinforcement Learning (R-AIRL)}. Rather than imitating the expert’s reasoning, R-AIRL infers the underlying process-level reward from the expert Chain-of-Thoughts. Through experiments on GSM8K, MMLU-Pro and MedReason we show that the reasoning reward function learned with R-AIRL can be effectively used throughout the training and inference pipeline: (1) to provide a training signal for \textbf{post-training}, outperforming SFT in most of the considered settings, (2) for \textbf{inference-time reranking}, improving pass@1 by up to 17.4 points, and (3) for \textbf{process-level evaluation}, localising reasoning failures with up to 86.1\% accuracy. Overall, R-AIRL bridges imitation learning and reward-based optimisation, enabling the extraction of meaningful reasoning signals from expert thinking traces.
+## Layout
 
-## What This Repo Covers
-- AIRL-style reasoning reward learning (sparse / partial-step / interval / dense variants)
-- Policy training baselines: AIRL, SFT, GRPO
-- Evaluation and reranking analyses for GSM8K, MedReason, MMLU(-Pro), and AIME variants
-- Plot/table generation for pass@k, reranking, calibration, and token-level diagnostics
+- `train_irl.py`, `train_sft.py`, `train_grpo.py`: training entrypoints.
+- `evaluate.py`: unified evaluation entrypoint; see `docs/EVALUATION_GUIDE.md`.
+- `configs/`: Hydra configs for math, medicine, MMLU, ScienceQA-style runs.
+- `src/`: model, reward, training, evaluation, data, and table-generation code.
+- `runner_scripts/`: cleaned cluster scripts for paper-scale runs, ablations,
+  reranking, and localisation.
+- `figures/`: generated tables and plots.
+- `localisation/`: process-level localisation experiments.
+- `localisation/clinician_medreason/`: cleaned anonymised clinician-labelled
+  MedReason localisation study.
+- `localisation/synthetic_perturbations/`: controlled GSM8K perturbation
+  localisation study from the appendix.
 
-## Repository Layout
-- `train_irl.py`, `train_sft.py`, `train_grpo.py`: training entrypoints
-- `evaluate.py`: unified evaluation entrypoint (see `docs/EVALUATION_GUIDE.md`)
-- `configs/`: training/eval configs (see `configs/README.md`)
-- `src/`: implementation modules (models, training, rewards, plotting, data)
-- `src/plot_generators/configs/`: YAML specs for plotting runs
-- `runner_scripts/`: multi-GPU experiment orchestration scripts used for paper-scale runs
-- `figures/`: generated outputs and historical artifacts (see `figures/README.md`)
+Many paper-scale configs reference cluster paths under `/mnt/pdata/...`.
+Override dataset, checkpoint, and output paths when running elsewhere.
 
 ## Setup
+
 ```bash
 conda env create -f environment.yaml
 conda activate unsloth_env
 ```
 
-## Data and Paths
-Many configs reference cluster paths under `/mnt/pdata/...`. For local runs, override paths at launch time (especially `training.output_dir` and any dataset/model path overrides).
+If you use the current local environment instead of the full conda spec,
+`requirements-uv-current.txt` records the packages installed for the latest
+analysis runs.
 
-## How Experiments Were Run
-This repository contains both:
-- single-run Hydra entrypoints (`train_*.py`, `evaluate.py`) for local debugging
-- paper-scale orchestration scripts under `runner_scripts/` (multi-GPU, staged pipeline)
+## Training
 
-
-### 1) Single-Run Commands (Local Smoke Tests)
-Examples (Hydra-based):
+Single-run examples:
 
 ```bash
-# AIRL (example: math / qwen7b)
+# Reward model / IRL training
 python train_irl.py --config-path=configs/math/qwen7b --config-name=irl_train \
   wandb.run_name=qwen7b_partial_fixed \
   model.dense_rewards=partial_fixed \
   training.output_dir=./outputs/qwen7b_partial_fixed
 
-# SFT
+# Supervised fine-tuning
 python train_sft.py --config-path=configs/math/qwen7b --config-name=sft_train \
   wandb.run_name=qwen7b_sft \
   training.output_dir=./outputs/qwen7b_sft
 
-# GRPO
+# GRPO baseline
 python train_grpo.py --config-path=configs/math/qwen7b --config-name=grpo_train \
   wandb.run_name=qwen7b_grpo \
   training.output_dir=./outputs/qwen7b_grpo
 ```
 
-### 2) Paper-Scale Training (Multi-GPU)
-The main training sweep is orchestrated by:
-- `runner_scripts/super_runners/{0,1,2,3}_superrunner.sh`
+Paper-scale sweeps are orchestrated by scripts under `runner_scripts/`; see
+`runner_scripts/README.md` for the cleaned map. Legacy scratch launchers are
+archived locally under `runner_scripts/_backup_not_committed/`.
 
-These scripts call `train_sft.py`, `train_irl.py`, and `evaluate.py` through:
-- `runner_scripts/{0,1,2,3}_run_gpu_node.sh`
-
-Launch one script per GPU:
+## Evaluation And Reranking
 
 ```bash
-bash runner_scripts/super_runners/0_superrunner.sh
-bash runner_scripts/super_runners/1_superrunner.sh
-bash runner_scripts/super_runners/2_superrunner.sh
-bash runner_scripts/super_runners/3_superrunner.sh
+# Reward-model evaluation
+python evaluate.py --config-path=configs/math/qwen7b --config-name=irl_eval
+
+# SFT evaluation
+python evaluate.py --config-path=configs/math/qwen7b --config-name=sft_eval
+
+# GRPO evaluation
+python evaluate.py --config-path=configs/math/qwen7b --config-name=grpo_eval
+
+# Pregenerated completions with policy and reward scores
+python evaluate.py --config-path=configs/math/qwen7b --config-name=irl_eval \
+  eval.mode=pregenerated_policy_and_reward
 ```
 
-Notes:
-- edit `ASSIGNED_*` lists / `run_combo` lines in each script to control which dataset-model pairs are run
-- scripts are intentionally editable templates for cluster runs
-- `runner_scripts/retakes/` contains late-stage reruns (including partial-fixed/GRPO retakes)
-
-### 3) Standard Eval Sweep (Temperature 0.5)
-Evaluate all trained checkpoints (SFT/GRPO/AIRL variants):
-
-```bash
-bash runner_scripts/eval_all_temp05/0_evaluator.sh
-bash runner_scripts/eval_all_temp05/1_evaluator.sh
-bash runner_scripts/eval_all_temp05/2_evaluator.sh
-bash runner_scripts/eval_all_temp05/3_evaluator.sh
-```
-
-### 4) Reranking + SFT-Trace Scoring
-Run AIRL reward scoring on SFT traces and policy log-prob extraction:
-
-```bash
-bash runner_scripts/sft_reranking_temp05/0_evaluator.sh
-bash runner_scripts/sft_reranking_temp05/1_evaluator.sh
-bash runner_scripts/sft_reranking_temp05/2_evaluator.sh
-bash runner_scripts/sft_reranking_temp05/3_evaluator.sh
-
-bash runner_scripts/sft_reranking_temp05/0_logprobs.sh
-bash runner_scripts/sft_reranking_temp05/1_logprobs.sh
-bash runner_scripts/sft_reranking_temp05/2_logprobs.sh
-bash runner_scripts/sft_reranking_temp05/3_logprobs.sh
-```
-
-### 5) Transferability Sweep
-Cross-domain policy/reward transfer experiments are under:
-- `runner_scripts/transferability_temp05/`
-
-Common launch pattern:
-
-```bash
-# Optional: choose dense mode
-export DENSITY=partial_fixed
-
-bash runner_scripts/transferability_temp05/first_0_runner.sh
-bash runner_scripts/transferability_temp05/first_1_runner.sh
-bash runner_scripts/transferability_temp05/2_runner.sh
-bash runner_scripts/transferability_temp05/3_runner.sh
-```
-
-### 6) Plot and Table Generation
-Main paper figures/tables:
+Main paper table and figure generation:
 
 ```bash
 python src/plot_generators/plot_main.py \
@@ -133,41 +96,46 @@ python src/plot_generators/plot_transfer.py \
   --workers 8
 ```
 
-To regenerate into the archive folder directly:
+## Clinician Localisation
+
+The cleaned MedReason clinician study has one public runner and anonymised JSONL
+labels:
 
 ```bash
-python src/plot_generators/plot_main.py \
-  --config src/plot_generators/configs/main.yaml \
-  --output-root figures/archive \
-  --workers 8
+python localisation/clinician_medreason/run_experiment.py
 ```
 
-Useful flags:
-- `--ckpt <name>`: override checkpoint folder (default: `best_model`)
-- `--output-root <path>`: override output root directory
-- `--no-token-figs`: skip expensive token-level visualizations
-- `--debug`: run sequentially (easier debugging)
+Inputs:
 
-## Evaluation
+- `localisation/clinician_medreason/annotations/expert_*.jsonl`
+- `localisation/clinician_medreason/metadata/clinician_cases.jsonl`
+- external token-level score JSONLs under the paths documented in
+  `localisation/clinician_medreason/README.md`
+
+Outputs:
+
+- `localisation/clinician_medreason/results/clinician_localisation_metrics.md`
+- `localisation/clinician_medreason/results/clinician_localisation_metrics.json`
+
+The metric is Hit@1 and Hit@+/-1 over clinician-visible reasoning units, with
+no-clear and final-answer-only labels mapped to the final visible reasoning
+unit.
+
+## Synthetic Perturbation Localisation
+
+The controlled GSM8K localisation experiment from Section 5.2 and Appendix D.5
+is collected under `localisation/synthetic_perturbations/`:
+
 ```bash
-# AIRL evaluation
-python evaluate.py --config-path=configs/math/qwen7b --config-name=irl_eval
-
-# SFT evaluation
-python evaluate.py --config-path=configs/math/qwen7b --config-name=sft_eval
-
-# GRPO evaluation
-python evaluate.py --config-path=configs/math/qwen7b --config-name=grpo_eval
-
-# AIME-style output filename (legacy evaluate_aime behavior)
-python evaluate.py --config-path=configs/aime/qwen3b --config-name=irl_eval eval.mode=aime
-
-# Pregenerated completions + policy log-probs (legacy evaluate_pregenerated behavior)
-python evaluate.py --config-path=configs/math/qwen7b --config-name=irl_eval eval.mode=pregenerated_policy
-
-# Pregenerated completions + policy + reward model (legacy evaluate_pregenerated_sft behavior)
-python evaluate.py --config-path=configs/math/qwen7b --config-name=irl_eval eval.mode=pregenerated_policy_and_reward
+bash localisation/synthetic_perturbations/run_experiment.sh
 ```
 
-See `docs/EVALUATION_GUIDE.md` for full mode details, jsonl input resolution rules, and output naming.
+This regenerates the synthetic Hit@1/Hit@7 tables from the compact run
+summaries and writes them to `localisation/synthetic_perturbations/results/`.
 
+## Notes
+
+Large raw JSONL traces, logs, smoke outputs, and score dumps are intentionally
+ignored. The repository should keep scripts, configs, compact summaries, and
+anonymised labels; regenerate large intermediates from the runner scripts when
+needed.

@@ -7,8 +7,8 @@ from typing import Any
 import numpy as np
 
 
-ROOT_DIR = Path("localisation")
-DEFAULT_OUTPUT = ROOT_DIR / "localisation_combined_reward_policy_hit1_hit7.tex"
+ROOT_DIR = Path("localisation/synthetic_perturbations")
+DEFAULT_OUTPUT = ROOT_DIR / "results/localisation_combined_reward_policy_hit1_hit7.tex"
 WINDOWS = [1, 7]
 BOOTSTRAP_SAMPLES = 2000
 BOOTSTRAP_ALPHA = 0.05

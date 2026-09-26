@@ -1,9 +1,9 @@
-"""Label first erroneous steps in naturally wrong SFT GSM8K generations.
+"""Label first erroneous steps in naturally wrong SFT generations.
 
 The output is pair-style JSONL compatible with the localisation scorers:
 ``clean_text`` is a correct SFT reference generation for the same prompt, and
 ``pert_text``/``wrong_text`` is a naturally wrong SFT generation. The LLM labels
-the first mathematically invalid reasoning step in the wrong trace.
+the first invalid reasoning step in the wrong trace.
 """
 
 from __future__ import annotations
@@ -47,7 +47,10 @@ DEFAULT_GENERATIONS = Path(
     "/mnt/pdata/caf83/icml_math/outputs/qwen7b_sft/best_model/"
     "eval_results_math_qwen7b_sft_t0p5.jsonl"
 )
-DEFAULT_REFERENCE = PROJECT_ROOT / "localisation/runs/qwen7b_sft/qwen7b/full/pair_details.jsonl"
+DEFAULT_REFERENCE = (
+    PROJECT_ROOT
+    / "localisation/synthetic_perturbations/runs/qwen7b_sft/qwen7b/full/pair_details.jsonl"
+)
 DEFAULT_OUTPUT = (
     PROJECT_ROOT
     / "localisation/natural_wrong_sft/"
@@ -62,6 +65,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--generations-jsonl", type=Path, default=DEFAULT_GENERATIONS)
     parser.add_argument("--reference-pair-details", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--output-file", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--domain",
+        type=str,
+        default="gsm8k",
+        choices=["gsm8k", "math", "medreason", "medicine", "mmlu", "mmlu_pro", "generic"],
+        help="Task domain used to phrase the LLM labelling instruction.",
+    )
     parser.add_argument("--max-examples", type=int, default=0)
     parser.add_argument("--start-index", type=int, default=0)
     parser.add_argument("--wrong-per-prompt", type=int, default=1)
@@ -226,29 +236,79 @@ def _format_steps(steps: list[dict[str, Any]]) -> str:
     return "\n".join(f"[{step['index']}] {step['text']}" for step in steps)
 
 
+def _domain_prompt_config(domain: str) -> dict[str, str]:
+    normalized = str(domain or "generic").strip().lower()
+    if normalized in {"gsm8k", "math"}:
+        return {
+            "label": "GSM8K/math",
+            "solution": "math word-problem",
+            "invalidity": "mathematically invalid, logically invalid, or unjustified",
+            "answer_issue": "only the final answer tag is wrong",
+            "gold": "Gold final answer",
+            "task": "natural_wrong_sft_first_error_step",
+        }
+    if normalized in {"medreason", "medicine"}:
+        return {
+            "label": "MedReason/medical",
+            "solution": "medical multiple-choice",
+            "invalidity": (
+                "clinically or biomedically invalid, factually incorrect, contradicted by "
+                "the question/options, or based on an unsupported diagnostic or treatment inference"
+            ),
+            "answer_issue": "only the final answer choice/tag is wrong",
+            "gold": "Gold final answer or answer choice",
+            "task": "natural_wrong_sft_first_error_step_medreason",
+        }
+    if normalized in {"mmlu", "mmlu_pro"}:
+        return {
+            "label": "MMLU-Pro",
+            "solution": "general knowledge multiple-choice",
+            "invalidity": (
+                "factually incorrect, logically invalid, contradicted by the question/options, "
+                "or based on an unsupported inference"
+            ),
+            "answer_issue": "only the final answer choice/tag is wrong",
+            "gold": "Gold final answer or answer choice",
+            "task": "natural_wrong_sft_first_error_step_mmlu_pro",
+        }
+    return {
+        "label": "generic reasoning",
+        "solution": "reasoning",
+        "invalidity": (
+            "factually incorrect, logically invalid, contradicted by the problem statement/options, "
+            "or unjustified"
+        ),
+        "answer_issue": "only the final answer is wrong",
+        "gold": "Gold final answer",
+        "task": "natural_wrong_sft_first_error_step_generic",
+    }
+
+
 def _build_messages(
     question: str,
     answer: str | None,
     correct_trace: str,
     wrong_trace: str,
     wrong_steps: list[dict[str, Any]],
+    domain: str = "gsm8k",
 ) -> list[dict[str, str]]:
+    config = _domain_prompt_config(domain)
     return [
         {
             "role": "system",
             "content": (
-                "You label GSM8K reasoning errors for localisation evaluation. "
+                f"You label {config['label']} reasoning errors for localisation evaluation. "
                 "Return valid JSON only."
             ),
         },
         {
             "role": "user",
             "content": (
-                "A model produced a wrong GSM8K solution. Identify the first reasoning step "
-                "where the wrong solution becomes mathematically invalid or unjustified. "
+                f"A model produced a wrong {config['solution']} solution. Identify the first "
+                f"reasoning step where the wrong solution becomes {config['invalidity']}. "
                 "Choose from the numbered steps exactly as listed. Do not choose a later step "
                 "if an earlier step already contains the error. If the reasoning is valid but "
-                "only the final answer tag is wrong, set label to \"answer_only\" and use "
+                f"{config['answer_issue']}, set label to \"answer_only\" and use "
                 "first_wrong_step_index = null.\n\n"
                 "Return JSON with exactly these keys:\n"
                 "- label: one of \"invalid_step\", \"answer_only\", \"ambiguous\"\n"
@@ -258,7 +318,7 @@ def _build_messages(
                 "- error_summary: one short phrase\n"
                 "- confidence: number between 0 and 1\n\n"
                 f"Question:\n{question}\n\n"
-                f"Gold final answer:\n{answer or ''}\n\n"
+                f"{config['gold']}:\n{answer or ''}\n\n"
                 f"Correct reference solution:\n{correct_trace}\n\n"
                 f"Wrong model solution:\n{wrong_trace}\n\n"
                 f"Numbered wrong-solution reasoning steps:\n{_format_steps(wrong_steps)}\n"
@@ -278,12 +338,6 @@ def _validate_label(obj: dict[str, Any], wrong_steps: list[dict[str, Any]]) -> t
     if idx is None or idx < 0 or idx >= len(wrong_steps):
         raise ValueError(f"Invalid first_wrong_step_index: {raw_idx!r}")
     step = wrong_steps[idx]
-    returned_step = str(obj.get("first_wrong_step", "")).strip()
-    if returned_step and returned_step != step["text"]:
-        raise ValueError(
-            "first_wrong_step does not exactly match the numbered step at "
-            f"index {idx}: {returned_step!r}"
-        )
     return label, idx, str(step["text"]), list(step["char_span"])
 
 
@@ -302,7 +356,11 @@ def _load_done_keys(path: Path) -> set[tuple[int, int]]:
                 continue
             prompt_idx = _to_int(row.get("prompt_idx"))
             gen_idx = _to_int(row.get("wrong_generation_idx"))
-            if prompt_idx is not None and gen_idx is not None and row.get("error") is None:
+            label = row.get("label")
+            is_completed_label = label in {"invalid_step", "answer_only", "ambiguous"}
+            if prompt_idx is not None and gen_idx is not None and (
+                row.get("error") is None or is_completed_label
+            ):
                 done.add((int(prompt_idx), int(gen_idx)))
     return done
 
@@ -363,6 +421,7 @@ def build_items(args: argparse.Namespace) -> list[dict[str, Any]]:
                     "clean_correctness_reward_func": clean_row.get("correctness_reward_func"),
                     "source_generations_jsonl": str(args.generations_jsonl),
                     "reference_pair_details": str(args.reference_pair_details),
+                    "domain": str(args.domain),
                     "wrong_steps": wrong_steps,
                 }
             )
@@ -376,12 +435,14 @@ def process_item(item: dict[str, Any], args: argparse.Namespace) -> dict[str, An
         correct_trace=str(item["clean_text"]),
         wrong_trace=str(item["wrong_text"]),
         wrong_steps=list(item["wrong_steps"]),
+        domain=str(item.get("domain") or args.domain),
     )
+    task_name = _domain_prompt_config(str(item.get("domain") or args.domain))["task"]
     out = {
         **{k: v for k, v in item.items() if k != "wrong_steps"},
         "created_at": datetime.now(timezone.utc).isoformat(),
         "azure_deployment": args.deployment,
-        "label_task": "natural_wrong_sft_first_error_step",
+        "label_task": task_name,
     }
     if args.dry_run:
         out["messages"] = messages
@@ -462,7 +523,7 @@ def _error_item(item: dict[str, Any], args: argparse.Namespace, exc: BaseExcepti
         **{k: v for k, v in item.items() if k != "wrong_steps"},
         "created_at": datetime.now(timezone.utc).isoformat(),
         "azure_deployment": args.deployment,
-        "label_task": "natural_wrong_sft_first_error_step",
+        "label_task": _domain_prompt_config(str(item.get("domain") or args.domain))["task"],
         "target_char_span": None,
         "target_error_char_span": None,
         "attempts": 0,

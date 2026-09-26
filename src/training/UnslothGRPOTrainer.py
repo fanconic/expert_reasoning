@@ -47,6 +47,12 @@ import psutil
 from transformers import DataCollatorForSeq2Seq, DataCollatorForLanguageModeling as TransformersDataCollatorForLanguageModeling
 from transformers.training_args import ParallelMode
 
+try:
+    import wandb as _wandb
+    wandb = _wandb
+except Exception:
+    wandb = None
+
 # Wrap trainer with padding to right and enable training mode
 # Also patches W&B since multiple runs must use wandb.finish()
 import functools
@@ -3341,7 +3347,7 @@ class _UnslothGRPOTrainer(BaseTrainer):
                     self.num_completions_to_print,
                 )
 
-            if self.args.report_to and "wandb" in self.args.report_to and wandb.run is not None:
+            if self.args.report_to and "wandb" in self.args.report_to and wandb is not None and wandb.run is not None:
                 import pandas as pd
 
                 table = {

@@ -63,7 +63,10 @@ def parse_args() -> argparse.Namespace:
         "--checkpoint-dir",
         type=str,
         required=True,
-        help="Checkpoint dir containing reward_model/adapter_config.json.",
+        help=(
+            "Checkpoint dir containing either reward_model/adapter_config.json "
+            "or a direct adapter_config.json warmup checkpoint."
+        ),
     )
     parser.add_argument(
         "--reward-name",

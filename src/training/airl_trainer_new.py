@@ -26,6 +26,8 @@ from __future__ import annotations
 
 # Standard library imports
 from collections import defaultdict
+import hashlib
+import json
 import math
 from typing import Any, Dict, List, Optional, Union, Callable
 import os
@@ -90,17 +92,13 @@ from src.training.airl_segment_utils import (
     sum_tokens_by_segment,
 )
 try:
-    from unsloth_compiled_cache.UnslothGRPOTrainer import (
-        UnslothEfficientGRPO,
-        align_logprobs_with_mask,
-        grpo_compute_loss_slow,
-    )
+    import unsloth_compiled_cache.UnslothGRPOTrainer as _unsloth_grpo_module
 except ImportError:
-    from src.training.UnslothGRPOTrainer import (
-        UnslothEfficientGRPO,
-        align_logprobs_with_mask,
-        grpo_compute_loss_slow,
-    )
+    import src.training.UnslothGRPOTrainer as _unsloth_grpo_module
+
+UnslothEfficientGRPO = _unsloth_grpo_module.UnslothEfficientGRPO
+align_logprobs_with_mask = _unsloth_grpo_module.align_logprobs_with_mask
+grpo_compute_loss_slow = _unsloth_grpo_module.grpo_compute_loss_slow
 
 # Conditional imports
 if is_vllm_available():
@@ -122,8 +120,17 @@ if is_vllm_available():
     from vllm import LLM, SamplingParams
     from vllm.sampling_params import GuidedDecodingParams
 
-if is_wandb_available():
+try:
     import wandb
+except Exception:
+    class _MissingWandb:
+        run = None
+
+    wandb = _MissingWandb()
+
+# Unsloth's generated GRPO cache can reference a module-level `wandb`
+# without importing it. Patch the imported module as a second line of defense.
+_unsloth_grpo_module.wandb = wandb
 
 
 logger = logging.get_logger(__name__)
@@ -519,6 +526,15 @@ class AIRLTrainer(GRPOTrainer):
         self.clipped_delta_f_max = float(getattr(args, "clipped_delta_f_max", 2.0))
         self.log_segment_example = bool(getattr(args, "log_segment_example", False))
         self.debug_check_segment_finite = bool(getattr(args, "debug_check_segment_finite", True))
+        self.verify_reward_updates = bool(getattr(args, "verify_reward_updates", True))
+        self.fail_on_unchanged_reward_checkpoint = bool(
+            getattr(args, "fail_on_unchanged_reward_checkpoint", True)
+        )
+        self.freeze_reward_after_warmup = bool(getattr(args, "freeze_reward_after_warmup", False))
+        self.reward_model_frozen = False
+        self._reward_updates_since_warmup = 0
+        self._reward_warmup_checkpoint_hash = None
+        self._reward_warmup_checkpoint_dir = None
         self._segment_example_logged = False
         self._last_segment_local = None
         if self.policy_reward_density == "token" and self.critic_type == "airl_segment":
@@ -571,6 +587,8 @@ class AIRLTrainer(GRPOTrainer):
         self.reward_model, self.reward_optimizer = self.accelerator.prepare(
             self.reward_model, self.reward_optimizer
         )
+        # Keep TRL's reward-function list tied to the trainable discriminator wrapper.
+        self.reward_funcs[0] = self.reward_model
         self.reward_warmup_steps = self.args.reward_warmup_steps
         self.warmup_done = False
         self.continue_reward_warmup_after_load = bool(
@@ -578,11 +596,13 @@ class AIRLTrainer(GRPOTrainer):
         )
         if args.warmup_reward_dir:
             self.load_reward_warmup_checkpoint(args.warmup_reward_dir)
-        self.freeze_reward_after_warmup = bool(getattr(args, "freeze_reward_after_warmup", False))
-        self.reward_model_frozen = False
-
         if not self.use_outcome_rewards: # Only the reward model is used for training
-            self.reward_weights = torch.zeros_like(self.reward_weights, dtype=torch.float32)
+            reward_device = self.reward_weights.device if torch.is_tensor(self.reward_weights) else None
+            self.reward_weights = torch.zeros(
+                len(self.reward_funcs),
+                dtype=torch.float32,
+                device=reward_device,
+            )
             self.reward_weights[0] = 1.0  
 
         self.eps = getattr(args, "disc_label_smoothing", 0.0)
@@ -654,13 +674,223 @@ class AIRLTrainer(GRPOTrainer):
                     return module
         return None
 
+    def _reward_trainable_parameters(self):
+        return [p for p in self.reward_model.parameters() if p.requires_grad]
+
+    def _expects_reward_training(self) -> bool:
+        return (
+            int(getattr(self.args, "reward_warmup_steps", 0) or 0) > 0
+            or (
+                int(getattr(self, "reward_updates_per_policy_step", 0) or 0) > 0
+                and not bool(getattr(self, "freeze_reward_after_warmup", False))
+            )
+        )
+
+    def _assert_reward_can_train(self, context: str):
+        if not getattr(self, "verify_reward_updates", True):
+            return
+        if not self._expects_reward_training():
+            return
+
+        if not self._reward_trainable_parameters():
+            raise RuntimeError(
+                f"Reward model has no trainable parameters while {context}. "
+                "If this is an intentional fixed-critic run, set "
+                "training.freeze_reward_after_warmup=true and model.reward_updates_per_policy_step=0. "
+                "Otherwise load/create the reward adapter with trainable LoRA parameters."
+            )
+
+    def _reward_grad_stats(self):
+        grad_tensors = 0
+        total_sq = torch.zeros((), device=self.accelerator.device)
+        for param in self._reward_trainable_parameters():
+            if param.grad is None:
+                continue
+            grad_tensors += 1
+            total_sq = total_sq + param.grad.detach().float().pow(2).sum()
+        return grad_tensors, total_sq.sqrt()
+
+    def _finish_reward_optimizer_step(self, log_prefix: str) -> dict[str, float]:
+        trainable = self._reward_trainable_parameters()
+        if not trainable:
+            self._assert_reward_can_train(f"taking a {log_prefix} optimizer step")
+            return {
+                f"{log_prefix}/grad_tensors": 0.0,
+                f"{log_prefix}/grad_norm": 0.0,
+                f"{log_prefix}/trainable_tensors": 0.0,
+            }
+
+        grad_tensors, grad_norm = self._reward_grad_stats()
+        grad_norm_value = self.accelerator.gather(grad_norm.detach().reshape(1)).mean().item()
+        if self.verify_reward_updates:
+            if grad_tensors == 0:
+                raise RuntimeError(
+                    f"Reward update '{log_prefix}' produced no gradients for any trainable reward parameter."
+                )
+            if not math.isfinite(grad_norm_value) or grad_norm_value == 0.0:
+                raise RuntimeError(
+                    f"Reward update '{log_prefix}' produced zero/non-finite gradient norm: {grad_norm_value}."
+                )
+
+        reward_max_grad_norm = getattr(self.args, "max_grad_norm", None)
+        if reward_max_grad_norm is not None:
+            clipped_norm = self.accelerator.clip_grad_norm_(trainable, float(reward_max_grad_norm))
+            if clipped_norm is not None:
+                grad_norm_value = (
+                    clipped_norm.detach().float().item()
+                    if torch.is_tensor(clipped_norm)
+                    else float(clipped_norm)
+                )
+
+        # This reward optimizer is independent of the policy optimizer. During
+        # the Trainer's policy gradient-accumulation loop, Accelerate may set
+        # sync_gradients=False; an AcceleratedOptimizer.step() is then a no-op.
+        # Force the discriminator step to happen immediately, then restore the
+        # policy accumulation state.
+        sync_gradients_before = getattr(self.accelerator, "sync_gradients", None)
+        forced_reward_step = sync_gradients_before is False
+        if forced_reward_step:
+            self.accelerator.sync_gradients = True
+        try:
+            self.reward_optimizer.step()
+            if hasattr(self, "reward_scheduler") and self.reward_scheduler is not None:
+                self.reward_scheduler.step()
+        finally:
+            if sync_gradients_before is not None:
+                self.accelerator.sync_gradients = sync_gradients_before
+        if getattr(self, "warmup_done", False):
+            self._reward_updates_since_warmup += 1
+
+        return {
+            f"{log_prefix}/grad_tensors": float(grad_tensors),
+            f"{log_prefix}/grad_norm": float(grad_norm_value),
+            f"{log_prefix}/trainable_tensors": float(len(trainable)),
+            f"{log_prefix}/forced_optimizer_step": float(forced_reward_step),
+        }
+
+    @staticmethod
+    def _hash_file(path: str) -> str:
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _reward_checkpoint_hash(self, reward_dir: str):
+        digest = hashlib.sha256()
+        found = False
+        for rel_path in (
+            "adapter_model.safetensors",
+            "model.safetensors",
+            "pytorch_model.bin",
+            "airl_segment_h_head.pt",
+        ):
+            path = os.path.join(reward_dir, rel_path)
+            if not os.path.exists(path):
+                continue
+            found = True
+            digest.update(rel_path.encode("utf-8"))
+            digest.update(self._hash_file(path).encode("utf-8"))
+        return digest.hexdigest() if found else None
+
+    def _record_reward_warmup_checkpoint(self, reward_dir: str):
+        if not self.accelerator.is_main_process:
+            return
+        self._reward_warmup_checkpoint_dir = reward_dir
+        self._reward_warmup_checkpoint_hash = self._reward_checkpoint_hash(reward_dir)
+        if self._reward_warmup_checkpoint_hash is None:
+            logger.warning("Could not find reward weights to hash under %s.", reward_dir)
+
+    def _check_saved_reward_changed_since_warmup(self, reward_dir: str):
+        if not self.accelerator.is_main_process:
+            return
+        if not self.verify_reward_updates or not self.fail_on_unchanged_reward_checkpoint:
+            return
+        if self.freeze_reward_after_warmup or self.reward_updates_per_policy_step <= 0:
+            return
+        if self._reward_updates_since_warmup <= 0 or self._reward_warmup_checkpoint_hash is None:
+            return
+
+        current_hash = self._reward_checkpoint_hash(reward_dir)
+        if current_hash is None:
+            raise RuntimeError(f"No reward model weights were saved under {reward_dir}.")
+        if current_hash == self._reward_warmup_checkpoint_hash:
+            raise RuntimeError(
+                "Saved reward model is byte-identical to reward_model_warmup after "
+                f"{self._reward_updates_since_warmup} post-warmup discriminator update(s). "
+                f"Warmup dir: {self._reward_warmup_checkpoint_dir}; current dir: {reward_dir}. "
+                "This indicates that the reward optimizer did not update the saved reward parameters."
+            )
+
+    def _save_reward_training_state(self, reward_dir: str):
+        if not self.accelerator.is_main_process:
+            return
+        state = {
+            "warmup_done": bool(getattr(self, "warmup_done", False)),
+            "reward_warmup_steps": int(getattr(self, "reward_warmup_steps", 0) or 0),
+            "reward_updates_since_warmup": int(getattr(self, "_reward_updates_since_warmup", 0) or 0),
+            "reward_updates_per_policy_step": int(getattr(self, "reward_updates_per_policy_step", 0) or 0),
+            "freeze_reward_after_warmup": bool(getattr(self, "freeze_reward_after_warmup", False)),
+            "reward_model_frozen": bool(getattr(self, "reward_model_frozen", False)),
+            "reward_trainable_tensors": len(self._reward_trainable_parameters()),
+            "warmup_checkpoint_dir": self._reward_warmup_checkpoint_dir,
+            "warmup_checkpoint_hash": self._reward_warmup_checkpoint_hash,
+            "current_checkpoint_hash": self._reward_checkpoint_hash(reward_dir),
+        }
+        with open(os.path.join(reward_dir, "reward_training_state.json"), "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2, sort_keys=True)
+
+    def _save_airl_segment_h_head(self, reward_dir: str):
+        if self.critic_type != "airl_segment":
+            return
+
+        h_head = self._find_reward_head("h_head")
+        if h_head is None:
+            logger.warning("AIRL segment critic requested but h_head was not found; not saving h_head.")
+            return
+
+        h_head_path = os.path.join(reward_dir, "airl_segment_h_head.pt")
+        state_dict = {
+            key: value.detach().cpu()
+            for key, value in h_head.state_dict().items()
+        }
+        torch.save(state_dict, h_head_path)
+
+    def _load_airl_segment_h_head(self, checkpoint_path: str):
+        if self.critic_type != "airl_segment":
+            return
+
+        h_head_path = os.path.join(checkpoint_path, "airl_segment_h_head.pt")
+        if not os.path.exists(h_head_path):
+            logger.warning(
+                "AIRL segment checkpoint %s has no airl_segment_h_head.pt; h_head starts from initialization.",
+                checkpoint_path,
+            )
+            return
+
+        h_head = self._find_reward_head("h_head")
+        if h_head is None:
+            raise RuntimeError("AIRL segment checkpoint contains h_head weights, but no h_head exists on the reward model.")
+
+        h_state = torch.load(h_head_path, map_location=self.accelerator.device)
+        h_head.load_state_dict(h_state, strict=True)
+        del h_state
+
     def _reward_optimizer_params(self, reward_learning_rate: float):
         if self.critic_type != "airl_segment":
+            params = self._reward_trainable_parameters()
+            if params:
+                return params
+            self._assert_reward_can_train("building the reward optimizer")
             return self.reward_model.parameters()
 
         h_head = self._find_reward_head("h_head")
         if h_head is None:
             logger.warning("AIRL segment critic requested but h_head was not found; using one reward LR group.")
+            params = self._reward_trainable_parameters()
+            if params:
+                return params
+            self._assert_reward_can_train("building the segment reward optimizer")
             return self.reward_model.parameters()
 
         h_param_ids = {id(p) for p in h_head.parameters()}
@@ -676,7 +906,10 @@ class AIRLTrainer(GRPOTrainer):
             param_groups.append({"params": base_params, "lr": reward_learning_rate})
         if h_params:
             param_groups.append({"params": h_params, "lr": reward_learning_rate * self.h_head_lr_mult})
-        return param_groups if param_groups else self.reward_model.parameters()
+        if param_groups:
+            return param_groups
+        self._assert_reward_can_train("building the segment reward optimizer")
+        return self.reward_model.parameters()
 
     # -----------------------------------------------------------------------
     # Core overwrites overrides
@@ -1071,6 +1304,9 @@ class AIRLTrainer(GRPOTrainer):
         return attn & (idx >= prompt_lens.unsqueeze(1))
 
     def _apply_scalar_head(self, head, hidden_states: torch.Tensor) -> torch.Tensor:
+        head_param = next(head.parameters(), None)
+        if head_param is not None:
+            hidden_states = hidden_states.to(dtype=head_param.dtype)
         out = head(hidden_states)
         if isinstance(out, (tuple, list)):
             out = out[0]
@@ -1078,7 +1314,7 @@ class AIRLTrainer(GRPOTrainer):
             out = out.logits
         if out.ndim >= 1 and out.shape[-1] == 1:
             out = out.squeeze(-1)
-        return out
+        return out.float()
 
     def _reward_hidden_states(self, batch):
         outputs = self.reward_model(
@@ -1498,15 +1734,11 @@ class AIRLTrainer(GRPOTrainer):
                 penalty = penalty + self.shape_l2_penalty * shape_penalty
 
         total_loss = loss + penalty
+        step_metrics = {}
         if do_step:
             self.reward_optimizer.zero_grad()
             self.accelerator.backward(total_loss)
-            reward_max_grad_norm = getattr(self.args, "max_grad_norm", None)
-            if reward_max_grad_norm is not None:
-                self.accelerator.clip_grad_norm_(self.reward_model.parameters(), float(reward_max_grad_norm))
-            self.reward_optimizer.step()
-            if hasattr(self, "reward_scheduler") and self.reward_scheduler is not None:
-                self.reward_scheduler.step()
+            step_metrics = self._finish_reward_optimizer_step(log_prefix)
 
         logits_pos_det = logits_pos.detach()[pos_valid]
         logits_neg_det = logits_neg.detach()[neg_valid]
@@ -1551,6 +1783,7 @@ class AIRLTrainer(GRPOTrainer):
             f"{log_prefix}/policy_segment_mismatches": float(
                 pos_components["policy_segment_mismatches"] + neg_components["policy_segment_mismatches"]
             ),
+            **step_metrics,
         }
 
 
@@ -1577,6 +1810,10 @@ class AIRLTrainer(GRPOTrainer):
         Pairwise margin (optional) is computed per-prompt by reshaping negatives to (B, K)
         and comparing each positive to an aggregate negative (mean/max).
         """
+        if do_step:
+            self._assert_reward_can_train(f"starting {log_prefix} update")
+            self.reward_model.train()
+
         if self.critic_type == "airl_segment":
             return self._update_airl_segment_reward_model_step(
                 neg_prompts,
@@ -1720,6 +1957,7 @@ class AIRLTrainer(GRPOTrainer):
                     del batch_neg, logits_neg_det, logits_pos_det, margins_det, shifted_margins, loss_vec, pos_coeff
 
             neg_coeffs = torch.cat(neg_coeffs, dim=0)
+            step_metrics = {}
 
             if do_step:
                 for i in range(0, B, pair_micro_bs):
@@ -1738,13 +1976,7 @@ class AIRLTrainer(GRPOTrainer):
                     self.accelerator.backward(neg_surrogate)
                     del batch_neg, logits_neg, neg_surrogate
 
-            if do_step:
-                reward_max_grad_norm = getattr(self.args, "max_grad_norm", None)
-                if reward_max_grad_norm is not None:
-                    self.accelerator.clip_grad_norm_(self.reward_model.parameters(), float(reward_max_grad_norm))
-                self.reward_optimizer.step()
-                if hasattr(self, "reward_scheduler") and self.reward_scheduler is not None:
-                    self.reward_scheduler.step()
+                step_metrics = self._finish_reward_optimizer_step(log_prefix)
 
             loss = pair_loss_sum / pair_cnt.clamp_min(1.0)
             logits_pos_det = torch.cat(logits_pos_all, dim=0)
@@ -1780,6 +2012,7 @@ class AIRLTrainer(GRPOTrainer):
                 f"{log_prefix}/neg_pos_ratio": pair_k,
                 f"{log_prefix}/pairs_per_prompt": pair_k,
                 f"{log_prefix}/pairs_used": N,
+                **step_metrics,
             }
 
         if self.dense_rewards:
@@ -1897,13 +2130,9 @@ class AIRLTrainer(GRPOTrainer):
                 scale = (neg_w / (pos_w + neg_w)) * (1.0 / denom)
                 self.accelerator.backward(loss_sum * scale)
 
+        step_metrics = {}
         if do_step:
-            reward_max_grad_norm = getattr(self.args, "max_grad_norm", None)
-            if reward_max_grad_norm is not None:
-                self.accelerator.clip_grad_norm_(self.reward_model.parameters(), float(reward_max_grad_norm))
-            self.reward_optimizer.step()
-            if hasattr(self, "reward_scheduler") and self.reward_scheduler is not None:
-                self.reward_scheduler.step()
+            step_metrics = self._finish_reward_optimizer_step(log_prefix)
 
         # Metrics (exact means + accuracies)
         bce_pos = (pos_sum / pos_cnt.clamp_min(1.0))
@@ -1937,6 +2166,7 @@ class AIRLTrainer(GRPOTrainer):
             f"{log_prefix}/prob_pos_mean": gmean(p_pos.mean()),
             f"{log_prefix}/prob_neg_mean": gmean(p_neg.mean()),
             f"{log_prefix}/neg_pos_ratio": K,
+            **step_metrics,
         }
 
 
@@ -2037,12 +2267,14 @@ class AIRLTrainer(GRPOTrainer):
 
 
         # Save reward model after warmup
+        self.warmup_done = True
         reward_dir = os.path.join(self.args.output_dir, "reward_model_warmup")
         os.makedirs(reward_dir, exist_ok=True)
 
         # Unwrap reward model in case it's wrapped by accelerate/FS*DP etc.
         reward_model_unwrapped = self.accelerator.unwrap_model(self.reward_model)
         reward_model_unwrapped.save_pretrained(reward_dir, safe_serialization=True)
+        self._save_airl_segment_h_head(reward_dir)
 
         # Save reward tokenizer if available (kept separate from policy tokenizer on purpose)
         if self.reward_tokenizer is not None:
@@ -2053,6 +2285,10 @@ class AIRLTrainer(GRPOTrainer):
             torch.save(
                 self.reward_optimizer.state_dict(), os.path.join(reward_dir,"reward_optimizer_warmup.pt")
             )
+
+        self._record_reward_warmup_checkpoint(reward_dir)
+        self._reward_updates_since_warmup = 0
+        self._save_reward_training_state(reward_dir)
             
         if policy_was_training: self.model.train()
         if not reward_was_training: self.reward_model.eval()
@@ -2095,22 +2331,31 @@ class AIRLTrainer(GRPOTrainer):
             
             unwrapped_model.load_state_dict(state_dict, strict=True)
 
+        self._load_airl_segment_h_head(checkpoint_path)
+        self._record_reward_warmup_checkpoint(checkpoint_path)
+        self._reward_updates_since_warmup = 0
+
         # --- 2. Load Optimizer State ---
-        opt_path = None
-        for candidate in ("reward_optimizer_warmup.pt", "reward_optimizer.pt"):
-            candidate_path = os.path.join(checkpoint_path, candidate)
-            if os.path.exists(candidate_path):
-                opt_path = candidate_path
-                break
-        if opt_path is not None:
-            logger.info(f"Loading reward optimizer state from {opt_path}...")
-            opt_state = torch.load(opt_path, map_location="cpu")
-            self.reward_optimizer.load_state_dict(opt_state)
-            del opt_state
-            torch.cuda.empty_cache()
+        if getattr(self.args, "load_warmup_reward_optimizer", True):
+            opt_path = None
+            for candidate in ("reward_optimizer_warmup.pt", "reward_optimizer.pt"):
+                candidate_path = os.path.join(checkpoint_path, candidate)
+                if os.path.exists(candidate_path):
+                    opt_path = candidate_path
+                    break
+            if opt_path is not None:
+                logger.info(f"Loading reward optimizer state from {opt_path}...")
+                opt_state = torch.load(opt_path, map_location="cpu")
+                self.reward_optimizer.load_state_dict(opt_state)
+                del opt_state
+                torch.cuda.empty_cache()
+            else:
+                logger.warning(
+                    f"No reward optimizer checkpoint found in {checkpoint_path}. Optimizer starts fresh."
+                )
         else:
-            logger.warning(
-                f"No reward optimizer checkpoint found in {checkpoint_path}. Optimizer starts fresh."
+            logger.info(
+                "Skipping warmup reward optimizer load; warmed reward weights loaded and optimizer starts fresh."
             )
 
         if self.continue_reward_warmup_after_load and self.reward_warmup_steps > 0:
@@ -2124,6 +2369,8 @@ class AIRLTrainer(GRPOTrainer):
             self.reward_warmup_steps = 0
             logger.info("Reward model loaded. Warmup phase will be skipped.")
 
+        if not self.freeze_reward_after_warmup and self.reward_updates_per_policy_step > 0:
+            self._assert_reward_can_train("after loading the reward warmup checkpoint")
 
     @profiling_decorator
     def _calculate_rewards(self, inputs, prompts, completions, completion_ids_list):
@@ -2153,10 +2400,13 @@ class AIRLTrainer(GRPOTrainer):
         for i, (reward_func, reward_processing_class, reward_func_name) in enumerate(
             zip(self.reward_funcs, self.reward_processing_classes, self.reward_func_names)
         ):
+            if i == 0:
+                reward_func = self.reward_model
             with profiling_context(self, reward_func_name):
                 
                 # === BRANCH A: NEURAL REWARD MODEL ===
                 if isinstance(reward_func, nn.Module):
+                    reward_func.eval()
                     if segment_critic and i == 0:
                         with torch.no_grad():
                             components = self._airl_segment_components(
@@ -2250,7 +2500,7 @@ class AIRLTrainer(GRPOTrainer):
         Calculates the advantages, normalizing the rewards per group. Handles sparse and dense rewards
         """
         # Apply weights to each reward function's output and sum
-        if self.dense_rewards and self.advantage_calculation == "discounted_dense":
+        if rewards_per_func.ndim == 3 and self.dense_rewards and self.advantage_calculation == "discounted_dense":
             B, F, L = rewards_per_func.shape
             weights = self.reward_weights.to(device)
 
@@ -2311,7 +2561,7 @@ class AIRLTrainer(GRPOTrainer):
                 is_std_zero = is_std_zero_dense
             
         else:
-            if self.dense_rewards and self.advantage_calculation == "average_dense":
+            if rewards_per_func.ndim == 3 and self.dense_rewards and self.advantage_calculation == "average_dense":
                 rewards = (rewards_per_func * self.reward_weights.to(device).unsqueeze(0).unsqueeze(2)).sum(dim=1) #(B, L)
                 rewards = rewards.nanmean(dim=1)  #(B)
             else:  
@@ -2638,8 +2888,9 @@ class AIRLTrainer(GRPOTrainer):
                     do_step=True, log_prefix="reward", is_chat=is_chat
                 )
         
-                if (self.state.global_step + 1) % self.args.logging_steps == 0 and update_idx == self.reward_updates_per_policy_step - 1:
-                    self.log(reward_metrics)
+                reward_metrics["reward/policy_step"] = self.state.global_step + 1
+                reward_metrics["reward/update_idx"] = update_idx + 1
+                self.log(reward_metrics)
 
         # Calculate rewards for each reward function. rewards_per_func aggregates rewards across all processes. This is
         # important because rewards will be normalized per group, and completions are distributed. We will later slice
@@ -2773,10 +3024,14 @@ class AIRLTrainer(GRPOTrainer):
         # Unwrap reward model in case it's wrapped by accelerate/FS*DP etc.
         reward_model_unwrapped = self.accelerator.unwrap_model(self.reward_model)
         reward_model_unwrapped.save_pretrained(reward_dir, safe_serialization=True)
+        self._save_airl_segment_h_head(reward_dir)
 
         # Save reward tokenizer if available (kept separate from policy tokenizer on purpose)
         if self.reward_tokenizer is not None:
             self.reward_tokenizer.save_pretrained(reward_dir)
+
+        self._check_saved_reward_changed_since_warmup(reward_dir)
+        self._save_reward_training_state(reward_dir)
 
     def save_state(self):
         """
@@ -2800,6 +3055,8 @@ class AIRLTrainer(GRPOTrainer):
             torch.save(
                 self.reward_scheduler.state_dict(), os.path.join(reward_dir, "reward_scheduler.pt")
             )
+        self._save_airl_segment_h_head(reward_dir)
+        self._save_reward_training_state(reward_dir)
 
     def _save_checkpoint(self, model, trial):
         super()._save_checkpoint(model, trial)
@@ -2824,6 +3081,9 @@ class AIRLTrainer(GRPOTrainer):
                 self.reward_scheduler.state_dict(),
                 os.path.join(reward_dir, "reward_scheduler.pt"),
             )
+        self._save_airl_segment_h_head(reward_dir)
+        self._check_saved_reward_changed_since_warmup(reward_dir)
+        self._save_reward_training_state(reward_dir)
             
     def compute_loss(
         self, model, inputs, return_outputs = False, num_items_in_batch = None

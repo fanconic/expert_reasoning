@@ -14,9 +14,9 @@ import numpy as np
 
 DEFAULT_SOURCE = Path("outputs/gsm8k_process_sensitivity_pregen/pair_details.jsonl")
 DEFAULT_ROOT = Path("outputs/gsm8k_process_sensitivity_pregen/rebuttal_scores")
-DEFAULT_OLD_ROOT = Path("localisation")
-DEFAULT_OUTPUT = Path("localisation/localisation_original_synthetic_rebuttal_map.tex")
-DEFAULT_JSON = Path("localisation/localisation_original_synthetic_rebuttal_map.json")
+DEFAULT_OLD_ROOT = Path("localisation/synthetic_perturbations")
+DEFAULT_OUTPUT = Path("localisation/synthetic_perturbations/results/localisation_original_synthetic_rebuttal_map.tex")
+DEFAULT_JSON = Path("localisation/synthetic_perturbations/results/localisation_original_synthetic_rebuttal_map.json")
 BOOTSTRAP_SAMPLES = 2000
 BOOTSTRAP_ALPHA = 0.05
 BOOTSTRAP_SEED = 42

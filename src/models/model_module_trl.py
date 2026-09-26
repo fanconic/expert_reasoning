@@ -212,8 +212,15 @@ def irl_load_model_and_tokenizer_trl(
         
     if pretrained:
         reward_checkpoint = os.path.join(checkpoint, "reward_model")
-        reward_model = PeftModel.from_pretrained(reward_model, reward_checkpoint, strict=True)
+        reward_model = PeftModel.from_pretrained(
+            reward_model,
+            reward_checkpoint,
+            strict=True,
+            is_trainable=not frozen_discriminator,
+        )
         print("Loaded Reward Model strictly")
+        if not frozen_discriminator:
+            print("Loaded Reward Model adapters as trainable.")
         
     else:
 

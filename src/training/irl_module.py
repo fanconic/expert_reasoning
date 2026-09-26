@@ -85,7 +85,10 @@ def run_irl_training(
         beta=getattr(cfg.training, "beta", 0.0),
         reward_warmup_steps=getattr(cfg.training, "reward_warmup_steps", 0),
         continue_reward_warmup_after_load=getattr(cfg.training, "continue_reward_warmup_after_load", False),
+        load_warmup_reward_optimizer=getattr(cfg.training, "load_warmup_reward_optimizer", True),
         freeze_reward_after_warmup=getattr(cfg.training, "freeze_reward_after_warmup", False),
+        verify_reward_updates=getattr(cfg.training, "verify_reward_updates", True),
+        fail_on_unchanged_reward_checkpoint=getattr(cfg.training, "fail_on_unchanged_reward_checkpoint", True),
         vllm_importance_sampling_correction=False, # set this one to false, else it leads to mismatch (https://github.com/huggingface/trl/issues/4205)
         save_strategy="steps",  # or "epoch" or "no"
         save_total_limit=1,  # Keep only 2 checkpoints: best + final

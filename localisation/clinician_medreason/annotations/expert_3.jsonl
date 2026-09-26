@@ -1,0 +1,25 @@
+{"case_id": "MRLOC-004", "case_rank": 4, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-008", "case_rank": 8, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-012", "case_rank": 12, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-016", "case_rank": 16, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 2}
+{"case_id": "MRLOC-020", "case_rank": 20, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 3}
+{"case_id": "MRLOC-024", "case_rank": 24, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-028", "case_rank": 28, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 8}
+{"case_id": "MRLOC-032", "case_rank": 32, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 2}
+{"case_id": "MRLOC-036", "case_rank": 36, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-040", "case_rank": 40, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-044", "case_rank": 44, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 7}
+{"case_id": "MRLOC-048", "case_rank": 48, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-052", "case_rank": 52, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 1}
+{"case_id": "MRLOC-056", "case_rank": 56, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-060", "case_rank": 60, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 13}
+{"case_id": "MRLOC-064", "case_rank": 64, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-068", "case_rank": 68, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-072", "case_rank": 72, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 2}
+{"case_id": "MRLOC-076", "case_rank": 76, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 1}
+{"case_id": "MRLOC-080", "case_rank": 80, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 9}
+{"case_id": "MRLOC-084", "case_rank": 84, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "final answer and conclusion also not aligned", "selected_step_id": 15}
+{"case_id": "MRLOC-088", "case_rank": 88, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-092", "case_rank": 92, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 18}
+{"case_id": "MRLOC-096", "case_rank": 96, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": true, "note": "", "selected_step_id": null}
+{"case_id": "MRLOC-100", "case_rank": 100, "confidence": 5, "expert_id": "expert_3", "final_answer_only_error": false, "no_clear_localisable_error": false, "note": "", "selected_step_id": 5}

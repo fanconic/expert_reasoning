@@ -90,7 +90,7 @@ _THREAD_LOCAL = threading.local()
 
 DEFAULT_SOURCE = (
     PROJECT_ROOT
-    / "localisation/runs/qwen7b_sft/qwen7b/full/pair_details.jsonl"
+    / "localisation/synthetic_perturbations/runs/qwen7b_sft/qwen7b/full/pair_details.jsonl"
 )
 DEFAULT_OUTPUT = (
     PROJECT_ROOT

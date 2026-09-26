@@ -1,0 +1,51 @@
+{
+  "description": "Anonymised clinician/medical-expert annotations for the MedReason first-error localisation study.",
+  "annotation_schema": {
+    "expert_id": "Anonymised labeler identifier.",
+    "case_id": "Clinician-visible case identifier.",
+    "case_rank": "Rank within the selected case batch.",
+    "selected_step_id": "First labelled reasoning unit, or null for no-clear labels.",
+    "no_clear_localisable_error": "True if the labeler did not find one clear first error.",
+    "final_answer_only_error": "True if the labeler marked a correct-reasoning/wrong-final-answer case.",
+    "confidence": "Self-reported confidence from the annotation UI.",
+    "note": "Free-text labeler note."
+  },
+  "experts": [
+    {
+      "expert_id": "expert_1",
+      "n_annotations": 25
+    },
+    {
+      "expert_id": "expert_2",
+      "n_annotations": 25
+    },
+    {
+      "expert_id": "expert_3",
+      "n_annotations": 25
+    },
+    {
+      "expert_id": "expert_4",
+      "n_annotations": 25
+    },
+    {
+      "expert_id": "expert_5",
+      "n_annotations": 10
+    }
+  ],
+  "n_annotations_total": 110,
+  "n_metadata_cases": 110,
+  "case_batches": [
+    {
+      "name": "primary",
+      "source_rows_used": 75
+    },
+    {
+      "name": "nonfinal_batch_1",
+      "source_rows_used": 25
+    },
+    {
+      "name": "nonfinal_batch_2",
+      "source_rows_used": 10
+    }
+  ]
+}

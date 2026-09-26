@@ -20,6 +20,7 @@ echo "  > Arguments: $@"
 GPU_ID=0
 NUMA_NODE=0
 CORES_PER_JOB=24 # Adjust based on your setup (Total Cores / Num Nodes)
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 # --- Environment Setup ---
 export OMP_NUM_THREADS=$CORES_PER_JOB
@@ -29,8 +30,14 @@ mkdir -p $TRITON_CACHE_DIR
 
 # --- Execute the Python Script ---
 # $PYTHON_SCRIPT now holds the script name, and "$@" holds the rest of the arguments.
-numactl --cpunodebind=$NUMA_NODE --membind=$NUMA_NODE \
-env CUDA_VISIBLE_DEVICES=$GPU_ID \
-python $PYTHON_SCRIPT "$@"
+if command -v numactl >/dev/null 2>&1; then
+    numactl --cpunodebind=$NUMA_NODE --membind=$NUMA_NODE \
+    env CUDA_VISIBLE_DEVICES=$GPU_ID \
+    "$PYTHON_BIN" $PYTHON_SCRIPT "$@"
+else
+    echo "  > numactl not found; running without NUMA binding."
+    env CUDA_VISIBLE_DEVICES=$GPU_ID \
+    "$PYTHON_BIN" $PYTHON_SCRIPT "$@"
+fi
 
 echo "--- Task on GPU 0 finished ---"

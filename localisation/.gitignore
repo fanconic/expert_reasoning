@@ -9,3 +9,23 @@
 *_trace.txt
 logs/
 **/logs/
+
+# The cleaned clinician study intentionally keeps anonymised labels and case
+# metadata as JSONL files.
+!clinician_medreason/annotations/
+!clinician_medreason/annotations/*.jsonl
+!clinician_medreason/metadata/
+!clinician_medreason/metadata/*.jsonl
+
+# Generated localisation workspaces from exploratory scoring and sweeps.
+_backup_not_committed/
+trace_scoring/
+cross_domain_natural_wrong_sft/
+full_three_domain_localisation/
+medreason_natural_wrong_sft/
+mmlu_pro_natural_wrong_sft/
+natural_wrong_sft/scores/*warmup*/
+natural_wrong_sft/localisation_natural_wrong_sft_*.json
+natural_wrong_sft/localisation_natural_wrong_sft_*.md
+natural_wrong_sft/localisation_natural_wrong_sft_*.tex
+natural_wrong_sft/localisation_start15_target_metrics.json

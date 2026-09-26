@@ -5,6 +5,7 @@ configure_pytorch_transformers_runtime()
 from unsloth import FastLanguageModel
 import torch
 from peft import PeftModel
+import os
 
 
 def _model_hidden_size(model):
@@ -43,6 +44,66 @@ def attach_airl_segment_heads(reward_model):
         dtype=dtype,
     )
     reward_model.config.num_labels = 1
+    return reward_model
+
+
+def attach_airl_segment_h_head(reward_model):
+    """Attach the AIRL segment potential head without touching the g/lm head."""
+    hidden_size = _model_hidden_size(reward_model)
+    device = next(reward_model.parameters()).device
+    dtype = next(reward_model.parameters()).dtype
+
+    reward_model.h_head = torch.nn.Linear(
+        in_features=hidden_size,
+        out_features=1,
+        bias=False,
+        device=device,
+        dtype=dtype,
+    )
+    reward_model.config.num_labels = 1
+    return reward_model
+
+
+def _find_model_head(model, name):
+    def safe_getattr(obj, attr):
+        try:
+            return getattr(obj, attr)
+        except Exception:
+            return None
+
+    seen = set()
+    stack = [model]
+    while stack:
+        obj = stack.pop()
+        if obj is None or id(obj) in seen:
+            continue
+        seen.add(id(obj))
+        found = safe_getattr(obj, name)
+        if found is not None:
+            return found
+        for child_name in ("base_model", "model", "module"):
+            child = safe_getattr(obj, child_name)
+            if child is not None:
+                stack.append(child)
+    return None
+
+
+def load_airl_segment_h_head(reward_model, adapter_dir):
+    h_head_path = os.path.join(adapter_dir, "airl_segment_h_head.pt")
+    if not os.path.exists(h_head_path):
+        print(f"AIRL segment h_head checkpoint not found at {h_head_path}; using initialized h_head.")
+        return reward_model
+
+    h_head = _find_model_head(reward_model, "h_head")
+    if h_head is None:
+        reward_model = attach_airl_segment_h_head(reward_model)
+        h_head = _find_model_head(reward_model, "h_head")
+    if h_head is None:
+        raise RuntimeError("AIRL segment h_head checkpoint exists, but no h_head could be attached.")
+
+    device = next(h_head.parameters()).device
+    h_state = torch.load(h_head_path, map_location=device)
+    h_head.load_state_dict(h_state, strict=True)
     return reward_model
 
 
@@ -210,8 +271,13 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
         reward_model = PeftModel.from_pretrained(
             reward_model,
             adapter_dir,
-            is_trainable=False
+            is_trainable=not frozen_discriminator,
         )
+        if not frozen_discriminator:
+            print("Loaded Reward Model adapters as trainable.")
+        if airl_segment:
+            reward_model = attach_airl_segment_h_head(reward_model)
+            reward_model = load_airl_segment_h_head(reward_model, adapter_dir)
         
     elif frozen_discriminator:
         adapter_dir = discriminator_path
@@ -220,6 +286,9 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
             adapter_dir,
             is_trainable=False
         )
+        if airl_segment:
+            reward_model = attach_airl_segment_h_head(reward_model)
+            reward_model = load_airl_segment_h_head(reward_model, adapter_dir)
     
     else:
         reward_model = FastLanguageModel.get_peft_model(
@@ -238,11 +307,13 @@ def irl_load_model_and_tokenizer(config, pretrained=False, frozen_discriminator=
             use_gradient_checkpointing="unsloth",
             random_state=random_state,
             modules_to_save=(
-                ["lm_head", "h_head"]
+                ["lm_head"]
                 if airl_segment
                 else (["lm_head"] if config.model.dense_rewards else None)
             )
         )
+        if airl_segment:
+            reward_model = attach_airl_segment_h_head(reward_model)
     
     if hasattr(reward_model, "gradient_checkpointing_disable"):
         reward_model.gradient_checkpointing_disable()   # avoids version mismatches

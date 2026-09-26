@@ -1,56 +1,48 @@
-# Localisation Rebuttal Artifacts
+# Localisation Experiments
 
-This folder contains the GSM8K localisation artifacts used for the rebuttal
-analysis. The committed files are the small, human-readable outputs: run
-configs, summary JSON files, generated LaTeX tables, and this documentation.
-Large raw traces (`pair_details.jsonl`, policy-token JSONL scores, smoke files,
-logs, and figures) are kept on disk for inspection and regeneration, but are
-ignored by git.
+This folder contains only the process-level localisation experiments represented
+in the paper and appendix.
 
-## Layout
+## Clinician MedReason
 
-- `runs/qwen7b_sft/<model>/<granularity>/`: reward-model localisation on the
-  original pregenerated Qwen2.5-7B SFT synthetic perturbation pairs.
-- `runs/expert/<model>/<granularity>/`: reward-model localisation on
-  perturbations built from expert traces.
-- `chatgpt_step_perturbations/`: LLM-edited fluent-but-wrong step perturbations
-  derived from Qwen2.5-7B SFT traces, plus reward and policy localisation
-  summaries.
-- `expert_step_perturbations/`: LLM-edited perturbations derived from expert
-  traces, with matching localisation summaries.
-- `natural_wrong_sft/`: naturally wrong Qwen2.5-7B SFT generations whose first
-  erroneous step was labelled by an LLM, then scored with the same localisation
-  pipeline.
-- `diagnostics/recalc32/<model>/<variant>/`: diagnostic dense-reward
-  recalculations.
-- `diagnostics/recalc32/triptychs/<variant>/`: visualization metadata for the
-  reviewer-facing dense-reward examples.
+`clinician_medreason/` contains the MedReason clinician-labelled localisation
+experiment:
 
-The old long top-level names, such as
-`qwen7b_full_localisation_from_qwen7b_sft`, are kept as symlink aliases for
-backward compatibility with older scripts and notebooks.
+```bash
+python localisation/clinician_medreason/run_experiment.py
+```
 
-## Main Artifact Types
+That command reads the anonymised expert labels in
+`clinician_medreason/annotations/`, aligns them to the labelled cases in
+`clinician_medreason/metadata/clinician_cases.jsonl`, loads token-level reward
+and policy-score JSONLs, and writes:
 
-- `run_config.json`: exact model, checkpoint, perturbation, and scoring options
-  for a run.
-- `summary.json`: aggregate localisation metrics such as Hit@1 within a token
-  window, MAP/MRR-style scores, and bootstrap intervals.
-- `policy_token_baselines_summary.json`: generator-side log-probability,
-  probability, entropy, and random-location baselines.
-- `*.tex`: final LaTeX table fragments used in the rebuttal.
-- `*.json`: machine-readable companions for tables or diagnostic summaries.
+```text
+localisation/clinician_medreason/results/clinician_localisation_metrics.md
+localisation/clinician_medreason/results/clinician_localisation_metrics.json
+```
 
-## Regeneration
+The default metric is Hit@1 and Hit@+/-1 over clinician-visible reasoning
+units. Labels marked no-clear or final-answer-only are mapped to the final
+visible reasoning unit.
 
-The runner scripts live under `runner_scripts/rebuttal/`:
+## Controlled GSM8K
 
-- `chatgpt_step_perturbations/` builds and scores LLM-edited SFT-step pairs.
-- `expert_step_perturbations/` builds LLM-edited expert-step pairs.
-- `natural_wrong_sft/` labels naturally wrong SFT traces.
-- `natural_error_scoring/` scores expert and naturally wrong sets.
-- `localisation_policy_baselines/` runs generator-token baselines.
-- `original_synthetic_mistakes/` rescoring for the original synthetic set.
+`synthetic_perturbations/` contains the controlled GSM8K synthetic
+localisation experiment from Section 5.2 and Appendix D.5:
 
-The table builders are in `src/plot_generators/` and write their outputs back
-into this folder by default.
+```bash
+bash localisation/synthetic_perturbations/run_experiment.sh
+```
+
+This regenerates the synthetic perturbation tables under
+`synthetic_perturbations/results/` from the compact run summaries in
+`synthetic_perturbations/runs/`.
+
+## Local Backup
+
+Exploratory natural-error runs, old HTML annotation packages, smoke outputs,
+large token-score dumps, and historical diagnostic folders were moved to
+`_backup_not_committed/`. That folder is ignored by git and is only a local
+archive. Commit only reproducible code, compact paper summaries, and anonymised
+annotation files.

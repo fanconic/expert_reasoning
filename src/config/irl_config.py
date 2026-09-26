@@ -328,10 +328,31 @@ class IRLConfig(GRPOConfig):
             "help": "If true, run reward_warmup_steps additional discriminator warmup steps after loading warmup_reward_dir."
         },
     )
+    load_warmup_reward_optimizer: bool = field(
+        default=True,
+        metadata={
+            "help": "If true, load reward optimizer state from warmup_reward_dir when available. "
+            "Set false to load warmed reward weights only, which reduces peak memory on single-GPU runs."
+        },
+    )
     freeze_reward_after_warmup: bool = field(
         default=False,
         metadata={
             "help": "If true, freeze the reward model after loading/running warmup and skip all subsequent discriminator updates."
+        },
+    )
+    verify_reward_updates: bool = field(
+        default=True,
+        metadata={
+            "help": "If true, fail loudly when reward training is requested but the discriminator has no gradients, "
+            "no trainable parameters, or saves a post-warmup checkpoint identical to the warmup checkpoint."
+        },
+    )
+    fail_on_unchanged_reward_checkpoint: bool = field(
+        default=True,
+        metadata={
+            "help": "If true, compare saved reward checkpoints against reward_model_warmup and raise when they are unchanged "
+            "after post-warmup reward updates."
         },
     )
 

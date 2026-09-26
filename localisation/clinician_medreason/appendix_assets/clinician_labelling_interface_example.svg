@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080">
+<rect width="1600" height="1080" fill="#f6f7f9"/>
+<defs><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#121c2d" flood-opacity="0.10"/></filter></defs>
+<rect x="0" y="0" width="1600" height="72" fill="#ffffff" stroke="#cfd8e3"/>
+<text x="28" y="43" font-size="22" font-weight="700" fill="#17202a">MedReason Localisation - Expert 4</text>
+<text x="680" y="21" font-size="13" fill="#5d6b7c">Your name or initials</text>
+<rect x="680" y="28" width="185" height="32" rx="6" fill="#ffffff" stroke="#cfd8e3"/>
+<text x="690" y="50" font-size="14" fill="#98a2b3">Expert 4</text>
+<rect x="874" y="24" width="70" height="36" rx="6" fill="#ffffff" stroke="#0f766e"/>
+<text x="909.0" y="47" text-anchor="middle" font-size="14" font-weight="700" fill="#17202a">Prev</text>
+<rect x="953" y="24" width="70" height="36" rx="6" fill="#ffffff" stroke="#0f766e"/>
+<text x="988.0" y="47" text-anchor="middle" font-size="14" font-weight="700" fill="#17202a">Next</text>
+<rect x="1032" y="24" width="160" height="36" rx="6" fill="#0f766e" stroke="#0f766e"/>
+<text x="1112.0" y="47" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">Download Answers</text>
+<rect x="1201" y="24" width="126" height="36" rx="6" fill="#ffffff" stroke="#0f766e"/>
+<text x="1264.0" y="47" text-anchor="middle" font-size="14" font-weight="700" fill="#17202a">Copy Answers</text>
+<rect x="1336" y="24" width="170" height="36" rx="6" fill="#ffffff" stroke="#0f766e"/>
+<text x="1421.0" y="47" text-anchor="middle" font-size="14" font-weight="700" fill="#17202a">Spreadsheet Backup</text>
+<rect x="28" y="100" width="430" height="900" rx="8" fill="#ffffff" stroke="#cfd8e3" filter="url(#shadow)"/>
+<rect x="486" y="100" width="1086" height="94" rx="8" fill="#ffffff" stroke="#cfd8e3" filter="url(#shadow)"/>
+<rect x="486" y="212" width="1086" height="868" rx="8" fill="#ffffff" stroke="#cfd8e3" filter="url(#shadow)"/>
+<text x="46" y="130" font-size="16" fill="#5d6b7c">MRLOC-NF2-001</text>
+<text x="440" y="130" text-anchor="end" font-size="16" fill="#5d6b7c">1 / 25</text>
+<text x="46" y="170" font-size="18" font-weight="400" fill="#17202a">Chronic Laxative abuse can result in the</text>
+<text x="46" y="194" font-size="18" font-weight="400" fill="#17202a">formation of which type of stone:</text>
+<text x="46" y="218" font-size="18" font-weight="400" fill="#17202a">Answer Choices:</text>
+<text x="46" y="242" font-size="18" font-weight="400" fill="#17202a">A. Xanthine</text>
+<text x="46" y="266" font-size="18" font-weight="400" fill="#17202a">B. Cysteine</text>
+<text x="46" y="290" font-size="18" font-weight="400" fill="#17202a">C. Ammonium urate</text>
+<text x="46" y="314" font-size="18" font-weight="400" fill="#17202a">D. Struvite</text>
+<rect x="46" y="356" width="394" height="86" fill="#eef3f8"/>
+<rect x="46" y="356" width="4" height="86" fill="#1d4ed8"/>
+<text x="62" y="384" font-size="17" font-weight="700" fill="#17202a">Model final answer</text>
+<text x="62" y="414" font-size="17" fill="#17202a">D. Struvite</text>
+<rect x="46" y="460" width="394" height="86" fill="#e7f5f2"/>
+<rect x="46" y="460" width="4" height="86" fill="#0f766e"/>
+<text x="62" y="488" font-size="17" font-weight="700" fill="#17202a">Correct answer</text>
+<text x="62" y="518" font-size="17" fill="#17202a">C. Ammonium urate</text>
+<text x="504" y="134" font-size="18" font-weight="400" fill="#5d6b7c">What to do: click the first numbered reasoning unit where the trace becomes medically incorrect,</text>
+<text x="504" y="158" font-size="18" font-weight="400" fill="#5d6b7c">unsupported, contradictory, or misleading. Then click Save. If no single first point is clear, use the</text>
+<text x="504" y="182" font-size="18" font-weight="400" fill="#5d6b7c">no-clear option.</text>
+<rect x="504" y="242" width="1050" height="80" rx="8" fill="#ffffff" stroke="#cfd8e3"/>
+<circle cx="532" cy="272" r="18" fill="#eef3f8"/>
+<text x="532" y="278" text-anchor="middle" font-size="16" font-weight="700" fill="#5d6b7c">1</text>
+<text x="566" y="269" font-size="17" fill="#17202a">Chronic laxative abuse -&gt; Increased fluid intake -&gt; Dilution of urine -&gt; Supersaturation of urine with solutes -&gt;</text>
+<text x="566" y="291" font-size="17" fill="#17202a">Formation of kidney stones (e.g., calcium oxalate, calcium phosphate, or uric acid stones).</text>
+<rect x="504" y="332" width="1050" height="80" rx="8" fill="#e7f5f2" stroke="#0f766e"/>
+<circle cx="532" cy="362" r="18" fill="#0f766e"/>
+<text x="532" y="368" text-anchor="middle" font-size="16" font-weight="700" fill="#ffffff">2</text>
+<text x="566" y="359" font-size="17" fill="#17202a">Chronic laxative abuse -&gt; Increased fluid intake -&gt; Altered urine pH -&gt; Formation of specific types of kidney stones</text>
+<text x="566" y="381" font-size="17" fill="#17202a">(e.g., uric acid stones).</text>
+<rect x="504" y="422" width="1050" height="80" rx="8" fill="#ffffff" stroke="#cfd8e3"/>
+<circle cx="532" cy="452" r="18" fill="#eef3f8"/>
+<text x="532" y="458" text-anchor="middle" font-size="16" font-weight="700" fill="#5d6b7c">3</text>
+<text x="566" y="449" font-size="17" fill="#17202a">Chronic laxative abuse -&gt; Increased fluid intake -&gt; Supersaturation of urine with specific solutes (e.g., oxalate,</text>
+<text x="566" y="471" font-size="17" fill="#17202a">calcium, or uric acid) -&gt; Formation of kidney stones.</text>
+<rect x="504" y="512" width="1050" height="102" rx="8" fill="#ffffff" stroke="#cfd8e3"/>
+<circle cx="532" cy="542" r="18" fill="#eef3f8"/>
+<text x="532" y="548" text-anchor="middle" font-size="16" font-weight="700" fill="#5d6b7c">4</text>
+<text x="566" y="539" font-size="17" fill="#17202a">Chronic laxative abuse typically involves the use of drugs that increase bowel motility, such as bisacodyl, senna, or</text>
+<text x="566" y="561" font-size="17" fill="#17202a">magnesium hydroxide. These medications often lead to increased fluid intake as a side effect, as patients may drink</text>
+<text x="566" y="583" font-size="17" fill="#17202a">more water to manage their bowel movements.</text>
+<rect x="504" y="624" width="1050" height="80" rx="8" fill="#ffffff" stroke="#cfd8e3"/>
+<circle cx="532" cy="654" r="18" fill="#eef3f8"/>
+<text x="532" y="660" text-anchor="middle" font-size="16" font-weight="700" fill="#5d6b7c">5</text>
+<text x="566" y="651" font-size="17" fill="#17202a">Increased fluid intake leads to dilution of urine, which can result in a lower urine concentration of solutes such as</text>
+<text x="566" y="673" font-size="17" fill="#17202a">calcium, oxalate, and uric acid.</text>
+<rect x="504" y="714" width="1050" height="80" rx="8" fill="#ffffff" stroke="#cfd8e3"/>
+<circle cx="532" cy="744" r="18" fill="#eef3f8"/>
+<text x="532" y="750" text-anchor="middle" font-size="16" font-weight="700" fill="#5d6b7c">6</text>
+<text x="566" y="741" font-size="17" fill="#17202a">However, this dilution effect is not always sufficient to prevent stone formation, especially if the patient has</text>
+<text x="566" y="763" font-size="17" fill="#17202a">underlying conditions that predispose them to stone formation.</text>
+<rect x="504" y="804" width="1050" height="58" rx="8" fill="#ffffff" stroke="#cfd8e3"/>
+<circle cx="532" cy="834" r="18" fill="#eef3f8"/>
+<text x="532" y="840" text-anchor="middle" font-size="16" font-weight="700" fill="#5d6b7c">7</text>
+<text x="566" y="831" font-size="17" fill="#17202a">The dilution of urine can paradoxically lead to supersaturation with certain solutes. For example:</text>
+<rect x="504" y="872" width="1050" height="80" rx="8" fill="#ffffff" stroke="#cfd8e3"/>
+<circle cx="532" cy="902" r="18" fill="#eef3f8"/>
+<text x="532" y="908" text-anchor="middle" font-size="16" font-weight="700" fill="#5d6b7c">8</text>
+<text x="566" y="899" font-size="17" fill="#17202a">Calcium oxalate stones: Increased fluid intake can lead to the excretion of oxalate in the urine, but if the urine</text>
+<text x="566" y="921" font-size="17" fill="#17202a">becomes too dilute, calcium oxalate crystals may form due to the supersaturation of calcium and oxalate.</text>
+<text x="504" y="940" font-size="16" fill="#5d6b7c">Additional reasoning units continue below in the scrollable interface.</text>
+<rect x="504" y="962" width="1050" height="42" rx="6" fill="#eef5ff" stroke="#8aa2c8"/>
+<text x="522" y="989" font-size="17" fill="#17202a">Reasoning seems correct; only final answer is wrong</text>
+<rect x="504" y="1016" width="1050" height="42" rx="6" fill="#fff8e8" stroke="#d0a03a"/>
+<text x="522" y="1043" font-size="17" fill="#17202a">No clear localisable error</text>
+<line x1="486" y1="1002" x2="1572" y2="1002" stroke="#cfd8e3"/>
+<text x="504" y="1036" font-size="14" fill="#5d6b7c">Confidence</text>
+<rect x="504" y="1046" width="210" height="42" rx="6" fill="#ffffff" stroke="#cfd8e3"/>
+<text x="516" y="1073" font-size="16" fill="#17202a">5 - high</text>
+<text x="740" y="1036" font-size="14" fill="#5d6b7c">Optional note</text>
+<rect x="740" y="1046" width="590" height="58" rx="6" fill="#ffffff" stroke="#cfd8e3"/>
+<rect x="1440" y="1060" width="104" height="42" rx="6" fill="#0f766e" stroke="#0f766e"/>
+<text x="1492" y="1087" text-anchor="middle" font-size="17" font-weight="700" fill="#ffffff">Save</text>
+<text x="28" y="1048" font-size="15" fill="#5d6b7c">Appendix snapshot of the offline clinician localisation interface. A selected reasoning unit is shown in green for illustration.</text>
+</svg>

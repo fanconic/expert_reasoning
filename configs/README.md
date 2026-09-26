@@ -43,11 +43,9 @@ Density comparison configs:
 - `drop_f_local.yaml`: sequence-level reward with small segment-local drop shaping.
 - `interval_drop_f_local.yaml`: interval-level reward with small segment-local drop shaping.
 
-Runner templates:
-- `runner_scripts/airl_segment/smoke.sh`
-- `runner_scripts/airl_segment/main_sweep.sh`
-- `runner_scripts/airl_segment/qwen7b_four_runs.sh`: fixed four-run qwen2.5-7B set with KL beta `0.01`, interval size `15`, and effective batch size `256`.
-- `runner_scripts/airl_segment/qwen7b_ddp_*.sh`: tmux-friendly torchrun/DDP launchers for the same four qwen2.5-7B runs.
+These configs are legacy development templates rather than part of the current
+paper/appendix runner set. Their old runner scripts are archived locally under
+`runner_scripts/_backup_not_committed/`.
 
 Qwen2.5-7B fixed run set:
 - `original_base.yaml`: base policy, original reward.
@@ -66,11 +64,3 @@ See `configs/index.yaml` for a compact canonical mapping used for quick reruns.
 - For local runs, override paths at launch time, e.g. with Hydra CLI overrides:
   - `training.output_dir=./outputs/<run_name>`
   - `model.warmup_reward_dir=...` (if required)
-
-
-PYTHONPATH=. python src/plot_generators/table_localisation.py \
-  --root-dir outputs/localisation \
-  --window 3 \
-  --bootstrap-samples 5000 \
-  --bootstrap-alpha 0.05 \
-  --bootstrap-seed 42

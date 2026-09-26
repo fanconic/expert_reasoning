@@ -65,4 +65,4 @@ echo "All bound ablations completed successfully."
 
 bash runner_scripts/corruption/1_ablation.sh
 
-bash runner_scripts/sft_reranking/evaluator_1_fullgas.sh
+bash runner_scripts/sft_reranking_temp05/1_evaluator.sh

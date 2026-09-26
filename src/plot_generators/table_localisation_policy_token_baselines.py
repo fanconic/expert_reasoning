@@ -7,12 +7,12 @@ from typing import Any
 import numpy as np
 
 
-ROOT_DIR = Path("localisation")
+ROOT_DIR = Path("localisation/synthetic_perturbations")
 DEFAULT_RUN_DIRS = [
     "runs/qwen7b_sft/qwen7b/full",
     "runs/qwen7b_sft/qwen7b/partial_fixed",
 ]
-DEFAULT_OUTPUT = ROOT_DIR / "localisation_policy_token_baselines_hit1_hit7.tex"
+DEFAULT_OUTPUT = ROOT_DIR / "results/localisation_policy_token_baselines_hit1_hit7.tex"
 BOOTSTRAP_SAMPLES = 2000
 BOOTSTRAP_ALPHA = 0.05
 BOOTSTRAP_SEED = 42

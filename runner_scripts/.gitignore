@@ -1,0 +1,4 @@
+_backup_not_committed/
+**/__pycache__/
+**/logs/
+*.log

@@ -1256,7 +1256,14 @@ def load_reward_model_and_tokenizer(cfg):
         )
         reward_model.config.num_labels = 1
 
-    adapter_dir = os.path.join(cfg.model.name, "reward_model")
+    direct_adapter = os.path.join(cfg.model.name, "adapter_config.json")
+    nested_adapter = os.path.join(cfg.model.name, "reward_model", "adapter_config.json")
+    if os.path.exists(direct_adapter):
+        adapter_dir = str(cfg.model.name)
+    elif os.path.exists(nested_adapter):
+        adapter_dir = os.path.join(cfg.model.name, "reward_model")
+    else:
+        adapter_dir = os.path.join(cfg.model.name, "reward_model")
     reward_model = PeftModel.from_pretrained(
         reward_model,
         adapter_dir,

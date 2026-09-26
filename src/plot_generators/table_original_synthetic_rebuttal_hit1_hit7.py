@@ -14,8 +14,10 @@ import numpy as np
 
 DEFAULT_SOURCE = Path("outputs/gsm8k_process_sensitivity_pregen/pair_details.jsonl")
 DEFAULT_ROOT = Path("outputs/gsm8k_process_sensitivity_pregen/rebuttal_scores")
-DEFAULT_OLD_ROOT = Path("localisation")
-DEFAULT_OUTPUT = Path("localisation/localisation_original_synthetic_rebuttal_hit1_hit7.tex")
+DEFAULT_OLD_ROOT = Path("localisation/synthetic_perturbations")
+DEFAULT_OUTPUT = Path(
+    "localisation/synthetic_perturbations/results/controlled_gsm8k_hit1_hit7_source_table.tex"
+)
 DEFAULT_WINDOWS = [1, 7]
 BOOTSTRAP_SAMPLES = 2000
 BOOTSTRAP_ALPHA = 0.05

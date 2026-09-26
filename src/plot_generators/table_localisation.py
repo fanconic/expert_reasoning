@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 
-ROOT_DIR = Path("outputs") / "localisation"
+ROOT_DIR = Path("localisation") / "synthetic_perturbations" / "runs"
 DEFAULT_LATEX_STEM = "localisation_hit1at"
 BOOTSTRAP_SAMPLES = 2000
 BOOTSTRAP_ALPHA = 0.05
@@ -201,21 +201,18 @@ def _infer_source(run_name: str, run_cfg: dict[str, Any]) -> str | None:
 
 def _discover_runs(root_dir: Path, mode_filter: str) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
-    for run_dir in sorted(root_dir.iterdir()):
-        if not run_dir.is_dir():
-            continue
-
-        pair_path = run_dir / "pair_details.jsonl"
-        if not pair_path.exists():
+    for pair_path in sorted(root_dir.rglob("pair_details.jsonl")):
+        run_dir = pair_path.parent
+        if any(part.startswith(".") for part in run_dir.relative_to(root_dir).parts):
             continue
 
         cfg_path = run_dir / "run_config.json"
         run_cfg = _load_json(cfg_path) if cfg_path.exists() else {}
 
-        run_name = run_dir.name
-        model = _infer_model(run_name, run_cfg)
-        mode = _infer_mode(run_name, run_cfg)
-        source = _infer_source(run_name, run_cfg)
+        run_name = str(run_dir.relative_to(root_dir))
+        model = _infer_model(run_dir.name, run_cfg)
+        mode = _infer_mode(run_dir.name, run_cfg)
+        source = _infer_source(run_dir.name, run_cfg)
 
         if model is None or mode != mode_filter or source not in {"expert", "pregenerated"}:
             continue
@@ -236,6 +233,14 @@ def _discover_runs(root_dir: Path, mode_filter: str) -> list[dict[str, Any]]:
         model = run["model"]
         source = run["source"]
         name = run["run_name"]
+        canonical_nested = {f"{source}/{model}/{mode_filter}", f"runs/{source}/{model}/{mode_filter}"}
+        if source == "pregenerated":
+            canonical_nested = {
+                f"qwen7b_sft/{model}/{mode_filter}",
+                f"runs/qwen7b_sft/{model}/{mode_filter}",
+            }
+        if name in canonical_nested:
+            return 4
         if source == "expert" and name == f"{model}_{mode_filter}_localisation_expert":
             return 3
         if source == "pregenerated" and name == f"{model}_{mode_filter}_localisation_from_qwen7b_sft":
